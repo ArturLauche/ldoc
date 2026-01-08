@@ -10,6 +10,7 @@ import Superscript from '@tiptap/extension-superscript';
 import Subscript from '@tiptap/extension-subscript';
 import FontFamily from '@tiptap/extension-font-family';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
 import { useState, useEffect, useCallback } from 'react';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
@@ -52,6 +53,13 @@ export const RichTextEditor = () => {
       FontFamily,
       Placeholder.configure({
         placeholder: 'Start writing something amazing...',
+      }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'rounded-lg max-w-full h-auto my-4 mx-auto block',
+        },
       }),
     ],
     content: '<p></p>',
