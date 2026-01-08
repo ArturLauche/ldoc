@@ -263,7 +263,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
             <Palette className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-3 glass-panel">
+        <PopoverContent className="w-auto p-3 bg-popover border border-border shadow-lg z-50">
           <div className="grid grid-cols-6 gap-1.5">
             {textColors.map((color) => (
               <button
@@ -285,7 +285,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
             <Highlighter className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-3 glass-panel">
+        <PopoverContent className="w-auto p-3 bg-popover border border-border shadow-lg z-50">
           <div className="grid grid-cols-6 gap-1.5">
             {highlightColors.map((color, index) => (
               <button
@@ -398,7 +398,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
             <ChevronsUpDown className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-32 p-2 glass-panel">
+        <PopoverContent className="w-32 p-2 bg-popover border border-border shadow-lg z-50">
           {lineSpacings.map((spacing) => (
             <Button
               key={spacing.value}
@@ -427,7 +427,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
             <Link className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-3 glass-panel">
+        <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
           <div className="flex flex-col gap-2">
             <input
               type="url"

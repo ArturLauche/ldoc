@@ -229,7 +229,7 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
       </Tooltip>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="glass-panel sm:max-w-2xl">
+        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Insert SmartArt</DialogTitle>
             <DialogDescription>

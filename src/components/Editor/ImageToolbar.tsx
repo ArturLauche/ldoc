@@ -135,7 +135,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       </Tooltip>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="glass-panel sm:max-w-md">
+        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Insert Image</DialogTitle>
             <DialogDescription>

@@ -190,7 +190,7 @@ ${editor.getHTML()}
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 glass-panel" align="start">
+        <DropdownMenuContent className="w-56 bg-popover border border-border shadow-lg z-50" align="start">
           <DropdownMenuItem onClick={handleNewDocument}>
             <FilePlus className="h-4 w-4 mr-2" />
             New Document
@@ -212,16 +212,16 @@ ${editor.getHTML()}
               <Download className="h-4 w-4 mr-2" />
               Export As
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="glass-panel w-48">
-              <DropdownMenuItem onClick={() => exportAs('txt')} className="flex items-center">
+            <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
+              <DropdownMenuItem onClick={() => exportAs('txt')}>
                 <FileType className="h-4 w-4 mr-2" />
                 Plain Text (.txt)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportAs('html')} className="flex items-center">
+              <DropdownMenuItem onClick={() => exportAs('html')}>
                 <FileText className="h-4 w-4 mr-2" />
                 HTML Document (.html)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportAs('rtf')} className="flex items-center">
+              <DropdownMenuItem onClick={() => exportAs('rtf')}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Rich Text Format (.rtf)
               </DropdownMenuItem>
@@ -242,7 +242,7 @@ ${editor.getHTML()}
       </DropdownMenu>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="glass-panel sm:max-w-md">
+        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Document</DialogTitle>
             <DialogDescription>
