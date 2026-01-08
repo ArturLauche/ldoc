@@ -1,0 +1,244 @@
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
+import Link from '@tiptap/extension-link';
+import Superscript from '@tiptap/extension-superscript';
+import Subscript from '@tiptap/extension-subscript';
+import FontFamily from '@tiptap/extension-font-family';
+import Placeholder from '@tiptap/extension-placeholder';
+import { useState, useEffect, useCallback } from 'react';
+import { EditorToolbar } from './EditorToolbar';
+import { FileMenu } from './FileMenu';
+import { VersionHistory } from './VersionHistory';
+import { toast } from 'sonner';
+import { Cloud, FileText } from 'lucide-react';
+
+const AUTOSAVE_DELAY = 3000;
+
+export const RichTextEditor = () => {
+  const [documentName, setDocumentName] = useState('Untitled Document');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3],
+        },
+      }),
+      Underline,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      TextStyle,
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-primary underline cursor-pointer hover:text-primary/80',
+        },
+      }),
+      Superscript,
+      Subscript,
+      FontFamily,
+      Placeholder.configure({
+        placeholder: 'Start writing something amazing...',
+      }),
+    ],
+    content: '<p></p>',
+    onUpdate: () => {
+      setHasUnsavedChanges(true);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-16 py-12',
+        'aria-label': 'Document editor',
+      },
+    },
+  });
+
+  // Load saved document on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('floatwrite-current-doc');
+      if (saved) {
+        const doc = JSON.parse(saved);
+        if (doc.content && editor) {
+          editor.commands.setContent(doc.content);
+          setDocumentName(doc.name || 'Untitled Document');
+          setLastSaved(new Date(doc.savedAt));
+          setHasUnsavedChanges(false);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load saved document:', error);
+    }
+  }, [editor]);
+
+  // Autosave
+  useEffect(() => {
+    if (!editor || !hasUnsavedChanges) return;
+
+    const timer = setTimeout(() => {
+      const content = editor.getHTML();
+      const docData = {
+        name: documentName,
+        content,
+        savedAt: new Date().toISOString(),
+      };
+      
+      localStorage.setItem('floatwrite-current-doc', JSON.stringify(docData));
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+    }, AUTOSAVE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [editor, hasUnsavedChanges, documentName]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (editor) {
+          const content = editor.getHTML();
+          const docData = {
+            name: documentName,
+            content,
+            savedAt: new Date().toISOString(),
+          };
+          localStorage.setItem('floatwrite-current-doc', JSON.stringify(docData));
+          setLastSaved(new Date());
+          setHasUnsavedChanges(false);
+          toast.success('Document saved');
+        }
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        if (hasUnsavedChanges) {
+          if (confirm('You have unsaved changes. Create a new document anyway?')) {
+            editor?.commands.setContent('<p></p>');
+            setDocumentName('Untitled Document');
+            localStorage.removeItem('floatwrite-current-doc');
+          }
+        } else {
+          editor?.commands.setContent('<p></p>');
+          setDocumentName('Untitled Document');
+          localStorage.removeItem('floatwrite-current-doc');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editor, documentName, hasUnsavedChanges]);
+
+  const handleRestoreVersion = useCallback((content: string) => {
+    if (editor) {
+      editor.commands.setContent(content);
+      setHasUnsavedChanges(true);
+    }
+  }, [editor]);
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <span className="font-semibold text-lg tracking-tight">FloatWrite</span>
+            </div>
+            
+            <FileMenu
+              editor={editor}
+              documentName={documentName}
+              setDocumentName={setDocumentName}
+              onShowVersionHistory={() => setShowVersionHistory(true)}
+              hasUnsavedChanges={hasUnsavedChanges}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Save Status */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {hasUnsavedChanges ? (
+                <>
+                  <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Unsaved changes</span>
+                </>
+              ) : lastSaved ? (
+                <>
+                  <Cloud className="h-4 w-4 text-emerald-500" />
+                  <span>Saved</span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Document Title */}
+        <div className="px-4 pb-3">
+          <input
+            type="text"
+            value={documentName}
+            onChange={(e) => setDocumentName(e.target.value)}
+            className="text-xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
+            placeholder="Untitled Document"
+            aria-label="Document name"
+          />
+        </div>
+      </header>
+
+      {/* Toolbar */}
+      <div className="sticky top-[89px] z-30 px-4 py-2 bg-background/50 backdrop-blur-sm">
+        <EditorToolbar editor={editor} />
+      </div>
+
+      {/* Editor */}
+      <main className="flex-1 max-w-4xl mx-auto w-full">
+        <div className="editor-container bg-card rounded-2xl shadow-floating my-6 mx-4 overflow-hidden border border-border/30">
+          <EditorContent 
+            editor={editor} 
+            className="editor-content"
+          />
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="px-4 py-3 border-t border-border/50 bg-background/50 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center gap-4">
+            <span>{editor?.storage.characterCount?.words?.() || 0} words</span>
+            <span>{editor?.storage.characterCount?.characters?.() || 0} characters</span>
+          </div>
+          {lastSaved && (
+            <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
+          )}
+        </div>
+      </footer>
+
+      {/* Version History Modal */}
+      <VersionHistory
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        onRestore={handleRestoreVersion}
+        currentContent={editor?.getHTML() || ''}
+        documentName={documentName}
+      />
+    </div>
+  );
+};
