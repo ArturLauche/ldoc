@@ -79,7 +79,7 @@ export const VersionHistory = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-      <div className="glass-panel w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl shadow-floating overflow-hidden">
+      <div className="bg-background border border-border w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl shadow-lg overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border/50">
           <div className="flex items-center gap-3">

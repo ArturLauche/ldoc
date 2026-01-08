@@ -149,7 +149,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
           <Search className="h-3 w-3 ml-1 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0 glass-panel" align="start">
+      <PopoverContent className="w-64 p-0 bg-popover border border-border shadow-lg z-50" align="start">
         <div className="p-2 border-b border-border/50">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
