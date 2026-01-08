@@ -40,19 +40,13 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useCallback, useState } from 'react';
+import { FontPicker } from './FontPicker';
+import { ImageToolbar } from './ImageToolbar';
+import { SmartArtPicker } from './SmartArtPicker';
 
 interface EditorToolbarProps {
   editor: Editor | null;
 }
-
-const fontFamilies = [
-  { name: 'Default', value: '' },
-  { name: 'Arial', value: 'Arial, sans-serif' },
-  { name: 'Times New Roman', value: 'Times New Roman, serif' },
-  { name: 'Georgia', value: 'Georgia, serif' },
-  { name: 'Courier New', value: 'Courier New, monospace' },
-  { name: 'Verdana', value: 'Verdana, sans-serif' },
-];
 
 const fontSizes = [
   { name: '10', value: '10px' },
@@ -173,28 +167,17 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Font Family */}
-      <Select
-        value={getCurrentFontFamily()}
-        onValueChange={(value) => {
+      {/* Font Family - Using FontPicker */}
+      <FontPicker
+        value={editor.getAttributes('textStyle').fontFamily || ''}
+        onChange={(value) => {
           if (value === '') {
             editor.chain().focus().unsetFontFamily().run();
           } else {
             editor.chain().focus().setFontFamily(value).run();
           }
         }}
-      >
-        <SelectTrigger className="w-32 h-8 text-xs font-medium bg-background/50 border-border/50" aria-label="Font family">
-          <SelectValue placeholder="Font" />
-        </SelectTrigger>
-        <SelectContent>
-          {fontFamilies.map((font) => (
-            <SelectItem key={font.value} value={font.value || 'default'} style={{ fontFamily: font.value }}>
-              {font.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
 
       {/* Font Size */}
       <Select
@@ -476,6 +459,14 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
           </div>
         </PopoverContent>
       </Popover>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      {/* Image */}
+      <ImageToolbar editor={editor} />
+
+      {/* SmartArt */}
+      <SmartArtPicker editor={editor} />
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 

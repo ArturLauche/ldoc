@@ -8,6 +8,8 @@ import {
   FilePlus,
   History,
   ChevronDown,
+  FileType,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { importDocument, getSupportedFormats } from './DocumentImporter';
 
 interface FileMenuProps {
   editor: Editor | null;
@@ -49,6 +52,7 @@ export const FileMenu = ({
 }: FileMenuProps) => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [newName, setNewName] = useState(documentName);
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleNewDocument = () => {
     if (!editor) return;
@@ -66,31 +70,31 @@ export const FileMenu = ({
   };
 
   const handleOpenFile = async () => {
+    if (!editor) return;
+    
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.txt,.html,.rtf';
+      input.accept = getSupportedFormats();
       
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file || !editor) return;
+        if (!file) return;
 
-        const text = await file.text();
-        const fileName = file.name.replace(/\.[^/.]+$/, '');
-        
-        if (file.name.endsWith('.html')) {
-          editor.commands.setContent(text);
-        } else if (file.name.endsWith('.rtf')) {
-          // Basic RTF to HTML conversion (simplified)
-          const htmlContent = convertRtfToHtml(text);
-          editor.commands.setContent(htmlContent);
-        } else {
-          // Plain text
-          editor.commands.setContent(`<p>${text.replace(/\n/g, '</p><p>')}</p>`);
+        setIsImporting(true);
+        toast.loading('Importing document...', { id: 'import' });
+
+        try {
+          const result = await importDocument(file);
+          editor.commands.setContent(result.content);
+          setDocumentName(result.fileName);
+          toast.success(`Opened: ${file.name}`, { id: 'import' });
+        } catch (error) {
+          console.error('Import error:', error);
+          toast.error('Failed to import document. Try a different format.', { id: 'import' });
+        } finally {
+          setIsImporting(false);
         }
-        
-        setDocumentName(fileName);
-        toast.success(`Opened: ${file.name}`);
       };
       
       input.click();
@@ -192,9 +196,9 @@ ${editor.getHTML()}
             New Document
             <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleOpenFile}>
+          <DropdownMenuItem onClick={handleOpenFile} disabled={isImporting}>
             <FolderOpen className="h-4 w-4 mr-2" />
-            Open...
+            {isImporting ? 'Importing...' : 'Open...'}
             <span className="ml-auto text-xs text-muted-foreground">⌘O</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -208,14 +212,17 @@ ${editor.getHTML()}
               <Download className="h-4 w-4 mr-2" />
               Export As
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="glass-panel">
-              <DropdownMenuItem onClick={() => exportAs('txt')}>
+            <DropdownMenuSubContent className="glass-panel w-48">
+              <DropdownMenuItem onClick={() => exportAs('txt')} className="flex items-center">
+                <FileType className="h-4 w-4 mr-2" />
                 Plain Text (.txt)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportAs('html')}>
+              <DropdownMenuItem onClick={() => exportAs('html')} className="flex items-center">
+                <FileText className="h-4 w-4 mr-2" />
                 HTML Document (.html)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportAs('rtf')}>
+              <DropdownMenuItem onClick={() => exportAs('rtf')} className="flex items-center">
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Rich Text Format (.rtf)
               </DropdownMenuItem>
             </DropdownMenuSubContent>
