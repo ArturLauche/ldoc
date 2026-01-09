@@ -16,6 +16,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
+import {
+  DEFAULT_IMAGE_ALIGNMENT,
+  DEFAULT_IMAGE_WIDTH,
+  normalizeImageAlignment,
+  normalizeImageUrl,
+  normalizeImageWidth,
+  readFileAsDataUrl,
+  sanitizeAltText,
+  validateImageFile,
+} from '@/lib/media';
 
 interface ImageToolbarProps {
   editor: Editor | null;
@@ -26,8 +36,8 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
   const [imageUrl, setImageUrl] = useState('');
   const [altText, setAltText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [imageAlignment, setImageAlignment] = useState('center');
-  const [imageWidth, setImageWidth] = useState('100');
+  const [imageAlignment, setImageAlignment] = useState(DEFAULT_IMAGE_ALIGNMENT);
+  const [imageWidth, setImageWidth] = useState(DEFAULT_IMAGE_WIDTH);
 
   if (!editor) return null;
 
@@ -36,52 +46,55 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
   const syncSelectionAttributes = () => {
     if (!isEditingSelection) {
       setAltText('');
-      setImageAlignment('center');
-      setImageWidth('100');
+      setImageAlignment(DEFAULT_IMAGE_ALIGNMENT);
+      setImageWidth(DEFAULT_IMAGE_WIDTH);
       return;
     }
 
     const attributes = editor.getAttributes('image');
     setAltText(attributes.alt ?? '');
-    setImageAlignment(attributes.align ?? 'center');
-    setImageWidth(attributes.width ?? '100');
+    setImageAlignment(normalizeImageAlignment(attributes.align));
+    setImageWidth(normalizeImageWidth(attributes.width));
+  };
+
+  const insertImage = (src: string, fallbackAlt: string) => {
+    const safeAlt = sanitizeAltText(altText) || fallbackAlt;
+    const safeAlignment = normalizeImageAlignment(imageAlignment);
+    const safeWidth = normalizeImageWidth(imageWidth);
+
+    editor
+      .chain()
+      .focus()
+      .setImage({
+        src,
+        alt: safeAlt,
+      })
+      .updateAttributes('image', {
+        align: safeAlignment,
+        width: safeWidth,
+      })
+      .run();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
+    const validation = validateImageFile(file);
+    if (!validation.ok) {
+      toast.error(validation.message);
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Convert to base64 for local storage
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        editor
-          .chain()
-          .focus()
-          .setImage({ 
-            src: dataUrl,
-            alt: altText || file.name,
-          })
-          .updateAttributes('image', {
-            align: imageAlignment,
-            width: imageWidth,
-          })
-          .run();
-        setIsOpen(false);
-        setAltText('');
-        toast.success('Image inserted');
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
+      const dataUrl = await readFileAsDataUrl(file);
+      insertImage(dataUrl, file.name);
+      setIsOpen(false);
+      setAltText('');
+      toast.success('Image inserted');
+    } catch {
       toast.error('Failed to upload image');
     } finally {
       setIsUploading(false);
@@ -89,32 +102,13 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
   };
 
   const handleUrlInsert = () => {
-    if (!imageUrl) {
-      toast.error('Please enter an image URL');
+    const normalized = normalizeImageUrl(imageUrl);
+    if (!normalized.ok) {
+      toast.error(normalized.message);
       return;
     }
 
-    // Basic URL validation
-    try {
-      new URL(imageUrl);
-    } catch {
-      toast.error('Please enter a valid URL');
-      return;
-    }
-
-    editor
-      .chain()
-      .focus()
-      .setImage({ 
-        src: imageUrl,
-        alt: altText || 'Image',
-      })
-      .updateAttributes('image', {
-        align: imageAlignment,
-        width: imageWidth,
-      })
-      .run();
-    
+    insertImage(normalized.url, 'Image');
     setIsOpen(false);
     setImageUrl('');
     setAltText('');
@@ -127,26 +121,25 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
     e.stopPropagation();
 
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        editor
-          .chain()
-          .focus()
-          .setImage({ 
-            src: dataUrl,
-            alt: file.name,
-          })
-          .updateAttributes('image', {
-            align: imageAlignment,
-            width: imageWidth,
-          })
-          .run();
-        toast.success('Image inserted');
-      };
-      reader.readAsDataURL(file);
+    if (!file) {
+      toast.error('Please drop an image file');
+      return;
     }
+
+    const validation = validateImageFile(file);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    readFileAsDataUrl(file)
+      .then((dataUrl) => {
+        insertImage(dataUrl, file.name);
+        toast.success('Image inserted');
+      })
+      .catch(() => {
+        toast.error('Failed to upload image');
+      });
   };
 
   const handleApplyFormatting = () => {
@@ -156,9 +149,9 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       .chain()
       .focus()
       .updateAttributes('image', {
-        alt: altText || attributes.alt,
-        align: imageAlignment,
-        width: imageWidth,
+        alt: sanitizeAltText(altText) || attributes.alt,
+        align: normalizeImageAlignment(imageAlignment),
+        width: normalizeImageWidth(imageWidth),
       })
       .run();
     toast.success('Image updated');

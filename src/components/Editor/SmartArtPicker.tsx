@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import { 
   LayoutGrid, 
@@ -17,16 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { createSvgDataUrl } from '@/lib/media';
 
 interface SmartArtPickerProps {
   editor: Editor | null;
@@ -56,6 +52,12 @@ const normalizeItems = (items: string[]) => {
   const baseItems = trimmed.length > 0 ? trimmed : fallbackItems;
   return baseItems.map((item) => escapeXml(item));
 };
+
+const clampItemCount = (count: number, min: number, max: number) =>
+  Math.min(Math.max(count, min), max);
+
+const withFallback = (value: string | undefined, fallback: string) =>
+  value && value.trim() ? value : fallback;
 
 const smartArtTemplates: SmartArtTemplate[] = [
   {
@@ -91,9 +93,9 @@ const smartArtTemplates: SmartArtTemplate[] = [
     icon: <GitBranch className="h-5 w-5" />,
     category: 'Hierarchy',
     generateSvg: (items, colors) => {
-      const topLabel = items[0] || 'Top';
+      const topLabel = withFallback(items[0], 'Top');
       const childLabels = items.slice(1, 5);
-      const childCount = Math.max(childLabels.length, 3);
+      const childCount = clampItemCount(childLabels.length, 3, 4);
       const topWidth = 140;
       const childWidth = 120;
       const gap = 24;
@@ -108,7 +110,7 @@ const smartArtTemplates: SmartArtTemplate[] = [
 
       const childPositions = Array.from({ length: childCount }, (_, index) => ({
         x: padding + index * (childWidth + gap),
-        label: childLabels[index] || `Item ${index + 1}`,
+        label: withFallback(childLabels[index], `Item ${index + 1}`),
       }));
 
       const connectorStart = childPositions[0].x + childWidth / 2;
@@ -144,7 +146,7 @@ const smartArtTemplates: SmartArtTemplate[] = [
     icon: <Circle className="h-5 w-5" />,
     category: 'Cycle',
     generateSvg: (items, colors) => {
-      const count = Math.min(items.length, 5);
+      const count = clampItemCount(items.length, 3, 5);
       const centerX = 170;
       const centerY = 170;
       const radius = 95;
@@ -190,7 +192,7 @@ const smartArtTemplates: SmartArtTemplate[] = [
     icon: <Triangle className="h-5 w-5" />,
     category: 'Pyramid',
     generateSvg: (items, colors) => {
-      const count = Math.min(items.length, 4);
+      const count = clampItemCount(items.length, 3, 4);
       let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" width="300" height="240">`;
       
       for (let i = 0; i < count; i++) {
@@ -217,9 +219,9 @@ const smartArtTemplates: SmartArtTemplate[] = [
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="300" height="200">
         <circle cx="100" cy="100" r="70" fill="${colors[0]}" opacity="0.6"/>
         <circle cx="200" cy="100" r="70" fill="${colors[1]}" opacity="0.6"/>
-        <text x="70" y="105" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${items[0] || 'A'}</text>
-        <text x="150" y="105" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[2] || 'Both'}</text>
-        <text x="230" y="105" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${items[1] || 'B'}</text>
+        <text x="70" y="105" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${withFallback(items[0], 'A')}</text>
+        <text x="150" y="105" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${withFallback(items[2], 'Both')}</text>
+        <text x="230" y="105" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${withFallback(items[1], 'B')}</text>
       </svg>`;
     }
   },
@@ -231,13 +233,13 @@ const smartArtTemplates: SmartArtTemplate[] = [
     generateSvg: (items, colors) => {
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="220" height="220">
         <rect x="10" y="10" width="95" height="95" rx="8" fill="${colors[0]}"/>
-        <text x="57" y="62" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[0] || 'Q1'}</text>
+        <text x="57" y="62" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${withFallback(items[0], 'Q1')}</text>
         <rect x="115" y="10" width="95" height="95" rx="8" fill="${colors[1]}"/>
-        <text x="162" y="62" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[1] || 'Q2'}</text>
+        <text x="162" y="62" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${withFallback(items[1], 'Q2')}</text>
         <rect x="10" y="115" width="95" height="95" rx="8" fill="${colors[2]}"/>
-        <text x="57" y="167" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[2] || 'Q3'}</text>
+        <text x="57" y="167" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${withFallback(items[2], 'Q3')}</text>
         <rect x="115" y="115" width="95" height="95" rx="8" fill="${colors[3]}"/>
-        <text x="162" y="167" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[3] || 'Q4'}</text>
+        <text x="162" y="167" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${withFallback(items[3], 'Q4')}</text>
       </svg>`;
     }
   },
@@ -250,12 +252,22 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
 
   if (!editor) return null;
 
+  const normalizedItems = useMemo(() => normalizeItems(items), [items]);
+  const previewSvg = useMemo(() => {
+    if (!selectedTemplate) return '';
+    return selectedTemplate.generateSvg(normalizedItems, defaultColors);
+  }, [normalizedItems, selectedTemplate]);
+
   const handleInsertSmartArt = () => {
     if (!selectedTemplate) return;
 
-    const renderItems = normalizeItems(items);
-    const svg = selectedTemplate.generateSvg(renderItems, defaultColors);
-    const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+    const svg = selectedTemplate.generateSvg(normalizedItems, defaultColors);
+    const dataUri = createSvgDataUrl(svg);
+
+    if (!dataUri) {
+      toast.error('Failed to generate SmartArt');
+      return;
+    }
     
     editor
       .chain()
@@ -321,6 +333,9 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
             <div>
               <Label className="text-sm font-medium mb-2 block">Edit content</Label>
               <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Some layouts support 3–5 items. Extra entries will be ignored.
+                </p>
                 {items.map((item, index) => (
                   <Input
                     key={index}
@@ -339,6 +354,7 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                   size="sm"
                   onClick={() => setItems([...items, `Item ${items.length + 1}`])}
                   className="w-full"
+                  disabled={items.length >= 8}
                 >
                   Add Item
                 </Button>
@@ -347,10 +363,10 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
               {/* Preview */}
               {selectedTemplate && (
                 <div className="mt-4 p-4 bg-background/50 rounded-lg border border-border/30 overflow-auto max-h-40">
-                  <div 
-                    dangerouslySetInnerHTML={{ 
-                      __html: selectedTemplate.generateSvg(normalizeItems(items), defaultColors) 
-                    }} 
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: previewSvg,
+                    }}
                   />
                 </div>
               )}
