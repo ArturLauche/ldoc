@@ -43,6 +43,9 @@ interface FileMenuProps {
   hasUnsavedChanges: boolean;
 }
 
+const STORAGE_KEY = 'lwrite-current-doc';
+const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
+
 export const FileMenu = ({
   editor,
   documentName,
@@ -65,7 +68,8 @@ export const FileMenu = ({
     
     editor.commands.setContent('<p></p>');
     setDocumentName('Untitled Document');
-    localStorage.removeItem('floatwrite-current-doc');
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     toast.success('New document created');
   };
 
@@ -113,7 +117,7 @@ export const FileMenu = ({
       savedAt: new Date().toISOString(),
     };
     
-    localStorage.setItem('floatwrite-current-doc', JSON.stringify(docData));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
     toast.success('Document saved');
   };
 

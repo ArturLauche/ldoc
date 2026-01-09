@@ -20,6 +20,9 @@ interface VersionHistoryProps {
   documentName: string;
 }
 
+const STORAGE_KEY = 'lwrite-versions';
+const LEGACY_STORAGE_KEY = 'floatwrite-versions';
+
 export const VersionHistory = ({
   isOpen,
   onClose,
@@ -36,9 +39,13 @@ export const VersionHistory = ({
 
   const loadVersions = () => {
     try {
-      const stored = localStorage.getItem('floatwrite-versions');
+      const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
       if (stored) {
         setVersions(JSON.parse(stored));
+        if (!localStorage.getItem(STORAGE_KEY)) {
+          localStorage.setItem(STORAGE_KEY, stored);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
       }
     } catch (error) {
       console.error('Failed to load versions:', error);
@@ -55,7 +62,7 @@ export const VersionHistory = ({
 
     const updatedVersions = [newVersion, ...versions].slice(0, 20); // Keep last 20 versions
     setVersions(updatedVersions);
-    localStorage.setItem('floatwrite-versions', JSON.stringify(updatedVersions));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions));
     toast.success('Version saved');
   };
 
@@ -68,7 +75,7 @@ export const VersionHistory = ({
   const handleDelete = (versionId: string) => {
     const updatedVersions = versions.filter(v => v.id !== versionId);
     setVersions(updatedVersions);
-    localStorage.setItem('floatwrite-versions', JSON.stringify(updatedVersions));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions));
     if (selectedVersion?.id === versionId) {
       setSelectedVersion(null);
     }

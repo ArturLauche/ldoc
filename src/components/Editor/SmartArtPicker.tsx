@@ -7,9 +7,6 @@ import {
   Circle, 
   Layers,
   Triangle,
-  Square,
-  Diamond,
-  ArrowDownUp,
   Network,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +41,21 @@ interface SmartArtTemplate {
 }
 
 const defaultColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+const fallbackItems = ['Item 1', 'Item 2', 'Item 3', 'Item 4'];
+
+const escapeXml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const normalizeItems = (items: string[]) => {
+  const trimmed = items.map((item) => item.trim()).filter(Boolean);
+  const baseItems = trimmed.length > 0 ? trimmed : fallbackItems;
+  return baseItems.map((item) => escapeXml(item));
+};
 
 const smartArtTemplates: SmartArtTemplate[] = [
   {
@@ -79,20 +91,49 @@ const smartArtTemplates: SmartArtTemplate[] = [
     icon: <GitBranch className="h-5 w-5" />,
     category: 'Hierarchy',
     generateSvg: (items, colors) => {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180" width="300" height="180">
-        <rect x="100" y="10" width="100" height="40" rx="8" fill="${colors[0]}"/>
-        <text x="150" y="35" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${items[0] || 'Top'}</text>
-        <line x1="150" y1="50" x2="150" y2="70" stroke="#666" stroke-width="2"/>
-        <line x1="75" y1="70" x2="225" y2="70" stroke="#666" stroke-width="2"/>
-        <line x1="75" y1="70" x2="75" y2="90" stroke="#666" stroke-width="2"/>
-        <line x1="150" y1="70" x2="150" y2="90" stroke="#666" stroke-width="2"/>
-        <line x1="225" y1="70" x2="225" y2="90" stroke="#666" stroke-width="2"/>
-        <rect x="25" y="90" width="100" height="40" rx="8" fill="${colors[1]}"/>
-        <text x="75" y="115" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[1] || 'Left'}</text>
-        <rect x="100" y="90" width="100" height="40" rx="8" fill="${colors[2]}"/>
-        <text x="150" y="115" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[2] || 'Center'}</text>
-        <rect x="175" y="90" width="100" height="40" rx="8" fill="${colors[3]}"/>
-        <text x="225" y="115" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[3] || 'Right'}</text>
+      const topLabel = items[0] || 'Top';
+      const childLabels = items.slice(1, 5);
+      const childCount = Math.max(childLabels.length, 3);
+      const topWidth = 140;
+      const childWidth = 120;
+      const gap = 24;
+      const padding = 24;
+      const totalChildWidth = childCount * childWidth + (childCount - 1) * gap;
+      const width = Math.max(340, totalChildWidth + padding * 2);
+      const topX = (width - topWidth) / 2;
+      const topCenter = width / 2;
+      const topY = 12;
+      const connectorY = 70;
+      const childY = 96;
+
+      const childPositions = Array.from({ length: childCount }, (_, index) => ({
+        x: padding + index * (childWidth + gap),
+        label: childLabels[index] || `Item ${index + 1}`,
+      }));
+
+      const connectorStart = childPositions[0].x + childWidth / 2;
+      const connectorEnd =
+        childPositions[childPositions.length - 1].x + childWidth / 2;
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 190" width="${width}" height="190">
+        <defs>
+          <marker id="arrow-hierarchy" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#666"/>
+          </marker>
+        </defs>
+        <rect x="${topX}" y="${topY}" width="${topWidth}" height="44" rx="8" fill="${colors[0]}"/>
+        <text x="${topCenter}" y="${topY + 28}" fill="white" font-size="12" text-anchor="middle" font-family="system-ui">${topLabel}</text>
+        <line x1="${topCenter}" y1="${topY + 44}" x2="${topCenter}" y2="${connectorY}" stroke="#666" stroke-width="2" marker-end="url(#arrow-hierarchy)"/>
+        <line x1="${connectorStart}" y1="${connectorY}" x2="${connectorEnd}" y2="${connectorY}" stroke="#666" stroke-width="2"/>
+        ${childPositions
+          .map(
+            (child, index) => `
+        <line x1="${child.x + childWidth / 2}" y1="${connectorY}" x2="${child.x + childWidth / 2}" y2="${childY}" stroke="#666" stroke-width="2" marker-end="url(#arrow-hierarchy)"/>
+        <rect x="${child.x}" y="${childY}" width="${childWidth}" height="44" rx="8" fill="${colors[(index + 1) % colors.length]}"/>
+        <text x="${child.x + childWidth / 2}" y="${childY + 28}" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${child.label}</text>
+        `
+          )
+          .join('')}
       </svg>`;
       return svg;
     }
@@ -104,29 +145,41 @@ const smartArtTemplates: SmartArtTemplate[] = [
     category: 'Cycle',
     generateSvg: (items, colors) => {
       const count = Math.min(items.length, 5);
-      const centerX = 150, centerY = 150, radius = 80;
-      let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">`;
+      const centerX = 170;
+      const centerY = 170;
+      const radius = 95;
+      const nodeRadius = 34;
+      let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 340" width="340" height="340">
+        <defs>
+          <marker id="arrow-cycle" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#666"/>
+          </marker>
+        </defs>`;
       
       for (let i = 0; i < count; i++) {
-        const angle = (i / count) * 2 * Math.PI - Math.PI/2;
+        const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
         const x = centerX + radius * Math.cos(angle);
         const y = centerY + radius * Math.sin(angle);
         const color = colors[i % colors.length];
         
-        svg += `<circle cx="${x}" cy="${y}" r="35" fill="${color}"/>`;
+        svg += `<circle cx="${x}" cy="${y}" r="${nodeRadius}" fill="${color}"/>`;
         svg += `<text x="${x}" y="${y + 4}" fill="white" font-size="11" text-anchor="middle" font-family="system-ui">${items[i]}</text>`;
         
-        // Draw arrow to next
-        const nextAngle = ((i + 1) / count) * 2 * Math.PI - Math.PI/2;
+        const nextAngle = ((i + 1) / count) * 2 * Math.PI - Math.PI / 2;
         const nextX = centerX + radius * Math.cos(nextAngle);
         const nextY = centerY + radius * Math.sin(nextAngle);
-        const midAngle = (angle + nextAngle) / 2 + (nextAngle > angle ? 0 : Math.PI);
-        const arcRadius = radius - 40;
+        const midAngle = (angle + nextAngle) / 2;
+        const controlRadius = radius - 40;
+        const controlX = centerX + controlRadius * Math.cos(midAngle);
+        const controlY = centerY + controlRadius * Math.sin(midAngle);
+        const startX = centerX + (radius - nodeRadius + 6) * Math.cos(angle);
+        const startY = centerY + (radius - nodeRadius + 6) * Math.sin(angle);
+        const endX = centerX + (radius - nodeRadius + 6) * Math.cos(nextAngle);
+        const endY = centerY + (radius - nodeRadius + 6) * Math.sin(nextAngle);
         
-        svg += `<path d="M${x + 30 * Math.cos(midAngle)} ${y + 30 * Math.sin(midAngle)} Q${centerX} ${centerY} ${nextX - 30 * Math.cos(midAngle)} ${nextY - 30 * Math.sin(midAngle)}" stroke="#666" fill="none" stroke-width="2" marker-end="url(#arrow)"/>`;
+        svg += `<path d="M${startX} ${startY} Q${controlX} ${controlY} ${endX} ${endY}" stroke="#666" fill="none" stroke-width="2" marker-end="url(#arrow-cycle)"/>`;
       }
       
-      svg += `<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#666"/></marker></defs>`;
       svg += '</svg>';
       return svg;
     }
@@ -200,10 +253,16 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
   const handleInsertSmartArt = () => {
     if (!selectedTemplate) return;
 
-    const svg = selectedTemplate.generateSvg(items.filter(i => i.trim()), defaultColors);
-    const dataUri = `data:image/svg+xml;base64,${btoa(svg)}`;
+    const renderItems = normalizeItems(items);
+    const svg = selectedTemplate.generateSvg(renderItems, defaultColors);
+    const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
     
-    editor.chain().focus().setImage({ src: dataUri, alt: selectedTemplate.name }).run();
+    editor
+      .chain()
+      .focus()
+      .setImage({ src: dataUri, alt: selectedTemplate.name })
+      .updateAttributes('image', { align: 'center', width: '100' })
+      .run();
     
     setIsOpen(false);
     setSelectedTemplate(null);
@@ -290,7 +349,7 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                 <div className="mt-4 p-4 bg-background/50 rounded-lg border border-border/30 overflow-auto max-h-40">
                   <div 
                     dangerouslySetInnerHTML={{ 
-                      __html: selectedTemplate.generateSvg(items.filter(i => i.trim()), defaultColors) 
+                      __html: selectedTemplate.generateSvg(normalizeItems(items), defaultColors) 
                     }} 
                   />
                 </div>
