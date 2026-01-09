@@ -57,12 +57,6 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
-      return;
-    }
-
     setIsUploading(true);
 
     try {
@@ -231,9 +225,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
                   <p className="text-sm text-muted-foreground mb-2">
                     {isUploading ? 'Uploading...' : 'Click to upload or drag and drop'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    PNG, JPG, GIF up to 5MB
-                  </p>
+                  <p className="text-xs text-muted-foreground">PNG, JPG, GIF supported</p>
                 </label>
               </div>
 
