@@ -25,6 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -464,6 +465,8 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
   const [items, setItems] = useState<string[]>(['Item 1', 'Item 2', 'Item 3', 'Item 4']);
   const [hierarchyDepth, setHierarchyDepth] = useState(defaultHierarchyDepth);
   const [hierarchyBranching, setHierarchyBranching] = useState(defaultHierarchyBranching);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [bulkItemsText, setBulkItemsText] = useState('');
 
   const imageAttributes = editor?.getAttributes('image') ?? {};
   const selectedSmartArtType = (imageAttributes as { smartArtType?: string }).smartArtType ?? null;
@@ -591,6 +594,32 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
     setItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const handleClearItems = () => {
+    setItems(['Item 1']);
+  };
+
+  const handleApplyBulkItems = () => {
+    const parsedItems = bulkItemsText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (parsedItems.length === 0) {
+      toast.error('Add at least one item before applying.');
+      return;
+    }
+
+    setItems(parsedItems);
+    toast.success('Items updated');
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTemplateSearch('');
+      setBulkItemsText('');
+    }
+  }, [isOpen]);
+
   const hierarchyCapacity = getHierarchyMaxItems({
     hierarchyDepth,
     hierarchyBranching,
@@ -645,16 +674,27 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
             {/* Template Selection */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Choose a layout</Label>
+              <Input
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                placeholder="Search layouts..."
+                className="mb-3"
+              />
               <div className="space-y-4 max-h-[420px] overflow-auto pr-2">
                 {categoryOrder
                   .filter((category) => groupedTemplates[category]?.length)
-                  .map((category) => (
+                  .map((category) => {
+                    const visibleTemplates = groupedTemplates[category].filter((template) =>
+                      template.name.toLowerCase().includes(templateSearch.toLowerCase())
+                    );
+                    if (visibleTemplates.length === 0) return null;
+                    return (
                   <div key={category} className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {category}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      {groupedTemplates[category].map((template) => (
+                      {visibleTemplates.map((template) => (
                         <button
                           key={template.id}
                           onClick={() => handleSelectTemplate(template)}
@@ -669,13 +709,34 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                       ))}
                     </div>
                   </div>
-                ))}
+                    );
+                  })}
               </div>
             </div>
 
             {/* Content Editor */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Edit content</Label>
+              {selectedTemplate ? (
+                <div className="mb-3 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{selectedTemplate.name}</span>
+                    <span>{selectedTemplate.category}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span>
+                      {items.length} {items.length === 1 ? 'item' : 'items'}
+                    </span>
+                    {typeof maxItems === 'number' && (
+                      <span>Max {maxItems}</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  Select a layout to customize items and preview.
+                </div>
+              )}
               <div className="space-y-2">
                 {items.map((item, index) => (
                   <div key={index} className="flex items-center gap-2">
@@ -744,6 +805,19 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                     Increase hierarchy depth or branching to fit all items.
                   </p>
                 )}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearItems}>
+                    Clear items
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setItems(['Item 1', 'Item 2', 'Item 3', 'Item 4'])}
+                  >
+                    Reset items
+                  </Button>
+                </div>
               </div>
 
               {/* Preview */}
@@ -763,6 +837,18 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                   />
                 </div>
               )}
+              <div className="mt-4 space-y-2">
+                <Label className="text-sm">Quick add items</Label>
+                <Textarea
+                  value={bulkItemsText}
+                  onChange={(e) => setBulkItemsText(e.target.value)}
+                  placeholder="Paste one item per line"
+                  rows={4}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={handleApplyBulkItems}>
+                  Apply list
+                </Button>
+              </div>
               {selectedTemplate?.id === 'hierarchy' && (
                 <div className="mt-4 space-y-3">
                   <div className="space-y-1">
