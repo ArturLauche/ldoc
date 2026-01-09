@@ -245,6 +245,26 @@ All colors MUST be HSL.
   line-height: 1.75;
 }
 
+.editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+}
+
+.editor-content .ProseMirror img[data-align="left"] {
+  float: left;
+  margin: 0.5rem 1.5rem 0.5rem 0;
+}
+
+.editor-content .ProseMirror img[data-align="center"] {
+  display: block;
+  margin: 1rem auto;
+}
+
+.editor-content .ProseMirror img[data-align="right"] {
+  float: right;
+  margin: 0.5rem 0 0.5rem 1.5rem;
+}
+
 .editor-content .ProseMirror ul,
 .editor-content .ProseMirror ol {
   padding-left: 1.5rem;

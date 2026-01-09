@@ -44,6 +44,21 @@ interface SmartArtTemplate {
 }
 
 const defaultColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+const fallbackItems = ['Item 1', 'Item 2', 'Item 3', 'Item 4'];
+
+const escapeXml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const normalizeItems = (items: string[]) => {
+  const trimmed = items.map((item) => item.trim()).filter(Boolean);
+  const baseItems = trimmed.length > 0 ? trimmed : fallbackItems;
+  return baseItems.map((item) => escapeXml(item));
+};
 
 const smartArtTemplates: SmartArtTemplate[] = [
   {
@@ -200,10 +215,16 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
   const handleInsertSmartArt = () => {
     if (!selectedTemplate) return;
 
-    const svg = selectedTemplate.generateSvg(items.filter(i => i.trim()), defaultColors);
-    const dataUri = `data:image/svg+xml;base64,${btoa(svg)}`;
+    const renderItems = normalizeItems(items);
+    const svg = selectedTemplate.generateSvg(renderItems, defaultColors);
+    const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
     
-    editor.chain().focus().setImage({ src: dataUri, alt: selectedTemplate.name }).run();
+    editor
+      .chain()
+      .focus()
+      .setImage({ src: dataUri, alt: selectedTemplate.name })
+      .updateAttributes('image', { align: 'center', width: '100' })
+      .run();
     
     setIsOpen(false);
     setSelectedTemplate(null);
@@ -290,7 +311,7 @@ export const SmartArtPicker = ({ editor }: SmartArtPickerProps) => {
                 <div className="mt-4 p-4 bg-background/50 rounded-lg border border-border/30 overflow-auto max-h-40">
                   <div 
                     dangerouslySetInnerHTML={{ 
-                      __html: selectedTemplate.generateSvg(items.filter(i => i.trim()), defaultColors) 
+                      __html: selectedTemplate.generateSvg(normalizeItems(items), defaultColors) 
                     }} 
                   />
                 </div>

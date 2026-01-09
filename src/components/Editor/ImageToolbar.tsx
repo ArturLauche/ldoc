@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Editor } from '@tiptap/react';
-import { Image as ImageIcon, Upload, Link2, X } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, Image as ImageIcon, Link2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,12 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
@@ -30,8 +26,26 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
   const [imageUrl, setImageUrl] = useState('');
   const [altText, setAltText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [imageAlignment, setImageAlignment] = useState('center');
+  const [imageWidth, setImageWidth] = useState('100');
 
   if (!editor) return null;
+
+  const isEditingSelection = editor.isActive('image');
+
+  const syncSelectionAttributes = () => {
+    if (!isEditingSelection) {
+      setAltText('');
+      setImageAlignment('center');
+      setImageWidth('100');
+      return;
+    }
+
+    const attributes = editor.getAttributes('image');
+    setAltText(attributes.alt ?? '');
+    setImageAlignment(attributes.align ?? 'center');
+    setImageWidth(attributes.width ?? '100');
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -56,10 +70,18 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
-        editor.chain().focus().setImage({ 
-          src: dataUrl,
-          alt: altText || file.name 
-        }).run();
+        editor
+          .chain()
+          .focus()
+          .setImage({ 
+            src: dataUrl,
+            alt: altText || file.name,
+          })
+          .updateAttributes('image', {
+            align: imageAlignment,
+            width: imageWidth,
+          })
+          .run();
         setIsOpen(false);
         setAltText('');
         toast.success('Image inserted');
@@ -86,10 +108,18 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       return;
     }
 
-    editor.chain().focus().setImage({ 
-      src: imageUrl,
-      alt: altText || 'Image' 
-    }).run();
+    editor
+      .chain()
+      .focus()
+      .setImage({ 
+        src: imageUrl,
+        alt: altText || 'Image',
+      })
+      .updateAttributes('image', {
+        align: imageAlignment,
+        width: imageWidth,
+      })
+      .run();
     
     setIsOpen(false);
     setImageUrl('');
@@ -107,14 +137,38 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
-        editor.chain().focus().setImage({ 
-          src: dataUrl,
-          alt: file.name 
-        }).run();
+        editor
+          .chain()
+          .focus()
+          .setImage({ 
+            src: dataUrl,
+            alt: file.name,
+          })
+          .updateAttributes('image', {
+            align: imageAlignment,
+            width: imageWidth,
+          })
+          .run();
         toast.success('Image inserted');
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleApplyFormatting = () => {
+    if (!isEditingSelection) return;
+    const attributes = editor.getAttributes('image');
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('image', {
+        alt: altText || attributes.alt,
+        align: imageAlignment,
+        width: imageWidth,
+      })
+      .run();
+    toast.success('Image updated');
+    setIsOpen(false);
   };
 
   return (
@@ -124,7 +178,10 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsOpen(true)}
+            onClick={() => {
+              syncSelectionAttributes();
+              setIsOpen(true);
+            }}
             className="h-8 w-8 p-0"
             aria-label="Insert image"
           >
@@ -221,6 +278,51 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
               </Button>
             </TabsContent>
           </Tabs>
+
+          <div className="mt-4 space-y-4">
+            <div>
+              <Label className="text-sm">Alignment</Label>
+              <ToggleGroup
+                type="single"
+                value={imageAlignment}
+                onValueChange={(value) => value && setImageAlignment(value)}
+                className="mt-2 justify-start"
+              >
+                <ToggleGroupItem value="left" aria-label="Align left">
+                  <AlignLeft className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="center" aria-label="Align center">
+                  <AlignCenter className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="right" aria-label="Align right">
+                  <AlignRight className="h-4 w-4" />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            <div>
+              <Label className="text-sm">Size</Label>
+              <ToggleGroup
+                type="single"
+                value={imageWidth}
+                onValueChange={(value) => value && setImageWidth(value)}
+                className="mt-2 justify-start"
+              >
+                <ToggleGroupItem value="25">25%</ToggleGroupItem>
+                <ToggleGroupItem value="50">50%</ToggleGroupItem>
+                <ToggleGroupItem value="75">75%</ToggleGroupItem>
+                <ToggleGroupItem value="100">100%</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
+
+          {isEditingSelection && (
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={handleApplyFormatting}>
+                Update Selected Image
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </>

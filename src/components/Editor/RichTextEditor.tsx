@@ -11,6 +11,7 @@ import Subscript from '@tiptap/extension-subscript';
 import FontFamily from '@tiptap/extension-font-family';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
+import { mergeAttributes } from '@tiptap/core';
 import { useState, useEffect, useCallback } from 'react';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
@@ -19,12 +20,45 @@ import { toast } from 'sonner';
 import { Cloud, FileText } from 'lucide-react';
 
 const AUTOSAVE_DELAY = 3000;
+const STORAGE_KEY = 'lwrite-current-doc';
+const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
+
+const EnhancedImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align') || 'center',
+        renderHTML: (attributes) => ({
+          'data-align': attributes.align,
+        }),
+      },
+      width: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-width'),
+        renderHTML: (attributes) =>
+          attributes.width
+            ? {
+                'data-width': attributes.width,
+                style: `width: ${attributes.width}%;`,
+              }
+            : {},
+      },
+    };
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
+  },
+});
 
 export const RichTextEditor = () => {
   const [documentName, setDocumentName] = useState('Untitled Document');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
+  const [characterCount, setCharacterCount] = useState(0);
 
   const editor = useEditor({
     extensions: [
@@ -54,7 +88,7 @@ export const RichTextEditor = () => {
       Placeholder.configure({
         placeholder: 'Start writing something amazing...',
       }),
-      Image.configure({
+      EnhancedImage.configure({
         inline: false,
         allowBase64: true,
         HTMLAttributes: {
@@ -65,6 +99,7 @@ export const RichTextEditor = () => {
     content: '<p></p>',
     onUpdate: () => {
       setHasUnsavedChanges(true);
+      updateCounts();
     },
     editorProps: {
       attributes: {
@@ -74,10 +109,18 @@ export const RichTextEditor = () => {
     },
   });
 
+  const updateCounts = useCallback(() => {
+    if (!editor) return;
+    const text = editor.getText();
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    setWordCount(words);
+    setCharacterCount(text.length);
+  }, [editor]);
+
   // Load saved document on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('floatwrite-current-doc');
+      const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
       if (saved) {
         const doc = JSON.parse(saved);
         if (doc.content && editor) {
@@ -85,6 +128,11 @@ export const RichTextEditor = () => {
           setDocumentName(doc.name || 'Untitled Document');
           setLastSaved(new Date(doc.savedAt));
           setHasUnsavedChanges(false);
+          updateCounts();
+        }
+        if (!localStorage.getItem(STORAGE_KEY)) {
+          localStorage.setItem(STORAGE_KEY, saved);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
         }
       }
     } catch (error) {
@@ -104,13 +152,19 @@ export const RichTextEditor = () => {
         savedAt: new Date().toISOString(),
       };
       
-      localStorage.setItem('floatwrite-current-doc', JSON.stringify(docData));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
     }, AUTOSAVE_DELAY);
 
     return () => clearTimeout(timer);
   }, [editor, hasUnsavedChanges, documentName]);
+
+  useEffect(() => {
+    if (editor) {
+      updateCounts();
+    }
+  }, [editor, updateCounts]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -124,7 +178,7 @@ export const RichTextEditor = () => {
             content,
             savedAt: new Date().toISOString(),
           };
-          localStorage.setItem('floatwrite-current-doc', JSON.stringify(docData));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
           setLastSaved(new Date());
           setHasUnsavedChanges(false);
           toast.success('Document saved');
@@ -137,12 +191,14 @@ export const RichTextEditor = () => {
           if (confirm('You have unsaved changes. Create a new document anyway?')) {
             editor?.commands.setContent('<p></p>');
             setDocumentName('Untitled Document');
-            localStorage.removeItem('floatwrite-current-doc');
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(LEGACY_STORAGE_KEY);
           }
         } else {
           editor?.commands.setContent('<p></p>');
           setDocumentName('Untitled Document');
-          localStorage.removeItem('floatwrite-current-doc');
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
         }
       }
     };
@@ -168,7 +224,7 @@ export const RichTextEditor = () => {
               <div className="p-1.5 rounded-lg bg-primary/10">
                 <FileText className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold text-lg tracking-tight">FloatWrite</span>
+              <span className="font-semibold text-lg tracking-tight">LWrite</span>
             </div>
             
             <FileMenu
@@ -230,8 +286,8 @@ export const RichTextEditor = () => {
       <footer className="px-4 py-3 border-t border-border/50 bg-background/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-4">
-            <span>{editor?.storage.characterCount?.words?.() || 0} words</span>
-            <span>{editor?.storage.characterCount?.characters?.() || 0} characters</span>
+            <span>{wordCount} words</span>
+            <span>{characterCount} characters</span>
           </div>
           {lastSaved && (
             <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
