@@ -1,6 +1,14 @@
 import mammoth from 'mammoth';
 
-export type SupportedFormat = 'txt' | 'html' | 'htm' | 'rtf' | 'docx' | 'odt';
+export type SupportedFormat =
+  | 'txt'
+  | 'html'
+  | 'htm'
+  | 'rtf'
+  | 'docx'
+  | 'odt'
+  | 'ott'
+  | 'fodt';
 
 export interface ImportResult {
   content: string;
@@ -58,6 +66,28 @@ async function importOdt(file: File): Promise<string> {
     return html || '<p></p>';
   } catch (error) {
     console.error('ODT import error:', error);
+    const text = await file.text();
+    return `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
+  }
+}
+
+// Import FODT (Flat OpenDocument Text) - basic support
+async function importFodt(file: File): Promise<string> {
+  try {
+    const text = await file.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const textElements = doc.getElementsByTagName('text:p');
+    let html = '';
+
+    for (let i = 0; i < textElements.length; i++) {
+      const element = textElements[i];
+      html += `<p>${processOdtNode(element)}</p>`;
+    }
+
+    return html || '<p></p>';
+  } catch (error) {
+    console.error('FODT import error:', error);
     const text = await file.text();
     return `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
   }
@@ -123,7 +153,11 @@ export async function importDocument(file: File): Promise<ImportResult> {
       content = await importDocx(file);
       break;
     case 'odt':
+    case 'ott':
       content = await importOdt(file);
+      break;
+    case 'fodt':
+      content = await importFodt(file);
       break;
     case 'html':
     case 'htm':
@@ -147,5 +181,5 @@ export async function importDocument(file: File): Promise<ImportResult> {
 }
 
 export function getSupportedFormats(): string {
-  return '.txt,.html,.htm,.rtf,.docx,.odt';
+  return '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
 }
