@@ -438,9 +438,7 @@ function escapeXml(value: string): string {
 }
 
 function buildOdtContentXml(blocks: HtmlBlock[]): string {
-  const body = blocks.length
-    ? blocks.map((block) => buildOdtBlock(block)).join('')
-    : '<text:p></text:p>';
+  const body = blocks.length ? buildOdtBody(blocks) : '<text:p></text:p>';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
@@ -465,10 +463,14 @@ async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const documentXml = buildDocxDocumentXml(blocks);
   const contentTypesXml = buildDocxContentTypesXml();
   const relsXml = buildDocxRelsXml();
+  const documentRelsXml = buildDocxDocumentRelsXml();
+  const numberingXml = buildDocxNumberingXml();
 
   zip.file('[Content_Types].xml', contentTypesXml);
   zip.file('_rels/.rels', relsXml);
+  zip.file('word/_rels/document.xml.rels', documentRelsXml);
   zip.file('word/document.xml', documentXml);
+  zip.file('word/numbering.xml', numberingXml);
 
   return zip.generateAsync({
     type: 'blob',
@@ -500,6 +502,7 @@ function buildDocxContentTypesXml(): string {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
 </Types>`;
 }
 
@@ -510,19 +513,52 @@ function buildDocxRelsXml(): string {
 </Relationships>`;
 }
 
+function buildDocxDocumentRelsXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+</Relationships>`;
+}
+
+function buildDocxNumberingXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="1">
+    <w:lvl w:ilvl="0">
+      <w:numFmt w:val="bullet"/>
+      <w:lvlText w:val="•"/>
+      <w:lvlJc w:val="left"/>
+      <w:pPr>
+        <w:ind w:left="720" w:hanging="360"/>
+      </w:pPr>
+    </w:lvl>
+  </w:abstractNum>
+  <w:abstractNum w:abstractNumId="2">
+    <w:lvl w:ilvl="0">
+      <w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1."/>
+      <w:lvlJc w:val="left"/>
+      <w:pPr>
+        <w:ind w:left="720" w:hanging="360"/>
+      </w:pPr>
+    </w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="1">
+    <w:abstractNumId w:val="1"/>
+  </w:num>
+  <w:num w:numId="2">
+    <w:abstractNumId w:val="2"/>
+  </w:num>
+</w:numbering>`;
+}
+
 function buildPdfBlob(blocks: HtmlBlock[]): Blob {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 72;
-  const lineHeight = 14;
   const maxCharsPerLine = 90;
   const lines = buildPdfLinesFromBlocks(blocks, maxCharsPerLine);
-  const linesPerPage = Math.floor((pageHeight - margin * 2) / lineHeight);
-
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += linesPerPage) {
-    pages.push(lines.slice(i, i + linesPerPage));
-  }
+  const pages = paginatePdfLines(lines, pageHeight - margin * 2);
 
   const maxId = 3 + pages.length * 2;
   const objects: string[] = new Array(maxId + 1);
@@ -540,8 +576,8 @@ function buildPdfBlob(blocks: HtmlBlock[]): Blob {
   pages.forEach((pageLines, index) => {
     const pageId = pageIds[index];
     const contentId = contentIds[index];
-    const contentStream = buildPdfContentStream(pageLines, margin, pageHeight, lineHeight);
-    const length = contentStream.length;
+    const contentStream = buildPdfContentStream(pageLines, margin, pageHeight, pageWidth);
+    const length = getPdfByteLength(contentStream);
 
     objects[pageId] =
       `${pageId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
@@ -550,29 +586,38 @@ function buildPdfBlob(blocks: HtmlBlock[]): Blob {
       `${contentId} 0 obj\n<< /Length ${length} >>\nstream\n${contentStream}\nendstream\nendobj`;
   });
 
-  let pdf = '%PDF-1.4\n';
+  const pdfChunks: string[] = [];
   const offsets: number[] = new Array(maxId + 1).fill(0);
+  let byteLength = 0;
+
+  const pushChunk = (chunk: string) => {
+    pdfChunks.push(chunk);
+    byteLength += getPdfByteLength(chunk);
+  };
+
+  pushChunk('%PDF-1.4\n');
 
   for (let i = 1; i <= maxId; i += 1) {
-    offsets[i] = pdf.length;
-    pdf += `${objects[i]}\n`;
+    offsets[i] = byteLength;
+    pushChunk(`${objects[i]}\n`);
   }
 
-  const xrefStart = pdf.length;
-  pdf += `xref\n0 ${maxId + 1}\n`;
-  pdf += '0000000000 65535 f \n';
+  const xrefStart = byteLength;
+  pushChunk(`xref\n0 ${maxId + 1}\n`);
+  pushChunk('0000000000 65535 f \n');
   for (let i = 1; i <= maxId; i += 1) {
-    pdf += `${offsets[i].toString().padStart(10, '0')} 00000 n \n`;
+    pushChunk(`${offsets[i].toString().padStart(10, '0')} 00000 n \n`);
   }
-  pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  pushChunk(`trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
 
-  return new Blob([pdf], { type: 'application/pdf' });
+  return new Blob([encodePdfChunks(pdfChunks)], { type: 'application/pdf' });
 }
 
 type HtmlBlock = {
-  type: 'paragraph' | 'heading' | 'list-item';
+  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule';
   text: string;
   level?: number;
+  listType?: 'bullet' | 'number';
 };
 
 function extractBlocksFromHtml(html: string): HtmlBlock[] {
@@ -619,8 +664,25 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
       return;
     }
 
+    if (tag === 'ul' || tag === 'ol') {
+      const listType = tag === 'ol' ? 'number' : 'bullet';
+      el.querySelectorAll(':scope > li').forEach((item) => {
+        addBlock({
+          type: 'list-item',
+          text: extractInlineText(item),
+          listType,
+        });
+      });
+      return;
+    }
+
     if (tag === 'li') {
-      addBlock({ type: 'list-item', text: extractInlineText(el) });
+      addBlock({ type: 'list-item', text: extractInlineText(el), listType: 'bullet' });
+      return;
+    }
+
+    if (tag === 'hr') {
+      blocks.push({ type: 'horizontal-rule', text: '' });
       return;
     }
 
@@ -632,69 +694,94 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
 }
 
 function buildDocxParagraph(block: HtmlBlock): string {
+  if (block.type === 'horizontal-rule') {
+    return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
+  }
+
   const style =
     block.type === 'heading'
-      ? `<w:pPr><w:pStyle w:val="Heading${block.level ?? 1}"/></w:pPr>`
+      ? buildDocxHeadingStyle(block.level ?? 1)
+      : block.type === 'list-item'
+        ? buildDocxListStyle(block.listType ?? 'bullet')
       : '';
-  const runs = buildDocxRuns(block.text);
-  const prefix = block.type === 'list-item' ? '• ' : '';
+  const runs = buildDocxRuns(block.text, block.type === 'heading' ? block.level : undefined);
+  const prefix = block.type === 'list-item' ? '' : '';
+  const prefixRun = prefix
+    ? `<w:r><w:t xml:space="preserve">${escapeXml(prefix)}</w:t></w:r>`
+    : '';
 
-  return `<w:p>${style}<w:r><w:t xml:space="preserve">${escapeXml(
-    prefix,
-  )}</w:t></w:r>${runs}</w:p>`;
+  return `<w:p>${style}${prefixRun}${runs}</w:p>`;
 }
 
-function buildDocxRuns(text: string): string {
+function buildDocxRuns(text: string, headingLevel?: number): string {
   const parts = text.split('\n');
+  const runProps = headingLevel ? buildDocxHeadingRunProps(headingLevel) : '';
   return parts
     .map((part, index) => {
       const escaped = escapeXml(part);
       const breakTag = index > 0 ? '<w:r><w:br/></w:r>' : '';
-      return `${breakTag}<w:r><w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+      return `${breakTag}<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
     })
     .join('');
 }
 
-function buildOdtBlock(block: HtmlBlock): string {
+function buildOdtBlock(block: HtmlBlock, index: number): string {
+  if (block.type === 'horizontal-rule') {
+    return `<text:p>${escapeXml('─'.repeat(48))}</text:p>`;
+  }
+
+  if (block.type === 'list-item') {
+    const text = block.listType === 'number' ? `${index + 1}. ${block.text}` : block.text;
+    return `<text:list-item><text:p>${buildOdtInlineText(text)}</text:p></text:list-item>`;
+  }
+
   const tag =
     block.type === 'heading'
       ? `text:h text:outline-level="${block.level ?? 1}"`
       : 'text:p';
-  const prefix = block.type === 'list-item' ? '• ' : '';
-  const text = `${prefix}${block.text}`;
-  const xml = text
-    .split('\n')
-    .map((line, index) =>
-      index === 0 ? escapeXml(line) : `<text:line-break/>${escapeXml(line)}`,
-    )
-    .join('');
-
-  return `<${tag}>${xml}</${tag.split(' ')[0]}>`;
+  return `<${tag}>${buildOdtInlineText(block.text)}</${tag.split(' ')[0]}>`;
 }
 
-function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): string[] {
-  const lines: string[] = [];
+function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine[] {
+  const lines: PdfLine[] = [];
+  let listIndex = 0;
 
   blocks.forEach((block, index) => {
-    const prefix = block.type === 'list-item' ? '• ' : '';
-    const text =
-      block.type === 'heading' ? block.text.toUpperCase() : `${prefix}${block.text}`;
+    if (block.type === 'list-item') {
+      listIndex += 1;
+    } else {
+      listIndex = 0;
+    }
 
-    lines.push(...wrapPdfText(text, maxChars));
+    if (block.type === 'horizontal-rule') {
+      lines.push({ type: 'rule' });
+    } else {
+      const prefix =
+        block.type === 'list-item'
+          ? block.listType === 'number'
+            ? `${listIndex}. `
+            : '• '
+          : '';
+      const text = `${prefix}${block.text}`;
+      const fontSize = block.type === 'heading' ? 16 - ((block.level ?? 1) - 1) * 2 : 12;
+
+      wrapPdfText(text, maxChars).forEach((line) => {
+        lines.push({ type: 'text', text: line, fontSize });
+      });
+    }
 
     if (index < blocks.length - 1) {
-      lines.push('');
+      lines.push({ type: 'spacer', fontSize: 12 });
     }
   });
 
-  return lines.length ? lines : [''];
+  return lines.length ? lines : [{ type: 'text', text: '', fontSize: 12 }];
 }
 
 function wrapPdfText(text: string, maxChars: number): string[] {
-  const sanitized = text.replace(/[^\x20-\x7E]/g, '?');
   const lines: string[] = [];
 
-  sanitized.split('\n').forEach((line) => {
+  text.split('\n').forEach((line) => {
     let current = '';
     line.split(/\s+/).forEach((word) => {
       if (!word) return;
@@ -720,21 +807,37 @@ function wrapPdfText(text: string, maxChars: number): string[] {
 }
 
 function buildPdfContentStream(
-  lines: string[],
+  lines: PdfLine[],
   margin: number,
   pageHeight: number,
-  lineHeight: number,
+  pageWidth: number,
 ): string {
-  const startY = pageHeight - margin;
-  const escapedLines = lines.map((line) => escapePdfText(line));
+  let cursorY = pageHeight - margin;
   let stream = 'BT\n/F1 12 Tf\n';
-  stream += `${margin} ${startY} Td\n`;
+  stream += `${margin} ${cursorY} Td\n`;
 
-  escapedLines.forEach((line, index) => {
+  lines.forEach((line, index) => {
     if (index > 0) {
-      stream += `0 -${lineHeight} Td\n`;
+      const move = line.type === 'rule' ? 10 : (line.fontSize ?? 12) * 1.4;
+      stream += `0 -${move.toFixed(2)} Td\n`;
+      cursorY -= move;
     }
-    stream += `(${line}) Tj\n`;
+
+    if (line.type === 'rule') {
+      stream += 'ET\n';
+      const y = cursorY;
+      stream += `q 0.5 w ${margin} ${y} m ${pageWidth - margin} ${y} l S Q\n`;
+      stream += 'BT\n/F1 12 Tf\n';
+      stream += `${margin} ${y} Td\n`;
+      return;
+    }
+
+    if (line.type === 'spacer') {
+      return;
+    }
+
+    stream += `/F1 ${line.fontSize ?? 12} Tf\n`;
+    stream += `(${escapePdfText(line.text ?? '')}) Tj\n`;
   });
 
   stream += 'ET';
@@ -743,4 +846,120 @@ function buildPdfContentStream(
 
 function escapePdfText(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+type PdfLine =
+  | { type: 'text'; text: string; fontSize: number }
+  | { type: 'rule' }
+  | { type: 'spacer'; fontSize: number };
+
+function paginatePdfLines(lines: PdfLine[], availableHeight: number): PdfLine[][] {
+  const pages: PdfLine[][] = [];
+  let current: PdfLine[] = [];
+  let used = 0;
+
+  lines.forEach((line) => {
+    const height =
+      line.type === 'rule'
+        ? 12
+        : line.type === 'spacer'
+          ? line.fontSize * 1.4
+          : line.fontSize * 1.4;
+
+    if (used + height > availableHeight && current.length) {
+      pages.push(current);
+      current = [];
+      used = 0;
+    }
+
+    current.push(line);
+    used += height;
+  });
+
+  if (current.length) {
+    pages.push(current);
+  }
+
+  return pages.length ? pages : [[{ type: 'text', text: '', fontSize: 12 }]];
+}
+
+function buildOdtBody(blocks: HtmlBlock[]): string {
+  const parts: string[] = [];
+  let listBuffer: HtmlBlock[] = [];
+  let listType: HtmlBlock['listType'] | null = null;
+
+  const flushList = () => {
+    if (!listBuffer.length) return;
+    const items = listBuffer
+      .map((block, index) => buildOdtBlock(block, index))
+      .join('');
+    parts.push(`<text:list>${items}</text:list>`);
+    listBuffer = [];
+    listType = null;
+  };
+
+  blocks.forEach((block) => {
+    if (block.type === 'list-item') {
+      if (listType && listType !== block.listType) {
+        flushList();
+      }
+      listType = block.listType ?? 'bullet';
+      listBuffer.push(block);
+      return;
+    }
+
+    flushList();
+    parts.push(buildOdtBlock(block, 0));
+  });
+
+  flushList();
+  return parts.join('');
+}
+
+function buildOdtInlineText(text: string): string {
+  return text
+    .split('\n')
+    .map((line, index) =>
+      index === 0 ? escapeXml(line) : `<text:line-break/>${escapeXml(line)}`,
+    )
+    .join('');
+}
+
+function buildDocxHeadingStyle(_level: number): string {
+  return `<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>`;
+}
+
+function buildDocxHeadingRunProps(level: number): string {
+  const size = level === 1 ? 48 : level === 2 ? 36 : 28;
+  return `<w:rPr><w:b/><w:sz w:val="${size}"/></w:rPr>`;
+}
+
+function buildDocxListStyle(listType: HtmlBlock['listType']): string {
+  const numId = listType === 'number' ? 2 : 1;
+  return `<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>`;
+}
+
+function getPdfByteLength(value: string): number {
+  let length = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    length += code <= 0xff ? 1 : 1;
+  }
+  return length;
+}
+
+function encodePdfChunks(chunks: string[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + getPdfByteLength(chunk), 0);
+  const buffer = new Uint8Array(total);
+  let offset = 0;
+
+  chunks.forEach((chunk) => {
+    for (let i = 0; i < chunk.length; i += 1) {
+      const code = chunk.charCodeAt(i);
+      buffer[offset] = code <= 0xff ? code : 63;
+      offset += 1;
+    }
+  });
+
+  return buffer;
 }
