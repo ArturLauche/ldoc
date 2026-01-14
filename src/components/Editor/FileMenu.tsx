@@ -164,16 +164,16 @@ ${editor.getHTML()}
         extension = 'rtf';
         break;
       case 'docx': {
-        const paragraphs = normalizeParagraphs(editor.getText());
-        const blob = await buildDocxBlob(paragraphs);
+        const blocks = extractBlocksFromHtml(editor.getHTML());
+        const blob = await buildDocxBlob(blocks);
         downloadBlob(blob, `${documentName}.docx`);
         toast.success(`Exported as ${documentName}.docx`);
         return;
       }
       case 'odt': {
-        const paragraphs = normalizeParagraphs(editor.getText());
+        const blocks = extractBlocksFromHtml(editor.getHTML());
 
-        const contentXml = buildOdtContentXml(paragraphs);
+        const contentXml = buildOdtContentXml(blocks);
         const manifestXml = buildOdtManifestXml();
         const zip = new JSZip();
 
@@ -191,7 +191,8 @@ ${editor.getHTML()}
         return;
       }
       case 'pdf': {
-        const blob = buildPdfBlob(editor.getText());
+        const blocks = extractBlocksFromHtml(editor.getHTML());
+        const blob = buildPdfBlob(blocks);
         downloadBlob(blob, `${documentName}.pdf`);
         toast.success(`Exported as ${documentName}.pdf`);
         return;
@@ -436,9 +437,9 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function buildOdtContentXml(paragraphs: string[]): string {
-  const body = paragraphs.length
-    ? paragraphs.map((paragraph) => `<text:p>${escapeXml(paragraph)}</text:p>`).join('')
+function buildOdtContentXml(blocks: HtmlBlock[]): string {
+  const body = blocks.length
+    ? blocks.map((block) => buildOdtBlock(block)).join('')
     : '<text:p></text:p>';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -459,16 +460,9 @@ function buildOdtManifestXml(): string {
 </manifest:manifest>`;
 }
 
-function normalizeParagraphs(text: string): string[] {
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.replace(/\n/g, ' ').trim())
-    .filter(Boolean);
-}
-
-async function buildDocxBlob(paragraphs: string[]): Promise<Blob> {
+async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const zip = new JSZip();
-  const documentXml = buildDocxDocumentXml(paragraphs);
+  const documentXml = buildDocxDocumentXml(blocks);
   const contentTypesXml = buildDocxContentTypesXml();
   const relsXml = buildDocxRelsXml();
 
@@ -483,11 +477,10 @@ async function buildDocxBlob(paragraphs: string[]): Promise<Blob> {
   });
 }
 
-function buildDocxDocumentXml(paragraphs: string[]): string {
-  const paragraphXml = (paragraphs.length ? paragraphs : ['']).map((paragraph) => {
-    const safeText = escapeXml(paragraph || ' ');
-    return `<w:p><w:r><w:t xml:space="preserve">${safeText}</w:t></w:r></w:p>`;
-  });
+function buildDocxDocumentXml(blocks: HtmlBlock[]): string {
+  const paragraphXml = (blocks.length ? blocks : [{ type: 'paragraph', text: '' }]).map(
+    (block) => buildDocxParagraph(block),
+  );
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -517,13 +510,13 @@ function buildDocxRelsXml(): string {
 </Relationships>`;
 }
 
-function buildPdfBlob(text: string): Blob {
+function buildPdfBlob(blocks: HtmlBlock[]): Blob {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 72;
   const lineHeight = 14;
   const maxCharsPerLine = 90;
-  const lines = wrapPdfText(text || ' ', maxCharsPerLine);
+  const lines = buildPdfLinesFromBlocks(blocks, maxCharsPerLine);
   const linesPerPage = Math.floor((pageHeight - margin * 2) / lineHeight);
 
   const pages: string[][] = [];
@@ -574,6 +567,127 @@ function buildPdfBlob(text: string): Blob {
   pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
   return new Blob([pdf], { type: 'application/pdf' });
+}
+
+type HtmlBlock = {
+  type: 'paragraph' | 'heading' | 'list-item';
+  text: string;
+  level?: number;
+};
+
+function extractBlocksFromHtml(html: string): HtmlBlock[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const blocks: HtmlBlock[] = [];
+
+  const addBlock = (block: HtmlBlock) => {
+    const trimmed = block.text.trim();
+    if (!trimmed) return;
+    blocks.push({ ...block, text: trimmed });
+  };
+
+  const extractInlineText = (node: Node): string => {
+    let result = '';
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        result += child.textContent ?? '';
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as HTMLElement;
+        if (el.tagName.toLowerCase() === 'br') {
+          result += '\n';
+        } else {
+          result += extractInlineText(child);
+        }
+      }
+    });
+    return result.replace(/\s+/g, ' ').replace(/ \n/g, '\n').replace(/\n /g, '\n');
+  };
+
+  const walk = (node: Node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'p' || tag === 'div') {
+      addBlock({ type: 'paragraph', text: extractInlineText(el) });
+      return;
+    }
+
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+      const level = Number(tag.replace('h', ''));
+      addBlock({ type: 'heading', text: extractInlineText(el), level });
+      return;
+    }
+
+    if (tag === 'li') {
+      addBlock({ type: 'list-item', text: extractInlineText(el) });
+      return;
+    }
+
+    el.childNodes.forEach(walk);
+  };
+
+  doc.body.childNodes.forEach(walk);
+  return blocks.length ? blocks : [{ type: 'paragraph', text: extractInlineText(doc.body) }];
+}
+
+function buildDocxParagraph(block: HtmlBlock): string {
+  const style =
+    block.type === 'heading'
+      ? `<w:pPr><w:pStyle w:val="Heading${block.level ?? 1}"/></w:pPr>`
+      : '';
+  const runs = buildDocxRuns(block.text);
+  const prefix = block.type === 'list-item' ? '• ' : '';
+
+  return `<w:p>${style}<w:r><w:t xml:space="preserve">${escapeXml(
+    prefix,
+  )}</w:t></w:r>${runs}</w:p>`;
+}
+
+function buildDocxRuns(text: string): string {
+  const parts = text.split('\n');
+  return parts
+    .map((part, index) => {
+      const escaped = escapeXml(part);
+      const breakTag = index > 0 ? '<w:r><w:br/></w:r>' : '';
+      return `${breakTag}<w:r><w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+    })
+    .join('');
+}
+
+function buildOdtBlock(block: HtmlBlock): string {
+  const tag =
+    block.type === 'heading'
+      ? `text:h text:outline-level="${block.level ?? 1}"`
+      : 'text:p';
+  const prefix = block.type === 'list-item' ? '• ' : '';
+  const text = `${prefix}${block.text}`;
+  const xml = text
+    .split('\n')
+    .map((line, index) =>
+      index === 0 ? escapeXml(line) : `<text:line-break/>${escapeXml(line)}`,
+    )
+    .join('');
+
+  return `<${tag}>${xml}</${tag.split(' ')[0]}>`;
+}
+
+function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): string[] {
+  const lines: string[] = [];
+
+  blocks.forEach((block, index) => {
+    const prefix = block.type === 'list-item' ? '• ' : '';
+    const text =
+      block.type === 'heading' ? block.text.toUpperCase() : `${prefix}${block.text}`;
+
+    lines.push(...wrapPdfText(text, maxChars));
+
+    if (index < blocks.length - 1) {
+      lines.push('');
+    }
+  });
+
+  return lines.length ? lines : [''];
 }
 
 function wrapPdfText(text: string, maxChars: number): string[] {
