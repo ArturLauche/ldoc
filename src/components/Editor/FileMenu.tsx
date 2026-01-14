@@ -845,7 +845,15 @@ function buildPdfContentStream(
 }
 
 function escapePdfText(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/[^\x20-\x7E]/g, (char) => {
+      const code = char.charCodeAt(0);
+      const octal = code.toString(8).padStart(3, '0');
+      return `\\${octal}`;
+    });
 }
 
 type PdfLine =
