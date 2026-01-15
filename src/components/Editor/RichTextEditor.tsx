@@ -17,7 +17,9 @@ import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
 import { VersionHistory } from './VersionHistory';
 import { toast } from 'sonner';
-import { Cloud, FileText } from 'lucide-react';
+import { Cloud, FileText, Moon, Sun } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { Button } from '@/components/ui/button';
 
 const AUTOSAVE_DELAY = 3000;
 const STORAGE_KEY = 'lwrite-current-doc';
@@ -59,6 +61,7 @@ export const RichTextEditor = () => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   const editor = useEditor({
     extensions: [
@@ -237,6 +240,21 @@ export const RichTextEditor = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const activeTheme = theme === 'system' ? resolvedTheme : theme;
+                setTheme(activeTheme === 'dark' ? 'light' : 'dark');
+              }}
+              aria-label="Toggle dark mode"
+            >
+              {resolvedTheme === 'dark' ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
             {/* Save Status */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {hasUnsavedChanges ? (

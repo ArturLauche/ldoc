@@ -571,7 +571,7 @@ function buildPdfBlob(blocks: HtmlBlock[]): Blob {
     .map((id) => `${id} 0 R`)
     .join(' ')}] /Count ${pages.length} >>\nendobj`;
   objects[3] =
-    '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj';
+    '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj';
 
   pages.forEach((pageLines, index) => {
     const pageId = pageIds[index];
@@ -851,6 +851,9 @@ function escapePdfText(value: string): string {
     .replace(/\)/g, '\\)')
     .replace(/[^\x20-\x7E]/g, (char) => {
       const code = char.charCodeAt(0);
+      if (code > 255) {
+        return '?';
+      }
       const octal = code.toString(8).padStart(3, '0');
       return `\\${octal}`;
     });
