@@ -13,6 +13,7 @@ import {
   FileOutput,
   FileBadge2,
   FileArchive,
+  FileImage,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { Button } from '@/components/ui/button';
@@ -132,18 +133,19 @@ export const FileMenu = ({
     let mimeType: string;
     let extension: string;
 
-    switch (format) {
-      case 'txt':
-        content = editor.getText();
-        mimeType = 'text/plain';
-        extension = 'txt';
-        break;
-      case 'html':
-        content = `<!DOCTYPE html>
+    try {
+      switch (format) {
+        case 'txt':
+          content = editor.getText();
+          mimeType = 'text/plain';
+          extension = 'txt';
+          break;
+        case 'html':
+          content = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>${documentName}</title>
+  <title>${escapeHtmlText(documentName)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
     h1 { font-size: 2em; }
@@ -155,56 +157,129 @@ export const FileMenu = ({
 ${editor.getHTML()}
 </body>
 </html>`;
-        mimeType = 'text/html';
-        extension = 'html';
-        break;
-      case 'rtf':
-        content = convertHtmlToRtf(editor.getHTML());
-        mimeType = 'application/rtf';
-        extension = 'rtf';
-        break;
-      case 'docx': {
-        const blocks = extractBlocksFromHtml(editor.getHTML());
-        const blob = await buildDocxBlob(blocks);
-        downloadBlob(blob, `${documentName}.docx`);
-        toast.success(`Exported as ${documentName}.docx`);
-        return;
+          mimeType = 'text/html';
+          extension = 'html';
+          break;
+        case 'rtf':
+          content = convertHtmlToRtf(editor.getHTML());
+          mimeType = 'application/rtf';
+          extension = 'rtf';
+          break;
+        case 'docx': {
+          const blocks = extractBlocksFromHtml(editor.getHTML());
+          const blob = await buildDocxBlob(blocks);
+          const fileName = buildExportFileName(documentName, 'docx');
+          downloadBlob(blob, fileName);
+          toast.success(`Exported as ${fileName}`);
+          return;
+        }
+        case 'odt': {
+          const blocks = extractBlocksFromHtml(editor.getHTML());
+
+          const contentXml = buildOdtContentXml(blocks);
+          const manifestXml = buildOdtManifestXml();
+          const zip = new JSZip();
+
+          zip.file('mimetype', 'application/vnd.oasis.opendocument.text');
+          zip.file('content.xml', contentXml);
+          zip.file('META-INF/manifest.xml', manifestXml);
+
+          const blob = await zip.generateAsync({
+            type: 'blob',
+            mimeType: 'application/vnd.oasis.opendocument.text',
+          });
+
+          const fileName = buildExportFileName(documentName, 'odt');
+          downloadBlob(blob, fileName);
+          toast.success(`Exported as ${fileName}`);
+          return;
+        }
+        case 'pdf': {
+          const blocks = extractBlocksFromHtml(editor.getHTML());
+          const blob = buildPdfBlob(blocks);
+          const fileName = buildExportFileName(documentName, 'pdf');
+          downloadBlob(blob, fileName);
+          toast.success(`Exported as ${fileName}`);
+          return;
+        }
+        default:
+          return;
       }
-      case 'odt': {
-        const blocks = extractBlocksFromHtml(editor.getHTML());
 
-        const contentXml = buildOdtContentXml(blocks);
-        const manifestXml = buildOdtManifestXml();
-        const zip = new JSZip();
+      const fileName = buildExportFileName(documentName, extension);
+      const blob = new Blob([content], { type: mimeType });
+      downloadBlob(blob, fileName);
 
-        zip.file('mimetype', 'application/vnd.oasis.opendocument.text');
-        zip.file('content.xml', contentXml);
-        zip.file('META-INF/manifest.xml', manifestXml);
-
-        const blob = await zip.generateAsync({
-          type: 'blob',
-          mimeType: 'application/vnd.oasis.opendocument.text',
-        });
-
-        downloadBlob(blob, `${documentName}.odt`);
-        toast.success(`Exported as ${documentName}.odt`);
-        return;
-      }
-      case 'pdf': {
-        const blocks = extractBlocksFromHtml(editor.getHTML());
-        const blob = buildPdfBlob(blocks);
-        downloadBlob(blob, `${documentName}.pdf`);
-        toast.success(`Exported as ${documentName}.pdf`);
-        return;
-      }
-      default:
-        return;
+      toast.success(`Exported as ${fileName}`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Export failed. Please try again.');
     }
+  };
 
-    const blob = new Blob([content], { type: mimeType });
-    downloadBlob(blob, `${documentName}.${extension}`);
+  const exportSmartArtPack = async () => {
+    if (!editor) return;
 
-    toast.success(`Exported as ${documentName}.${extension}`);
+    try {
+      const smartArtAssets = extractSmartArtAssets(editor.getHTML());
+
+      if (!smartArtAssets.length) {
+        toast.error('No SmartArt diagrams found to export.');
+        return;
+      }
+
+      const zip = new JSZip();
+      const baseName = sanitizeBaseFileName(documentName);
+      const folder = zip.folder(`${baseName}-smartart`) ?? zip;
+      const manifestItems: SmartArtManifestItem[] = [];
+
+      const usedNames = new Set<string>();
+      smartArtAssets.forEach((asset, index) => {
+        const uniqueName = ensureUniqueFileName(
+          sanitizeBaseFileName(asset.name || `smartart-${index + 1}`),
+          usedNames,
+        );
+        const fileName = `${uniqueName}.svg`;
+        folder.file(fileName, asset.svg);
+        manifestItems.push({
+          id: index + 1,
+          title: asset.title,
+          file: fileName,
+        });
+      });
+
+      folder.file(
+        'manifest.json',
+        JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            document: documentName,
+            count: manifestItems.length,
+            items: manifestItems,
+          },
+          null,
+          2,
+        ),
+      );
+
+      folder.file(
+        'README.txt',
+        `SmartArt export for "${documentName}".\n\n` +
+          manifestItems.map((item) => `• ${item.title} -> ${item.file}`).join('\n'),
+      );
+
+      const blob = await zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/zip',
+      });
+
+      const fileName = buildExportFileName(`${baseName}-smartart`, 'zip');
+      downloadBlob(blob, fileName);
+      toast.success(`Exported SmartArt pack as ${fileName}`);
+    } catch (error) {
+      console.error('SmartArt export failed:', error);
+      toast.error('SmartArt export failed. Please try again.');
+    }
   };
 
   const handleRename = () => {
@@ -271,6 +346,11 @@ ${editor.getHTML()}
               <DropdownMenuItem onClick={() => void exportAs('pdf')}>
                 <FileOutput className="h-4 w-4 mr-2" />
                 PDF Document (.pdf)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void exportSmartArtPack()}>
+                <FileImage className="h-4 w-4 mr-2" />
+                SmartArt Pack (.zip)
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -614,10 +694,22 @@ function buildPdfBlob(blocks: HtmlBlock[]): Blob {
 }
 
 type HtmlBlock = {
-  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule';
+  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'smart-art';
   text: string;
   level?: number;
   listType?: 'bullet' | 'number';
+};
+
+type SmartArtAsset = {
+  name: string;
+  title: string;
+  svg: string;
+};
+
+type SmartArtManifestItem = {
+  id: number;
+  title: string;
+  file: string;
 };
 
 function extractBlocksFromHtml(html: string): HtmlBlock[] {
@@ -654,8 +746,26 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     const tag = el.tagName.toLowerCase();
 
     if (tag === 'p' || tag === 'div') {
-      addBlock({ type: 'paragraph', text: extractInlineText(el) });
-      return;
+      const text = extractInlineText(el);
+      if (text.trim()) {
+        addBlock({ type: 'paragraph', text });
+        return;
+      }
+
+      const images = Array.from(el.querySelectorAll('img'));
+      const smartArtFound = images.some((img) => {
+        const src = img.getAttribute('src') ?? '';
+        const alt = img.getAttribute('alt') ?? 'SmartArt';
+        if (src.startsWith('data:image/svg+xml')) {
+          addBlock({ type: 'smart-art', text: alt });
+          return true;
+        }
+        return false;
+      });
+
+      if (smartArtFound) {
+        return;
+      }
     }
 
     if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
@@ -686,6 +796,15 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
       return;
     }
 
+    if (tag === 'img') {
+      const src = el.getAttribute('src') ?? '';
+      const alt = el.getAttribute('alt') ?? 'SmartArt';
+      if (src.startsWith('data:image/svg+xml')) {
+        addBlock({ type: 'smart-art', text: alt });
+        return;
+      }
+    }
+
     el.childNodes.forEach(walk);
   };
 
@@ -696,6 +815,10 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
 function buildDocxParagraph(block: HtmlBlock): string {
   if (block.type === 'horizontal-rule') {
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
+  }
+
+  if (block.type === 'smart-art') {
+    return `<w:p>${buildDocxRuns(`SmartArt: ${block.text}`)}</w:p>`;
   }
 
   const style =
@@ -730,6 +853,10 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
     return `<text:p>${escapeXml('─'.repeat(48))}</text:p>`;
   }
 
+  if (block.type === 'smart-art') {
+    return `<text:p>${buildOdtInlineText(`SmartArt: ${block.text}`)}</text:p>`;
+  }
+
   if (block.type === 'list-item') {
     const text = block.listType === 'number' ? `${index + 1}. ${block.text}` : block.text;
     return `<text:list-item><text:p>${buildOdtInlineText(text)}</text:p></text:list-item>`;
@@ -756,13 +883,14 @@ function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine
     if (block.type === 'horizontal-rule') {
       lines.push({ type: 'rule' });
     } else {
+      const smartArtPrefix = block.type === 'smart-art' ? 'SmartArt: ' : '';
       const prefix =
         block.type === 'list-item'
           ? block.listType === 'number'
             ? `${listIndex}. `
             : '• '
           : '';
-      const text = `${prefix}${block.text}`;
+      const text = `${smartArtPrefix}${prefix}${block.text}`;
       const fontSize = block.type === 'heading' ? 16 - ((block.level ?? 1) - 1) * 2 : 12;
 
       wrapPdfText(text, maxChars).forEach((line) => {
@@ -973,4 +1101,91 @@ function encodePdfChunks(chunks: string[]): Uint8Array {
   });
 
   return buffer;
+}
+
+function sanitizeBaseFileName(value: string): string {
+  const trimmed = value.trim();
+  const base = trimmed || 'Untitled Document';
+  return base
+    .replace(/[\/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildExportFileName(value: string, extension: string): string {
+  const base = sanitizeBaseFileName(value).replace(/\.[^/.]+$/, '');
+  return `${base}.${extension}`;
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function decodeSvgDataUrl(dataUrl: string): string | null {
+  if (!dataUrl.startsWith('data:image/svg+xml')) {
+    return null;
+  }
+
+  const [header, data] = dataUrl.split(',');
+  if (!data) {
+    return null;
+  }
+
+  if (header.includes(';base64')) {
+    try {
+      const decoded = atob(data);
+      if (typeof TextDecoder !== 'undefined') {
+        const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+      return decodeURIComponent(escape(decoded));
+    } catch (error) {
+      console.warn('Failed to decode base64 SVG data url', error);
+      return null;
+    }
+  }
+
+  try {
+    return decodeURIComponent(data);
+  } catch (error) {
+    console.warn('Failed to decode SVG data url', error);
+    return data;
+  }
+}
+
+function extractSmartArtAssets(html: string): SmartArtAsset[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const assets: SmartArtAsset[] = [];
+
+  doc.querySelectorAll('img').forEach((img, index) => {
+    const src = img.getAttribute('src') ?? '';
+    const svg = decodeSvgDataUrl(src);
+    if (!svg) return;
+
+    const title = (img.getAttribute('alt') || `SmartArt ${index + 1}`).trim() || `SmartArt ${index + 1}`;
+    assets.push({
+      name: title,
+      title,
+      svg,
+    });
+  });
+
+  return assets;
+}
+
+function ensureUniqueFileName(value: string, usedNames: Set<string>): string {
+  let name = value;
+  let counter = 2;
+  while (usedNames.has(name.toLowerCase())) {
+    name = `${value}-${counter}`;
+    counter += 1;
+  }
+  usedNames.add(name.toLowerCase());
+  return name;
 }
