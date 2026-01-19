@@ -220,7 +220,7 @@ export const RichTextEditor = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col app-shell">
       {/* Header */}
-      <header className="sticky top-0 z-40 glass-bar">
+      <header className="sticky top-0 z-40 glass-bar app-header">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -286,7 +286,7 @@ export const RichTextEditor = () => {
       </header>
 
       {/* Toolbar */}
-      <div className="sticky top-[89px] z-30 px-4 py-2 glass-bar glass-bar--toolbar">
+      <div className="sticky top-[var(--app-toolbar-offset)] z-30 px-4 py-2 glass-bar glass-bar--toolbar">
         <EditorToolbar editor={editor} />
       </div>
 
