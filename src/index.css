@@ -166,8 +166,6 @@ body {
 
 /* App background */
 .app-shell {
-  --app-header-height: clamp(88px, 9vw, 96px);
-  --app-toolbar-offset: calc(var(--app-header-height) + 1px);
   background-color: hsl(var(--background));
   background-image:
     radial-gradient(1200px circle at 50% -160px, hsl(0 0% 100% / 0.95), transparent 55%),
@@ -178,7 +176,7 @@ body {
 }
 
 .app-header {
-  min-height: var(--app-header-height);
+  min-height: clamp(88px, 9vw, 96px);
 }
 
 /* iOS 26 Floating Design System */
