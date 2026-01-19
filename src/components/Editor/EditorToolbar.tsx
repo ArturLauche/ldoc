@@ -42,7 +42,7 @@ import { cn } from '@/lib/utils';
 import { useCallback, useState } from 'react';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
-import { SmartArtPicker } from './SmartArtPicker';
+
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -465,10 +465,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
       {/* Image */}
       <ImageToolbar editor={editor} />
 
-      {/* SmartArt */}
-      <SmartArtPicker editor={editor} />
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Styles (Headings) */}
       <Select

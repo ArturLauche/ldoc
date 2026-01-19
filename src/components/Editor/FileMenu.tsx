@@ -13,9 +13,10 @@ import {
   FileOutput,
   FileBadge2,
   FileArchive,
-  FileImage,
 } from 'lucide-react';
 import JSZip from 'jszip';
+// @ts-ignore - html2pdf.js doesn't have perfect types
+import html2pdf from 'html2pdf.js';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -195,11 +196,60 @@ ${editor.getHTML()}
           return;
         }
         case 'pdf': {
-          const blocks = extractBlocksFromHtml(editor.getHTML());
-          const blob = buildPdfBlob(blocks);
+          const element = document.querySelector('.editor-content');
+          if (!element) {
+            toast.error('Editor content not found');
+            return;
+          }
+
           const fileName = buildExportFileName(documentName, 'pdf');
-          downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          
+          // Create a clone for PDF generation to avoid affecting the UI
+          const clone = element.cloneNode(true) as HTMLElement;
+          clone.classList.add('pdf-export-container');
+          clone.style.padding = '20mm';
+          clone.style.width = '210mm'; // A4 width
+          clone.style.minHeight = '297mm';
+          clone.style.background = 'white';
+          clone.style.color = 'black';
+          
+          // Remove ProseMirror specific classes that might interfere
+          const proseMirror = clone.querySelector('.ProseMirror');
+          if (proseMirror) {
+            proseMirror.classList.remove('ProseMirror');
+          }
+          
+          // Ensure all images are loaded before PDF generation
+          const images = clone.querySelectorAll('img');
+          await Promise.all(Array.from(images).map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            });
+          }));
+
+          const opt = {
+            margin: 0, // Margin is already in the clone's padding
+            filename: fileName,
+            image: { type: 'jpeg', quality: 1.0 },
+            html2canvas: { 
+              scale: 3, // Higher scale for better quality
+              useCORS: true,
+              letterRendering: true,
+              logging: false,
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
+          };
+
+          toast.loading('Generating PDF...', { id: 'pdf-gen' });
+          try {
+            await html2pdf().set(opt).from(clone).save();
+            toast.success(`Exported as ${fileName}`, { id: 'pdf-gen' });
+          } catch (err) {
+            console.error('PDF generation error:', err);
+            toast.error('Failed to generate PDF', { id: 'pdf-gen' });
+          }
           return;
         }
         default:
@@ -217,70 +267,7 @@ ${editor.getHTML()}
     }
   };
 
-  const exportSmartArtPack = async () => {
-    if (!editor) return;
 
-    try {
-      const smartArtAssets = extractSmartArtAssets(editor.getHTML());
-
-      if (!smartArtAssets.length) {
-        toast.error('No SmartArt diagrams found to export.');
-        return;
-      }
-
-      const zip = new JSZip();
-      const baseName = sanitizeBaseFileName(documentName);
-      const folder = zip.folder(`${baseName}-smartart`) ?? zip;
-      const manifestItems: SmartArtManifestItem[] = [];
-
-      const usedNames = new Set<string>();
-      smartArtAssets.forEach((asset, index) => {
-        const uniqueName = ensureUniqueFileName(
-          sanitizeBaseFileName(asset.name || `smartart-${index + 1}`),
-          usedNames,
-        );
-        const fileName = `${uniqueName}.svg`;
-        folder.file(fileName, asset.svg);
-        manifestItems.push({
-          id: index + 1,
-          title: asset.title,
-          file: fileName,
-        });
-      });
-
-      folder.file(
-        'manifest.json',
-        JSON.stringify(
-          {
-            exportedAt: new Date().toISOString(),
-            document: documentName,
-            count: manifestItems.length,
-            items: manifestItems,
-          },
-          null,
-          2,
-        ),
-      );
-
-      folder.file(
-        'README.txt',
-        `SmartArt export for "${documentName}".\n\n` +
-          manifestItems.map((item) => `• ${item.title} -> ${item.file}`).join('\n'),
-      );
-
-      const blob = await zip.generateAsync({
-        type: 'blob',
-        mimeType: 'application/zip',
-      });
-
-      const fileName = buildExportFileName(`${baseName}-smartart`, 'zip');
-      downloadBlob(blob, fileName);
-      toast.success(`Exported SmartArt pack as ${fileName}`);
-    } catch (error) {
-      console.error('SmartArt export failed:', error);
-      toast.error('SmartArt export failed. Please try again.');
-    }
-  };
 
   const handleRename = () => {
     if (newName.trim()) {
@@ -348,10 +335,7 @@ ${editor.getHTML()}
                 PDF Document (.pdf)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void exportSmartArtPack()}>
-                <FileImage className="h-4 w-4 mr-2" />
-                SmartArt Pack (.zip)
-              </DropdownMenuItem>
+
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
@@ -632,66 +616,7 @@ function buildDocxNumberingXml(): string {
 </w:numbering>`;
 }
 
-function buildPdfBlob(blocks: HtmlBlock[]): Blob {
-  const pageWidth = 612;
-  const pageHeight = 792;
-  const margin = 72;
-  const maxCharsPerLine = 90;
-  const lines = buildPdfLinesFromBlocks(blocks, maxCharsPerLine);
-  const pages = paginatePdfLines(lines, pageHeight - margin * 2);
 
-  const maxId = 3 + pages.length * 2;
-  const objects: string[] = new Array(maxId + 1);
-
-  const pageIds = pages.map((_, index) => 4 + index * 2);
-  const contentIds = pages.map((_, index) => 5 + index * 2);
-
-  objects[1] = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj';
-  objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${pageIds
-    .map((id) => `${id} 0 R`)
-    .join(' ')}] /Count ${pages.length} >>\nendobj`;
-  objects[3] =
-    '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj';
-
-  pages.forEach((pageLines, index) => {
-    const pageId = pageIds[index];
-    const contentId = contentIds[index];
-    const contentStream = buildPdfContentStream(pageLines, margin, pageHeight, pageWidth);
-    const length = getPdfByteLength(contentStream);
-
-    objects[pageId] =
-      `${pageId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
-      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>\nendobj`;
-    objects[contentId] =
-      `${contentId} 0 obj\n<< /Length ${length} >>\nstream\n${contentStream}\nendstream\nendobj`;
-  });
-
-  const pdfChunks: string[] = [];
-  const offsets: number[] = new Array(maxId + 1).fill(0);
-  let byteLength = 0;
-
-  const pushChunk = (chunk: string) => {
-    pdfChunks.push(chunk);
-    byteLength += getPdfByteLength(chunk);
-  };
-
-  pushChunk('%PDF-1.4\n');
-
-  for (let i = 1; i <= maxId; i += 1) {
-    offsets[i] = byteLength;
-    pushChunk(`${objects[i]}\n`);
-  }
-
-  const xrefStart = byteLength;
-  pushChunk(`xref\n0 ${maxId + 1}\n`);
-  pushChunk('0000000000 65535 f \n');
-  for (let i = 1; i <= maxId; i += 1) {
-    pushChunk(`${offsets[i].toString().padStart(10, '0')} 00000 n \n`);
-  }
-  pushChunk(`trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
-
-  return new Blob([encodePdfChunks(pdfChunks)], { type: 'application/pdf' });
-}
 
 type HtmlBlock = {
   type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'smart-art';
@@ -700,17 +625,7 @@ type HtmlBlock = {
   listType?: 'bullet' | 'number';
 };
 
-type SmartArtAsset = {
-  name: string;
-  title: string;
-  svg: string;
-};
 
-type SmartArtManifestItem = {
-  id: number;
-  title: string;
-  file: string;
-};
 
 function extractBlocksFromHtml(html: string): HtmlBlock[] {
   const parser = new DOMParser();
@@ -869,158 +784,7 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
   return `<${tag}>${buildOdtInlineText(block.text)}</${tag.split(' ')[0]}>`;
 }
 
-function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine[] {
-  const lines: PdfLine[] = [];
-  let listIndex = 0;
 
-  blocks.forEach((block, index) => {
-    if (block.type === 'list-item') {
-      listIndex += 1;
-    } else {
-      listIndex = 0;
-    }
-
-    if (block.type === 'horizontal-rule') {
-      lines.push({ type: 'rule' });
-    } else {
-      const smartArtPrefix = block.type === 'smart-art' ? 'SmartArt: ' : '';
-      const prefix =
-        block.type === 'list-item'
-          ? block.listType === 'number'
-            ? `${listIndex}. `
-            : '• '
-          : '';
-      const text = `${smartArtPrefix}${prefix}${block.text}`;
-      const fontSize = block.type === 'heading' ? 16 - ((block.level ?? 1) - 1) * 2 : 12;
-
-      wrapPdfText(text, maxChars).forEach((line) => {
-        lines.push({ type: 'text', text: line, fontSize });
-      });
-    }
-
-    if (index < blocks.length - 1) {
-      lines.push({ type: 'spacer', fontSize: 12 });
-    }
-  });
-
-  return lines.length ? lines : [{ type: 'text', text: '', fontSize: 12 }];
-}
-
-function wrapPdfText(text: string, maxChars: number): string[] {
-  const lines: string[] = [];
-
-  text.split('\n').forEach((line) => {
-    let current = '';
-    line.split(/\s+/).forEach((word) => {
-      if (!word) return;
-      const next = current ? `${current} ${word}` : word;
-      if (next.length > maxChars) {
-        if (current) {
-          lines.push(current);
-        }
-        current = word;
-      } else {
-        current = next;
-      }
-    });
-
-    if (current) {
-      lines.push(current);
-    } else {
-      lines.push('');
-    }
-  });
-
-  return lines;
-}
-
-function buildPdfContentStream(
-  lines: PdfLine[],
-  margin: number,
-  pageHeight: number,
-  pageWidth: number,
-): string {
-  let cursorY = pageHeight - margin;
-  let stream = 'BT\n/F1 12 Tf\n';
-  stream += `${margin} ${cursorY} Td\n`;
-
-  lines.forEach((line, index) => {
-    if (index > 0) {
-      const move = line.type === 'rule' ? 10 : (line.fontSize ?? 12) * 1.4;
-      stream += `0 -${move.toFixed(2)} Td\n`;
-      cursorY -= move;
-    }
-
-    if (line.type === 'rule') {
-      stream += 'ET\n';
-      const y = cursorY;
-      stream += `q 0.5 w ${margin} ${y} m ${pageWidth - margin} ${y} l S Q\n`;
-      stream += 'BT\n/F1 12 Tf\n';
-      stream += `${margin} ${y} Td\n`;
-      return;
-    }
-
-    if (line.type === 'spacer') {
-      return;
-    }
-
-    stream += `/F1 ${line.fontSize ?? 12} Tf\n`;
-    stream += `(${escapePdfText(line.text ?? '')}) Tj\n`;
-  });
-
-  stream += 'ET';
-  return stream;
-}
-
-function escapePdfText(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/[^\x20-\x7E]/g, (char) => {
-      const code = char.charCodeAt(0);
-      if (code > 255) {
-        return '?';
-      }
-      const octal = code.toString(8).padStart(3, '0');
-      return `\\${octal}`;
-    });
-}
-
-type PdfLine =
-  | { type: 'text'; text: string; fontSize: number }
-  | { type: 'rule' }
-  | { type: 'spacer'; fontSize: number };
-
-function paginatePdfLines(lines: PdfLine[], availableHeight: number): PdfLine[][] {
-  const pages: PdfLine[][] = [];
-  let current: PdfLine[] = [];
-  let used = 0;
-
-  lines.forEach((line) => {
-    const height =
-      line.type === 'rule'
-        ? 12
-        : line.type === 'spacer'
-          ? line.fontSize * 1.4
-          : line.fontSize * 1.4;
-
-    if (used + height > availableHeight && current.length) {
-      pages.push(current);
-      current = [];
-      used = 0;
-    }
-
-    current.push(line);
-    used += height;
-  });
-
-  if (current.length) {
-    pages.push(current);
-  }
-
-  return pages.length ? pages : [[{ type: 'text', text: '', fontSize: 12 }]];
-}
 
 function buildOdtBody(blocks: HtmlBlock[]): string {
   const parts: string[] = [];
@@ -1078,30 +842,7 @@ function buildDocxListStyle(listType: HtmlBlock['listType']): string {
   return `<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>`;
 }
 
-function getPdfByteLength(value: string): number {
-  let length = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    length += code <= 0xff ? 1 : 1;
-  }
-  return length;
-}
 
-function encodePdfChunks(chunks: string[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + getPdfByteLength(chunk), 0);
-  const buffer = new Uint8Array(total);
-  let offset = 0;
-
-  chunks.forEach((chunk) => {
-    for (let i = 0; i < chunk.length; i += 1) {
-      const code = chunk.charCodeAt(i);
-      buffer[offset] = code <= 0xff ? code : 63;
-      offset += 1;
-    }
-  });
-
-  return buffer;
-}
 
 function sanitizeBaseFileName(value: string): string {
   const trimmed = value.trim();
@@ -1126,66 +867,4 @@ function escapeHtmlText(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function decodeSvgDataUrl(dataUrl: string): string | null {
-  if (!dataUrl.startsWith('data:image/svg+xml')) {
-    return null;
-  }
 
-  const [header, data] = dataUrl.split(',');
-  if (!data) {
-    return null;
-  }
-
-  if (header.includes(';base64')) {
-    try {
-      const decoded = atob(data);
-      if (typeof TextDecoder !== 'undefined') {
-        const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
-        return new TextDecoder().decode(bytes);
-      }
-      return decodeURIComponent(escape(decoded));
-    } catch (error) {
-      console.warn('Failed to decode base64 SVG data url', error);
-      return null;
-    }
-  }
-
-  try {
-    return decodeURIComponent(data);
-  } catch (error) {
-    console.warn('Failed to decode SVG data url', error);
-    return data;
-  }
-}
-
-function extractSmartArtAssets(html: string): SmartArtAsset[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const assets: SmartArtAsset[] = [];
-
-  doc.querySelectorAll('img').forEach((img, index) => {
-    const src = img.getAttribute('src') ?? '';
-    const svg = decodeSvgDataUrl(src);
-    if (!svg) return;
-
-    const title = (img.getAttribute('alt') || `SmartArt ${index + 1}`).trim() || `SmartArt ${index + 1}`;
-    assets.push({
-      name: title,
-      title,
-      svg,
-    });
-  });
-
-  return assets;
-}
-
-function ensureUniqueFileName(value: string, usedNames: Set<string>): string {
-  let name = value;
-  let counter = 2;
-  while (usedNames.has(name.toLowerCase())) {
-    name = `${value}-${counter}`;
-    counter += 1;
-  }
-  usedNames.add(name.toLowerCase());
-  return name;
-}

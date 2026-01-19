@@ -291,6 +291,62 @@ All colors MUST be HSL.
   opacity: 0.8;
 }
 
+/* PDF Export Styles */
+.pdf-export-container {
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.6;
+  color: black;
+  background: white;
+}
+
+.pdf-export-container h1 {
+  font-size: 28pt;
+  font-weight: bold;
+  margin-top: 20pt;
+  margin-bottom: 10pt;
+}
+
+.pdf-export-container h2 {
+  font-size: 22pt;
+  font-weight: bold;
+  margin-top: 18pt;
+  margin-bottom: 8pt;
+}
+
+.pdf-export-container h3 {
+  font-size: 16pt;
+  font-weight: bold;
+  margin-top: 14pt;
+  margin-bottom: 6pt;
+}
+
+.pdf-export-container p {
+  font-size: 12pt;
+  margin-bottom: 10pt;
+}
+
+.pdf-export-container ul, .pdf-export-container ol {
+  margin-left: 20pt;
+  margin-bottom: 10pt;
+}
+
+.pdf-export-container li {
+  margin-bottom: 4pt;
+}
+
+.pdf-export-container img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10pt auto;
+}
+
+.pdf-export-container [style*="text-align: center"] { text-align: center; }
+.pdf-export-container [style*="text-align: right"] { text-align: right; }
+.pdf-export-container [style*="text-align: justify"] { text-align: justify; }
+.pdf-export-container [style*="color"] { color: inherit; } /* Allow inline colors */
+
+
 /* Dark mode adjustments */
 .dark .glass-panel {
   background: hsl(var(--card) / 0.75);
