@@ -13,7 +13,6 @@ import {
   FileOutput,
   FileBadge2,
   FileArchive,
-  FileImage,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { Button } from '@/components/ui/button';
@@ -147,10 +146,17 @@ export const FileMenu = ({
   <meta charset="UTF-8">
   <title>${escapeHtmlText(documentName)}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
-    h1 { font-size: 2em; }
-    h2 { font-size: 1.5em; }
-    h3 { font-size: 1.17em; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111827; }
+    h1 { font-size: 2em; margin: 0.6em 0 0.4em; }
+    h2 { font-size: 1.5em; margin: 0.6em 0 0.4em; }
+    h3 { font-size: 1.17em; margin: 0.6em 0 0.4em; }
+    p { margin: 0 0 0.75em; }
+    ul, ol { padding-left: 1.5em; margin: 0 0 1em; }
+    li { margin: 0.2em 0; }
+    blockquote { border-left: 3px solid #e5e7eb; padding-left: 1em; color: #374151; margin: 1em 0; }
+    mark { background-color: #fef08a; }
+    img { max-width: 100%; height: auto; display: block; margin: 1rem auto; }
+    hr { border: none; border-top: 1px solid #d1d5db; margin: 1.5em 0; }
   </style>
 </head>
 <body>
@@ -196,7 +202,7 @@ ${editor.getHTML()}
         }
         case 'pdf': {
           const blocks = extractBlocksFromHtml(editor.getHTML());
-          const blob = buildPdfBlob(blocks);
+          const blob = await buildPdfBlob(blocks);
           const fileName = buildExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
           toast.success(`Exported as ${fileName}`);
@@ -214,71 +220,6 @@ ${editor.getHTML()}
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Export failed. Please try again.');
-    }
-  };
-
-  const exportSmartArtPack = async () => {
-    if (!editor) return;
-
-    try {
-      const smartArtAssets = extractSmartArtAssets(editor.getHTML());
-
-      if (!smartArtAssets.length) {
-        toast.error('No SmartArt diagrams found to export.');
-        return;
-      }
-
-      const zip = new JSZip();
-      const baseName = sanitizeBaseFileName(documentName);
-      const folder = zip.folder(`${baseName}-smartart`) ?? zip;
-      const manifestItems: SmartArtManifestItem[] = [];
-
-      const usedNames = new Set<string>();
-      smartArtAssets.forEach((asset, index) => {
-        const uniqueName = ensureUniqueFileName(
-          sanitizeBaseFileName(asset.name || `smartart-${index + 1}`),
-          usedNames,
-        );
-        const fileName = `${uniqueName}.svg`;
-        folder.file(fileName, asset.svg);
-        manifestItems.push({
-          id: index + 1,
-          title: asset.title,
-          file: fileName,
-        });
-      });
-
-      folder.file(
-        'manifest.json',
-        JSON.stringify(
-          {
-            exportedAt: new Date().toISOString(),
-            document: documentName,
-            count: manifestItems.length,
-            items: manifestItems,
-          },
-          null,
-          2,
-        ),
-      );
-
-      folder.file(
-        'README.txt',
-        `SmartArt export for "${documentName}".\n\n` +
-          manifestItems.map((item) => `• ${item.title} -> ${item.file}`).join('\n'),
-      );
-
-      const blob = await zip.generateAsync({
-        type: 'blob',
-        mimeType: 'application/zip',
-      });
-
-      const fileName = buildExportFileName(`${baseName}-smartart`, 'zip');
-      downloadBlob(blob, fileName);
-      toast.success(`Exported SmartArt pack as ${fileName}`);
-    } catch (error) {
-      console.error('SmartArt export failed:', error);
-      toast.error('SmartArt export failed. Please try again.');
     }
   };
 
@@ -347,11 +288,6 @@ ${editor.getHTML()}
                 <FileOutput className="h-4 w-4 mr-2" />
                 PDF Document (.pdf)
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void exportSmartArtPack()}>
-                <FileImage className="h-4 w-4 mr-2" />
-                SmartArt Pack (.zip)
-              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
@@ -416,85 +352,179 @@ function convertRtfToHtml(rtf: string): string {
 
 // Simple HTML to RTF converter
 function convertHtmlToRtf(html: string): string {
-  // Create a temporary element to parse HTML
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = html;
-  
+  const blocks = extractBlocksFromHtml(html);
+  return buildRtfDocument(blocks);
+}
+
+function buildRtfDocument(blocks: HtmlBlock[]): string {
+  const fonts = collectRtfFonts(blocks);
+  const colors = collectRtfColors(blocks);
+
   let rtf = '{\\rtf1\\ansi\\deff0';
-  
-  // Font table
-  rtf += '{\\fonttbl{\\f0 Arial;}}';
-  
-  // Process content
-  const processNode = (node: Node): string => {
-    let result = '';
-    
-    if (node.nodeType === Node.TEXT_NODE) {
-      result += node.textContent?.replace(/[\\{}]/g, '\\$&') || '';
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as Element;
-      const tag = el.tagName.toLowerCase();
-      
-      switch (tag) {
-        case 'b':
-        case 'strong':
-          result += '\\b ';
-          break;
-        case 'i':
-        case 'em':
-          result += '\\i ';
-          break;
-        case 'u':
-          result += '\\ul ';
-          break;
-        case 'p':
-          result += '\\par ';
-          break;
-        case 'br':
-          result += '\\line ';
-          break;
-        case 'h1':
-          result += '\\fs48\\b ';
-          break;
-        case 'h2':
-          result += '\\fs36\\b ';
-          break;
-        case 'h3':
-          result += '\\fs28\\b ';
-          break;
-      }
-      
-      for (const child of Array.from(node.childNodes)) {
-        result += processNode(child);
-      }
-      
-      switch (tag) {
-        case 'b':
-        case 'strong':
-          result += '\\b0 ';
-          break;
-        case 'i':
-        case 'em':
-          result += '\\i0 ';
-          break;
-        case 'u':
-          result += '\\ul0 ';
-          break;
-        case 'h1':
-        case 'h2':
-        case 'h3':
-          result += '\\b0\\fs24\\par ';
-          break;
-      }
+  rtf += buildRtfFontTable(fonts);
+  rtf += buildRtfColorTable(colors);
+  rtf += '\n';
+
+  let listIndex = 0;
+  blocks.forEach((block, index) => {
+    if (block.type === 'list-item') {
+      listIndex += 1;
+    } else {
+      listIndex = 0;
     }
-    
-    return result;
-  };
-  
-  rtf += processNode(tempDiv);
+    rtf += buildRtfBlock(block, fonts, colors, listIndex);
+    if (index < blocks.length - 1) {
+      rtf += '\\par\n';
+    }
+  });
+
   rtf += '}';
-  
   return rtf;
+}
+
+function collectRtfFonts(blocks: HtmlBlock[]): Map<string, number> {
+  const fonts = new Map<string, number>();
+  fonts.set('Arial', 0);
+  let index = 1;
+  blocks.forEach((block) => {
+    block.segments?.forEach((segment) => {
+      const font = segment.style.fontFamily ? normalizeFontFamilyValue(segment.style.fontFamily) : '';
+      if (font && !fonts.has(font)) {
+        fonts.set(font, index);
+        index += 1;
+      }
+    });
+  });
+  return fonts;
+}
+
+function collectRtfColors(blocks: HtmlBlock[]): Map<string, number> {
+  const colors = new Map<string, number>();
+  let index = 1;
+  blocks.forEach((block) => {
+    block.segments?.forEach((segment) => {
+      const color = normalizeColorToHex(segment.style.color);
+      if (color && !colors.has(color)) {
+        colors.set(color, index);
+        index += 1;
+      }
+      const background = normalizeColorToHex(segment.style.backgroundColor);
+      if (background && !colors.has(background)) {
+        colors.set(background, index);
+        index += 1;
+      }
+    });
+  });
+  return colors;
+}
+
+function buildRtfFontTable(fonts: Map<string, number>): string {
+  const entries = Array.from(fonts.entries())
+    .sort((a, b) => a[1] - b[1])
+    .map(([font, index]) => `{\\f${index} ${font};}`)
+    .join('');
+  return `{\\fonttbl${entries}}`;
+}
+
+function buildRtfColorTable(colors: Map<string, number>): string {
+  if (!colors.size) {
+    return '{\\colortbl;}';
+  }
+  const entries = Array.from(colors.entries())
+    .sort((a, b) => a[1] - b[1])
+    .map(([hex]) => {
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
+      return `\\red${r}\\green${g}\\blue${b};`;
+    })
+    .join('');
+  return `{\\colortbl;${entries}}`;
+}
+
+function buildRtfBlock(
+  block: HtmlBlock,
+  fonts: Map<string, number>,
+  colors: Map<string, number>,
+  listIndex: number,
+): string {
+  if (block.type === 'horizontal-rule') {
+    return '\\pard\\brdrb\\brdrs\\brdrw10\\brsp20\\par';
+  }
+
+  const alignControl = block.align
+    ? block.align === 'center'
+      ? '\\qc'
+      : block.align === 'right'
+        ? '\\qr'
+        : block.align === 'justify'
+          ? '\\qj'
+          : '\\ql'
+    : '\\ql';
+  const fontSize = block.type === 'heading' ? getRtfHeadingSize(block.level ?? 1) : FONT_SIZE_BASE;
+  const paragraphPrefix = `\\pard${alignControl}\\fs${fontSize} `;
+
+  if (block.type === 'image') {
+    const placeholder = buildImagePlaceholderSegments(block);
+    return `${paragraphPrefix}${buildRtfRunsFromSegments(placeholder, fonts, colors)}`;
+  }
+
+  if (block.type === 'list-item') {
+    const prefix =
+      block.listType === 'number' ? `${listIndex}. ` : '• ';
+    const segments = block.segments ?? [{ text: '', style: {} }];
+    const prefixed = prefix ? [{ text: prefix, style: {} }, ...segments] : segments;
+    return `${paragraphPrefix}${buildRtfRunsFromSegments(prefixed, fonts, colors)}`;
+  }
+
+  const segments = block.segments ?? [{ text: '', style: {} }];
+  return `${paragraphPrefix}${buildRtfRunsFromSegments(segments, fonts, colors)}`;
+}
+
+function buildRtfRunsFromSegments(
+  segments: InlineSegment[],
+  fonts: Map<string, number>,
+  colors: Map<string, number>,
+): string {
+  return normalizeSegments(segments)
+    .map((segment) => {
+      const fontKey = segment.style.fontFamily ? normalizeFontFamilyValue(segment.style.fontFamily) : '';
+      const fontIndex = fontKey ? fonts.get(fontKey) ?? 0 : 0;
+      const colorIndex = segment.style.color
+        ? colors.get(normalizeColorToHex(segment.style.color) ?? '') ?? 0
+        : 0;
+      const backgroundIndex = segment.style.backgroundColor
+        ? colors.get(normalizeColorToHex(segment.style.backgroundColor) ?? '') ?? 0
+        : 0;
+
+      const controls = [
+        `\\f${fontIndex}`,
+        `\\cf${colorIndex}`,
+        `\\highlight${backgroundIndex}`,
+        segment.style.bold ? '\\b' : '\\b0',
+        segment.style.italic ? '\\i' : '\\i0',
+        segment.style.underline ? '\\ul' : '\\ul0',
+        segment.style.superscript ? '\\super' : segment.style.subscript ? '\\sub' : '\\nosupersub',
+      ].join('');
+
+      const text = segment.text
+        .split('\n')
+        .map((line, index) => (index === 0 ? rtfEscape(line) : `\\line ${rtfEscape(line)}`))
+        .join('');
+
+      return `${controls} ${text}\\nosupersub`;
+    })
+    .join('');
+}
+
+function rtfEscape(text: string): string {
+  return text.replace(/[\\{}]/g, '\\$&');
+}
+
+function getRtfHeadingSize(level: number): number {
+  if (level === 1) return 48;
+  if (level === 2) return 36;
+  return 28;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -519,11 +549,17 @@ function escapeXml(value: string): string {
 
 function buildOdtContentXml(blocks: HtmlBlock[]): string {
   const body = blocks.length ? buildOdtBody(blocks) : '<text:p></text:p>';
+  const styles = buildOdtAutomaticStyles(blocks);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
   office:version="1.2">
+  <office:automatic-styles>
+    ${styles}
+  </office:automatic-styles>
   <office:body>
     <office:text>${body}</office:text>
   </office:body>
@@ -632,112 +668,398 @@ function buildDocxNumberingXml(): string {
 </w:numbering>`;
 }
 
-function buildPdfBlob(blocks: HtmlBlock[]): Blob {
+async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 72;
   const maxCharsPerLine = 90;
-  const lines = buildPdfLinesFromBlocks(blocks, maxCharsPerLine);
-  const pages = paginatePdfLines(lines, pageHeight - margin * 2);
 
-  const maxId = 3 + pages.length * 2;
-  const objects: string[] = new Array(maxId + 1);
+  const preparedBlocks = await preparePdfBlocks(blocks);
+  const lines = buildPdfLinesFromBlocks(preparedBlocks, maxCharsPerLine, pageWidth, margin);
+  const pages = paginatePdfLines(lines, pageHeight, margin);
 
-  const pageIds = pages.map((_, index) => 4 + index * 2);
-  const contentIds = pages.map((_, index) => 5 + index * 2);
+  const objects: PdfChunk[][] = [];
+  let nextId = 1;
 
-  objects[1] = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj';
-  objects[2] = `2 0 obj\n<< /Type /Pages /Kids [${pageIds
-    .map((id) => `${id} 0 R`)
-    .join(' ')}] /Count ${pages.length} >>\nendobj`;
-  objects[3] =
-    '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj';
+  const addObject = (chunks: PdfChunk[]): number => {
+    const id = nextId;
+    objects[id] = chunks;
+    nextId += 1;
+    return id;
+  };
 
-  pages.forEach((pageLines, index) => {
-    const pageId = pageIds[index];
-    const contentId = contentIds[index];
-    const contentStream = buildPdfContentStream(pageLines, margin, pageHeight, pageWidth);
-    const length = getPdfByteLength(contentStream);
-
-    objects[pageId] =
-      `${pageId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
-      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>\nendobj`;
-    objects[contentId] =
-      `${contentId} 0 obj\n<< /Length ${length} >>\nstream\n${contentStream}\nendstream\nendobj`;
+  const fontRegistry = buildPdfFontRegistry(lines);
+  const fontEntries = Array.from(fontRegistry.entries());
+  const fontObjectIds = new Map<string, number>();
+  fontEntries.forEach(([name]) => {
+    const id = addObject([
+      `${nextId} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /${name} /Encoding /WinAnsiEncoding >>\nendobj`,
+    ]);
+    fontObjectIds.set(name, id);
   });
 
-  const pdfChunks: string[] = [];
-  const offsets: number[] = new Array(maxId + 1).fill(0);
+  const imageRegistry = new Map<string, { id: number; image: PreparedPdfImage; name: string }>();
+  const imageNames = new Map<string, string>();
+  let imageIndex = 1;
+  lines.forEach((line) => {
+    if (line.type !== 'image') return;
+    if (imageRegistry.has(line.src)) return;
+    const name = `Im${imageIndex}`;
+    imageIndex += 1;
+    const image = line.image;
+    const id = addObject([
+      `${nextId} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${Math.round(
+        image.width,
+      )} /Height ${Math.round(image.height)} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`,
+      image.bytes,
+      '\nendstream\nendobj',
+    ]);
+    imageRegistry.set(line.src, { id, image, name });
+    imageNames.set(line.src, name);
+  });
+
+  const pagesObjectId = addObject(['']);
+  const pageIds: number[] = [];
+
+  pages.forEach((pageLines) => {
+    const contentStream = buildPdfContentStream(pageLines, margin, pageHeight, pageWidth, {
+      fontRegistry,
+      imageNames,
+    });
+    const contentId = addObject([
+      `${nextId} 0 obj\n<< /Length ${getPdfChunkLength(contentStream)} >>\nstream\n`,
+      contentStream,
+      '\nendstream\nendobj',
+    ]);
+
+    const fontResourceEntries = fontEntries
+      .map(([name, key]) => `/${key} ${fontObjectIds.get(name)} 0 R`)
+      .join(' ');
+    const imageResourceEntries = Array.from(imageRegistry.values())
+      .map((entry) => `/${entry.name} ${entry.id} 0 R`)
+      .join(' ');
+    const resources = `<< /Font << ${fontResourceEntries} >>${
+      imageResourceEntries ? ` /XObject << ${imageResourceEntries} >>` : ''
+    } >>`;
+
+    const pageId = addObject([
+      `${nextId} 0 obj\n<< /Type /Page /Parent ${pagesObjectId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources ${resources} /Contents ${contentId} 0 R >>\nendobj`,
+    ]);
+    pageIds.push(pageId);
+  });
+
+  const pagesObject = `${pagesObjectId} 0 obj\n<< /Type /Pages /Kids [${pageIds
+    .map((id) => `${id} 0 R`)
+    .join(' ')}] /Count ${pageIds.length} >>\nendobj`;
+  objects[pagesObjectId] = [pagesObject];
+
+  const catalogId = addObject([
+    `${nextId} 0 obj\n<< /Type /Catalog /Pages ${pagesObjectId} 0 R >>\nendobj`,
+  ]);
+
+  const pdfChunks: PdfChunk[] = [];
+  const offsets: number[] = new Array(nextId + 1).fill(0);
   let byteLength = 0;
 
-  const pushChunk = (chunk: string) => {
+  const pushChunk = (chunk: PdfChunk) => {
     pdfChunks.push(chunk);
-    byteLength += getPdfByteLength(chunk);
+    byteLength += getPdfChunkLength(chunk);
   };
 
   pushChunk('%PDF-1.4\n');
 
-  for (let i = 1; i <= maxId; i += 1) {
+  for (let i = 1; i < nextId; i += 1) {
     offsets[i] = byteLength;
-    pushChunk(`${objects[i]}\n`);
+    objects[i].forEach(pushChunk);
+    pushChunk('\n');
   }
 
   const xrefStart = byteLength;
-  pushChunk(`xref\n0 ${maxId + 1}\n`);
+  pushChunk(`xref\n0 ${nextId}\n`);
   pushChunk('0000000000 65535 f \n');
-  for (let i = 1; i <= maxId; i += 1) {
+  for (let i = 1; i < nextId; i += 1) {
     pushChunk(`${offsets[i].toString().padStart(10, '0')} 00000 n \n`);
   }
-  pushChunk(`trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+  pushChunk(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
 
   return new Blob([encodePdfChunks(pdfChunks)], { type: 'application/pdf' });
 }
 
-type HtmlBlock = {
-  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'smart-art';
+type InlineStyle = {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  color?: string;
+  backgroundColor?: string;
+  fontFamily?: string;
+  superscript?: boolean;
+  subscript?: boolean;
+};
+
+type InlineSegment = {
   text: string;
+  style: InlineStyle;
+};
+
+type HtmlBlock = {
+  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'image';
+  segments?: InlineSegment[];
   level?: number;
   listType?: 'bullet' | 'number';
+  align?: 'left' | 'center' | 'right' | 'justify';
+  src?: string;
+  alt?: string;
+  widthPct?: number;
 };
 
-type SmartArtAsset = {
-  name: string;
-  title: string;
-  svg: string;
+type PreparedHtmlBlock = HtmlBlock & {
+  image?: PreparedPdfImage;
 };
 
-type SmartArtManifestItem = {
-  id: number;
-  title: string;
-  file: string;
+type PdfTextSegment = {
+  text: string;
+  style: InlineStyle;
 };
+
+type PdfTextLine = {
+  type: 'text';
+  segments: PdfTextSegment[];
+  fontSize: number;
+  align?: HtmlBlock['align'];
+};
+
+type PdfLine =
+  | PdfTextLine
+  | { type: 'rule' }
+  | { type: 'spacer'; fontSize: number }
+  | {
+      type: 'image';
+      image: PreparedPdfImage;
+      src: string;
+      width: number;
+      height: number;
+      align?: HtmlBlock['align'];
+    };
+
+type PreparedPdfImage = {
+  bytes: Uint8Array;
+  width: number;
+  height: number;
+};
+
+type PdfChunk = string | Uint8Array;
+
+const EMPTY_STYLE: InlineStyle = {};
+
+const FONT_SIZE_BASE = 24;
+
+function mergeInlineStyles(base: InlineStyle, override: InlineStyle): InlineStyle {
+  return {
+    bold: base.bold || override.bold,
+    italic: base.italic || override.italic,
+    underline: base.underline || override.underline,
+    superscript: base.superscript || override.superscript,
+    subscript: base.subscript || override.subscript,
+    color: override.color ?? base.color,
+    backgroundColor: override.backgroundColor ?? base.backgroundColor,
+    fontFamily: override.fontFamily ?? base.fontFamily,
+  };
+}
+
+function normalizeFontFamilyValue(value: string): string {
+  return value.split(',')[0].trim().replace(/['"]/g, '');
+}
+
+function normalizeSegments(segments: InlineSegment[]): InlineSegment[] {
+  const normalized: InlineSegment[] = [];
+  segments.forEach((segment) => {
+    if (!segment.text) return;
+    const last = normalized.at(-1);
+    if (last && JSON.stringify(last.style) === JSON.stringify(segment.style)) {
+      last.text += segment.text;
+    } else {
+      normalized.push({ ...segment, style: { ...segment.style } });
+    }
+  });
+  return normalized;
+}
+
+function hasVisibleText(segments: InlineSegment[]): boolean {
+  return segments.some((segment) => segment.text.replace(/\s+/g, '').length > 0);
+}
+
+function getInlineStyleFromElement(el: HTMLElement): InlineStyle {
+  const style: InlineStyle = {};
+  const tag = el.tagName.toLowerCase();
+
+  if (tag === 'strong' || tag === 'b') {
+    style.bold = true;
+  }
+  if (tag === 'em' || tag === 'i') {
+    style.italic = true;
+  }
+  if (tag === 'u') {
+    style.underline = true;
+  }
+  if (tag === 'sup') {
+    style.superscript = true;
+  }
+  if (tag === 'sub') {
+    style.subscript = true;
+  }
+
+  const css = el.style;
+  if (css.color) {
+    style.color = css.color;
+  }
+  if (css.backgroundColor) {
+    style.backgroundColor = css.backgroundColor;
+  }
+  if (css.fontFamily) {
+    style.fontFamily = normalizeFontFamilyValue(css.fontFamily);
+  }
+  if (css.fontWeight) {
+    const weight = Number.parseInt(css.fontWeight, 10);
+    if (!Number.isNaN(weight) && weight >= 600) {
+      style.bold = true;
+    }
+  }
+  if (css.fontStyle === 'italic') {
+    style.italic = true;
+  }
+  if (css.textDecoration.includes('underline')) {
+    style.underline = true;
+  }
+
+  return style;
+}
+
+function normalizeColorToHex(color?: string): string | null {
+  if (!color) return null;
+  const trimmed = color.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.slice(1);
+    if (hex.length === 3) {
+      return hex
+        .split('')
+        .map((char) => char + char)
+        .join('')
+        .toUpperCase();
+    }
+    if (hex.length === 6) {
+      return hex.toUpperCase();
+    }
+    return null;
+  }
+
+  const rgbMatch = trimmed.match(/rgba?\(([^)]+)\)/i);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(',').map((part) => Number.parseFloat(part.trim()));
+    if (parts.length >= 3) {
+      const [r, g, b] = parts;
+      return [r, g, b]
+        .map((value) => Math.max(0, Math.min(255, Math.round(value))))
+        .map((value) => value.toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase();
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = trimmed;
+  const normalized = ctx.fillStyle;
+  if (normalized.startsWith('#')) {
+    return normalizeColorToHex(normalized);
+  }
+  return normalizeColorToHex(normalized);
+}
+
+function normalizeAlign(value?: string | null): HtmlBlock['align'] | undefined {
+  if (!value) return undefined;
+  if (value === 'left' || value === 'center' || value === 'right' || value === 'justify') {
+    return value;
+  }
+  return undefined;
+}
 
 function extractBlocksFromHtml(html: string): HtmlBlock[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   const blocks: HtmlBlock[] = [];
 
-  const addBlock = (block: HtmlBlock) => {
-    const trimmed = block.text.trim();
-    if (!trimmed) return;
-    blocks.push({ ...block, text: trimmed });
+  const addTextBlock = (block: HtmlBlock, segments: InlineSegment[]) => {
+    const normalized = normalizeSegments(segments);
+    if (!hasVisibleText(normalized)) return;
+    blocks.push({ ...block, segments: normalized });
   };
 
-  const extractInlineText = (node: Node): string => {
-    let result = '';
-    node.childNodes.forEach((child) => {
-      if (child.nodeType === Node.TEXT_NODE) {
-        result += child.textContent ?? '';
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as HTMLElement;
-        if (el.tagName.toLowerCase() === 'br') {
-          result += '\n';
-        } else {
-          result += extractInlineText(child);
-        }
-      }
+  const addImageBlock = (img: HTMLImageElement) => {
+    const src = img.getAttribute('src') ?? '';
+    if (!src) return;
+    const alt = img.getAttribute('alt') ?? 'Image';
+    const widthAttr = img.getAttribute('data-width') ?? img.style.width;
+    const widthPct = widthAttr?.includes('%')
+      ? Number.parseFloat(widthAttr)
+      : widthAttr
+        ? Number.parseFloat(widthAttr)
+        : undefined;
+    const align = normalizeAlign(img.getAttribute('data-align')) ?? normalizeAlign(img.style.textAlign);
+    blocks.push({
+      type: 'image',
+      src,
+      alt,
+      widthPct: Number.isNaN(widthPct ?? NaN) ? undefined : widthPct,
+      align,
     });
-    return result.replace(/\s+/g, ' ').replace(/ \n/g, '\n').replace(/\n /g, '\n');
+  };
+
+  const collectInlineSegments = (node: Node, style: InlineStyle, segments: InlineSegment[]) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      segments.push({ text: node.textContent ?? '', style });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'br') {
+      segments.push({ text: '\n', style });
+      return;
+    }
+    if (tag === 'img') {
+      return;
+    }
+
+    const nextStyle = mergeInlineStyles(style, getInlineStyleFromElement(el));
+    el.childNodes.forEach((child) => collectInlineSegments(child, nextStyle, segments));
+  };
+
+  const handleBlockElement = (
+    el: HTMLElement,
+    blockType: HtmlBlock['type'],
+    extra: Partial<HtmlBlock>,
+  ) => {
+    const align = normalizeAlign(el.style.textAlign) ?? normalizeAlign(el.getAttribute('align'));
+    const segments: InlineSegment[] = [];
+    const baseStyle = getInlineStyleFromElement(el);
+    const flushSegments = () => {
+      if (segments.length) {
+        addTextBlock({ type: blockType, align, ...extra }, segments.splice(0));
+      }
+    };
+
+    el.childNodes.forEach((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE && (child as HTMLElement).tagName.toLowerCase() === 'img') {
+        flushSegments();
+        addImageBlock(child as HTMLImageElement);
+        return;
+      }
+      collectInlineSegments(child, baseStyle, segments);
+    });
+
+    flushSegments();
   };
 
   const walk = (node: Node) => {
@@ -746,70 +1068,55 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     const tag = el.tagName.toLowerCase();
 
     if (tag === 'p' || tag === 'div') {
-      const text = extractInlineText(el);
-      if (text.trim()) {
-        addBlock({ type: 'paragraph', text });
-        return;
-      }
-
-      const images = Array.from(el.querySelectorAll('img'));
-      const smartArtFound = images.some((img) => {
-        const src = img.getAttribute('src') ?? '';
-        const alt = img.getAttribute('alt') ?? 'SmartArt';
-        if (src.startsWith('data:image/svg+xml')) {
-          addBlock({ type: 'smart-art', text: alt });
-          return true;
-        }
-        return false;
-      });
-
-      if (smartArtFound) {
-        return;
-      }
+      handleBlockElement(el, 'paragraph', {});
+      return;
     }
 
     if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
       const level = Number(tag.replace('h', ''));
-      addBlock({ type: 'heading', text: extractInlineText(el), level });
+      handleBlockElement(el, 'heading', { level });
       return;
     }
 
     if (tag === 'ul' || tag === 'ol') {
       const listType = tag === 'ol' ? 'number' : 'bullet';
       el.querySelectorAll(':scope > li').forEach((item) => {
-        addBlock({
-          type: 'list-item',
-          text: extractInlineText(item),
-          listType,
-        });
+        handleBlockElement(item as HTMLElement, 'list-item', { listType });
       });
       return;
     }
 
     if (tag === 'li') {
-      addBlock({ type: 'list-item', text: extractInlineText(el), listType: 'bullet' });
+      handleBlockElement(el, 'list-item', { listType: 'bullet' });
       return;
     }
 
     if (tag === 'hr') {
-      blocks.push({ type: 'horizontal-rule', text: '' });
+      blocks.push({ type: 'horizontal-rule' });
       return;
     }
 
     if (tag === 'img') {
-      const src = el.getAttribute('src') ?? '';
-      const alt = el.getAttribute('alt') ?? 'SmartArt';
-      if (src.startsWith('data:image/svg+xml')) {
-        addBlock({ type: 'smart-art', text: alt });
-        return;
-      }
+      addImageBlock(el as HTMLImageElement);
+      return;
     }
 
     el.childNodes.forEach(walk);
   };
 
   doc.body.childNodes.forEach(walk);
-  return blocks.length ? blocks : [{ type: 'paragraph', text: extractInlineText(doc.body) }];
+  if (blocks.length) {
+    return blocks;
+  }
+
+  const fallbackSegments: InlineSegment[] = [];
+  collectInlineSegments(doc.body, EMPTY_STYLE, fallbackSegments);
+  return [
+    {
+      type: 'paragraph',
+      segments: normalizeSegments(fallbackSegments),
+    },
+  ];
 }
 
 function buildDocxParagraph(block: HtmlBlock): string {
@@ -817,33 +1124,43 @@ function buildDocxParagraph(block: HtmlBlock): string {
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
   }
 
-  if (block.type === 'smart-art') {
-    return `<w:p>${buildDocxRuns(`SmartArt: ${block.text}`)}</w:p>`;
+  const paragraphProps: string[] = [];
+  if (block.type === 'heading') {
+    paragraphProps.push(buildDocxHeadingStyle(block.level ?? 1));
+  }
+  if (block.type === 'list-item') {
+    paragraphProps.push(buildDocxListStyle(block.listType ?? 'bullet'));
+  }
+  if (block.align) {
+    paragraphProps.push(buildDocxAlignment(block.align));
   }
 
-  const style =
-    block.type === 'heading'
-      ? buildDocxHeadingStyle(block.level ?? 1)
-      : block.type === 'list-item'
-        ? buildDocxListStyle(block.listType ?? 'bullet')
-      : '';
-  const runs = buildDocxRuns(block.text, block.type === 'heading' ? block.level : undefined);
-  const prefix = block.type === 'list-item' ? '' : '';
-  const prefixRun = prefix
-    ? `<w:r><w:t xml:space="preserve">${escapeXml(prefix)}</w:t></w:r>`
-    : '';
+  const propsXml = paragraphProps.length ? `<w:pPr>${paragraphProps.join('')}</w:pPr>` : '';
+  const segments =
+    block.type === 'image'
+      ? buildImagePlaceholderSegments(block)
+      : block.segments ?? [{ text: '', style: {} }];
+  const runs = buildDocxRunsFromSegments(
+    segments,
+    block.type === 'heading' ? block.level : undefined,
+  );
 
-  return `<w:p>${style}${prefixRun}${runs}</w:p>`;
+  return `<w:p>${propsXml}${runs}</w:p>`;
 }
 
-function buildDocxRuns(text: string, headingLevel?: number): string {
-  const parts = text.split('\n');
-  const runProps = headingLevel ? buildDocxHeadingRunProps(headingLevel) : '';
-  return parts
-    .map((part, index) => {
-      const escaped = escapeXml(part);
-      const breakTag = index > 0 ? '<w:r><w:br/></w:r>' : '';
-      return `${breakTag}<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+function buildDocxRunsFromSegments(segments: InlineSegment[], headingLevel?: number): string {
+  const normalized = normalizeSegments(segments);
+  return normalized
+    .map((segment) => {
+      const parts = segment.text.split('\n');
+      return parts
+        .map((part, index) => {
+          const escaped = escapeXml(part);
+          const breakTag = index > 0 ? '<w:r><w:br/></w:r>' : '';
+          const runProps = buildDocxRunProps(segment.style, headingLevel);
+          return `${breakTag}<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+        })
+        .join('');
     })
     .join('');
 }
@@ -853,25 +1170,40 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
     return `<text:p>${escapeXml('─'.repeat(48))}</text:p>`;
   }
 
-  if (block.type === 'smart-art') {
-    return `<text:p>${buildOdtInlineText(`SmartArt: ${block.text}`)}</text:p>`;
-  }
-
   if (block.type === 'list-item') {
-    const text = block.listType === 'number' ? `${index + 1}. ${block.text}` : block.text;
-    return `<text:list-item><text:p>${buildOdtInlineText(text)}</text:p></text:list-item>`;
+    const segments = block.segments ?? [{ text: '', style: {} }];
+    const text = block.listType === 'number' ? `${index + 1}. ` : '';
+    const prefixSegments: InlineSegment[] = text
+      ? [{ text, style: {} }, ...segments]
+      : segments;
+    const styleName = block.align ? ` text:style-name="${getOdtParagraphStyleName(block.align)}"` : '';
+    return `<text:list-item><text:p${styleName}>${buildOdtInlineRuns(
+      prefixSegments,
+    )}</text:p></text:list-item>`;
   }
 
-  const tag =
-    block.type === 'heading'
-      ? `text:h text:outline-level="${block.level ?? 1}"`
-      : 'text:p';
-  return `<${tag}>${buildOdtInlineText(block.text)}</${tag.split(' ')[0]}>`;
+  if (block.type === 'image') {
+    const segments = buildImagePlaceholderSegments(block);
+    return `<text:p>${buildOdtInlineRuns(segments)}</text:p>`;
+  }
+
+  const tagName = block.type === 'heading' ? 'text:h' : 'text:p';
+  const outline = block.type === 'heading' ? ` text:outline-level="${block.level ?? 1}"` : '';
+  const styleName = block.align ? ` text:style-name="${getOdtParagraphStyleName(block.align)}"` : '';
+  return `<${tagName}${outline}${styleName}>${buildOdtInlineRuns(
+    block.segments ?? [{ text: '', style: {} }],
+  )}</${tagName}>`;
 }
 
-function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine[] {
+function buildPdfLinesFromBlocks(
+  blocks: PreparedHtmlBlock[],
+  maxChars: number,
+  pageWidth: number,
+  margin: number,
+): PdfLine[] {
   const lines: PdfLine[] = [];
   let listIndex = 0;
+  const maxWidth = pageWidth - margin * 2;
 
   blocks.forEach((block, index) => {
     if (block.type === 'list-item') {
@@ -882,19 +1214,41 @@ function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine
 
     if (block.type === 'horizontal-rule') {
       lines.push({ type: 'rule' });
+    } else if (block.type === 'image' && block.image) {
+      const widthTarget = block.widthPct ? (maxWidth * block.widthPct) / 100 : maxWidth;
+      const width = Math.min(block.image.width, widthTarget);
+      const scale = width / block.image.width;
+      const height = block.image.height * scale;
+      lines.push({
+        type: 'image',
+        image: block.image,
+        src: block.src ?? '',
+        width,
+        height,
+        align: block.align,
+      });
     } else {
-      const smartArtPrefix = block.type === 'smart-art' ? 'SmartArt: ' : '';
+      const baseSegments =
+        block.type === 'image'
+          ? buildImagePlaceholderSegments(block)
+          : block.segments ?? [{ text: '', style: {} }];
       const prefix =
         block.type === 'list-item'
           ? block.listType === 'number'
             ? `${listIndex}. `
             : '• '
           : '';
-      const text = `${smartArtPrefix}${prefix}${block.text}`;
-      const fontSize = block.type === 'heading' ? 16 - ((block.level ?? 1) - 1) * 2 : 12;
-
-      wrapPdfText(text, maxChars).forEach((line) => {
-        lines.push({ type: 'text', text: line, fontSize });
+      const segments: InlineSegment[] = prefix
+        ? [{ text: prefix, style: {} }, ...baseSegments]
+        : baseSegments;
+      const fontSize = block.type === 'heading' ? 18 - ((block.level ?? 1) - 1) * 2 : 12;
+      wrapPdfSegments(segments, maxChars).forEach((lineSegments) => {
+        lines.push({
+          type: 'text',
+          segments: lineSegments,
+          fontSize,
+          align: block.align,
+        });
       });
     }
 
@@ -903,35 +1257,47 @@ function buildPdfLinesFromBlocks(blocks: HtmlBlock[], maxChars: number): PdfLine
     }
   });
 
-  return lines.length ? lines : [{ type: 'text', text: '', fontSize: 12 }];
+  return lines.length ? lines : [{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12 }];
 }
 
-function wrapPdfText(text: string, maxChars: number): string[] {
-  const lines: string[] = [];
+function wrapPdfSegments(segments: InlineSegment[], maxChars: number): PdfTextSegment[][] {
+  const lines: PdfTextSegment[][] = [];
+  let currentLine: PdfTextSegment[] = [];
+  let currentLength = 0;
 
-  text.split('\n').forEach((line) => {
-    let current = '';
-    line.split(/\s+/).forEach((word) => {
-      if (!word) return;
-      const next = current ? `${current} ${word}` : word;
-      if (next.length > maxChars) {
-        if (current) {
-          lines.push(current);
+  const pushLine = () => {
+    if (currentLine.length) {
+      lines.push(currentLine);
+      currentLine = [];
+      currentLength = 0;
+    } else {
+      lines.push([]);
+    }
+  };
+
+  normalizeSegments(segments).forEach((segment) => {
+    const parts = segment.text.split('\n');
+    parts.forEach((part, index) => {
+      const tokens = part.split(/(\s+)/).filter((token) => token.length);
+      tokens.forEach((token) => {
+        const nextLength = currentLength + token.length;
+        if (nextLength > maxChars && currentLine.length) {
+          pushLine();
         }
-        current = word;
-      } else {
-        current = next;
+        currentLine.push({ text: token, style: segment.style });
+        currentLength += token.length;
+      });
+      if (index < parts.length - 1) {
+        pushLine();
       }
     });
-
-    if (current) {
-      lines.push(current);
-    } else {
-      lines.push('');
-    }
   });
 
-  return lines;
+  if (currentLine.length) {
+    lines.push(currentLine);
+  }
+
+  return lines.length ? lines : [[{ text: '', style: {} }]];
 }
 
 function buildPdfContentStream(
@@ -939,37 +1305,216 @@ function buildPdfContentStream(
   margin: number,
   pageHeight: number,
   pageWidth: number,
+  resources: { fontRegistry: Map<string, string>; imageNames: Map<string, string> },
 ): string {
   let cursorY = pageHeight - margin;
-  let stream = 'BT\n/F1 12 Tf\n';
-  stream += `${margin} ${cursorY} Td\n`;
+  let stream = 'BT\n';
 
-  lines.forEach((line, index) => {
-    if (index > 0) {
-      const move = line.type === 'rule' ? 10 : (line.fontSize ?? 12) * 1.4;
-      stream += `0 -${move.toFixed(2)} Td\n`;
-      cursorY -= move;
+  lines.forEach((line) => {
+    if (line.type === 'spacer') {
+      cursorY -= line.fontSize * 1.4;
+      return;
     }
 
     if (line.type === 'rule') {
+      cursorY -= 12;
       stream += 'ET\n';
       const y = cursorY;
       stream += `q 0.5 w ${margin} ${y} m ${pageWidth - margin} ${y} l S Q\n`;
-      stream += 'BT\n/F1 12 Tf\n';
-      stream += `${margin} ${y} Td\n`;
+      stream += 'BT\n';
       return;
     }
 
-    if (line.type === 'spacer') {
+    if (line.type === 'image') {
+      cursorY -= line.height;
+      stream += 'ET\n';
+      const x =
+        line.align === 'center'
+          ? margin + (pageWidth - margin * 2 - line.width) / 2
+          : line.align === 'right'
+            ? pageWidth - margin - line.width
+            : margin;
+      const imageName = resources.imageNames.get(line.src);
+      if (imageName) {
+        stream += `q ${line.width.toFixed(2)} 0 0 ${line.height.toFixed(
+          2,
+        )} ${x.toFixed(2)} ${cursorY.toFixed(2)} cm /${imageName} Do Q\n`;
+      }
+      stream += 'BT\n';
       return;
     }
 
-    stream += `/F1 ${line.fontSize ?? 12} Tf\n`;
-    stream += `(${escapePdfText(line.text ?? '')}) Tj\n`;
+    const lineHeight = line.fontSize * 1.4;
+    const lineText = line.segments.map((segment) => segment.text).join('');
+    const approximateWidth = lineText.length * line.fontSize * 0.5;
+    const availableWidth = pageWidth - margin * 2;
+    const x =
+      line.align === 'center'
+        ? margin + (availableWidth - approximateWidth) / 2
+        : line.align === 'right'
+          ? margin + (availableWidth - approximateWidth)
+          : margin;
+
+    stream += `1 0 0 1 ${x.toFixed(2)} ${cursorY.toFixed(2)} Tm\n`;
+    line.segments.forEach((segment) => {
+      const fontName = resolvePdfFontName(segment.style);
+      const fontKey = resources.fontRegistry.get(fontName) ?? 'F1';
+      const color = normalizeColorToHex(segment.style.color);
+      stream += `/${fontKey} ${line.fontSize} Tf\n`;
+      if (color) {
+        const [r, g, b] = [
+          Number.parseInt(color.slice(0, 2), 16) / 255,
+          Number.parseInt(color.slice(2, 4), 16) / 255,
+          Number.parseInt(color.slice(4, 6), 16) / 255,
+        ];
+        stream += `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg\n`;
+      } else {
+        stream += '0 0 0 rg\n';
+      }
+      stream += `(${escapePdfText(segment.text)}) Tj\n`;
+    });
+    cursorY -= lineHeight;
   });
 
   stream += 'ET';
   return stream;
+}
+
+async function preparePdfBlocks(blocks: HtmlBlock[]): Promise<PreparedHtmlBlock[]> {
+  const prepared: PreparedHtmlBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.type !== 'image') {
+      prepared.push(block);
+      continue;
+    }
+
+    if (!block.src) {
+      prepared.push({
+        type: 'paragraph',
+        segments: buildImagePlaceholderSegments(block),
+        align: block.align,
+      });
+      continue;
+    }
+
+    try {
+      const image = await loadPdfImage(block.src);
+      if (image) {
+        prepared.push({ ...block, image });
+      } else {
+        prepared.push({
+          type: 'paragraph',
+          segments: buildImagePlaceholderSegments(block),
+          align: block.align,
+        });
+      }
+    } catch {
+      prepared.push({
+        type: 'paragraph',
+        segments: buildImagePlaceholderSegments(block),
+        align: block.align,
+      });
+    }
+  }
+
+  return prepared;
+}
+
+function loadPdfImage(src: string): Promise<PreparedPdfImage | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = dataUrl.split(',')[1];
+      if (!base64) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        bytes: base64ToUint8Array(base64),
+        width: canvas.width,
+        height: canvas.height,
+      });
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function buildPdfFontRegistry(lines: PdfLine[]): Map<string, string> {
+  const fonts = new Map<string, string>();
+  let index = 1;
+  const register = (fontName: string) => {
+    if (!fonts.has(fontName)) {
+      fonts.set(fontName, `F${index}`);
+      index += 1;
+    }
+  };
+
+  lines.forEach((line) => {
+    if (line.type !== 'text') return;
+    line.segments.forEach((segment) => {
+      register(resolvePdfFontName(segment.style));
+    });
+  });
+
+  if (!fonts.size) {
+    register('Helvetica');
+  }
+
+  return fonts;
+}
+
+function resolvePdfFontName(style: InlineStyle): string {
+  const family = style.fontFamily ? normalizeFontFamilyValue(style.fontFamily).toLowerCase() : '';
+  let base = 'Helvetica';
+  if (family.includes('times')) {
+    base = 'Times-Roman';
+  } else if (family.includes('courier')) {
+    base = 'Courier';
+  }
+
+  const isBold = !!style.bold;
+  const isItalic = !!style.italic;
+
+  if (base === 'Times-Roman') {
+    if (isBold && isItalic) return 'Times-BoldItalic';
+    if (isBold) return 'Times-Bold';
+    if (isItalic) return 'Times-Italic';
+    return 'Times-Roman';
+  }
+
+  if (base === 'Courier') {
+    if (isBold && isItalic) return 'Courier-BoldOblique';
+    if (isBold) return 'Courier-Bold';
+    if (isItalic) return 'Courier-Oblique';
+    return 'Courier';
+  }
+
+  if (isBold && isItalic) return 'Helvetica-BoldOblique';
+  if (isBold) return 'Helvetica-Bold';
+  if (isItalic) return 'Helvetica-Oblique';
+  return 'Helvetica';
 }
 
 function escapePdfText(value: string): string {
@@ -992,34 +1537,37 @@ type PdfLine =
   | { type: 'rule' }
   | { type: 'spacer'; fontSize: number };
 
-function paginatePdfLines(lines: PdfLine[], availableHeight: number): PdfLine[][] {
+function paginatePdfLines(lines: PdfLine[], pageHeight: number, margin: number): PdfLine[][] {
   const pages: PdfLine[][] = [];
   let current: PdfLine[] = [];
-  let used = 0;
+  let cursorY = pageHeight - margin;
+
+  const lineHeight = (line: PdfLine): number => {
+    if (line.type === 'rule') return 12;
+    if (line.type === 'spacer') return line.fontSize * 1.4;
+    if (line.type === 'image') return line.height;
+    return line.fontSize * 1.4;
+  };
 
   lines.forEach((line) => {
-    const height =
-      line.type === 'rule'
-        ? 12
-        : line.type === 'spacer'
-          ? line.fontSize * 1.4
-          : line.fontSize * 1.4;
-
-    if (used + height > availableHeight && current.length) {
+    const height = lineHeight(line);
+    if (cursorY - height < margin && current.length) {
       pages.push(current);
       current = [];
-      used = 0;
+      cursorY = pageHeight - margin;
     }
 
     current.push(line);
-    used += height;
+    cursorY -= height;
   });
 
   if (current.length) {
     pages.push(current);
   }
 
-  return pages.length ? pages : [[{ type: 'text', text: '', fontSize: 12 }]];
+  return pages.length
+    ? pages
+    : [[{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12 }]];
 }
 
 function buildOdtBody(blocks: HtmlBlock[]): string {
@@ -1055,27 +1603,194 @@ function buildOdtBody(blocks: HtmlBlock[]): string {
   return parts.join('');
 }
 
-function buildOdtInlineText(text: string): string {
-  return text
-    .split('\n')
-    .map((line, index) =>
-      index === 0 ? escapeXml(line) : `<text:line-break/>${escapeXml(line)}`,
-    )
+function buildOdtAutomaticStyles(blocks: HtmlBlock[]): string {
+  const textStyles = new Map<string, InlineStyle>();
+  const paragraphAlignments = new Set<HtmlBlock['align']>();
+
+  blocks.forEach((block) => {
+    if (block.align) {
+      paragraphAlignments.add(block.align);
+    }
+    block.segments?.forEach((segment) => {
+      const key = buildOdtStyleKey(segment.style);
+      if (key) {
+        textStyles.set(key, segment.style);
+      }
+    });
+  });
+
+  const paragraphStyles = Array.from(paragraphAlignments)
+    .filter(Boolean)
+    .map((align) => buildOdtParagraphStyleDefinition(align!))
+    .join('');
+  const textStyleDefs = Array.from(textStyles.values())
+    .map((style) => buildOdtTextStyleDefinition(style))
+    .join('');
+
+  return `${paragraphStyles}${textStyleDefs}`;
+}
+
+function buildOdtParagraphStyleDefinition(align: HtmlBlock['align']): string {
+  if (!align) return '';
+  return `<style:style style:name="${getOdtParagraphStyleName(align)}" style:family="paragraph">
+    <style:paragraph-properties fo:text-align="${align}"/>
+  </style:style>`;
+}
+
+function buildOdtTextStyleDefinition(style: InlineStyle): string {
+  const parts: string[] = [];
+  if (style.bold) parts.push('fo:font-weight="bold"');
+  if (style.italic) parts.push('fo:font-style="italic"');
+  if (style.underline)
+    parts.push('style:text-underline-style="solid" style:text-underline-width="auto"');
+  if (style.superscript) parts.push('style:text-position="super 58%"');
+  if (style.subscript) parts.push('style:text-position="sub 58%"');
+  const color = normalizeColorToHex(style.color);
+  if (color) parts.push(`fo:color="#${color}"`);
+  const background = normalizeColorToHex(style.backgroundColor);
+  if (background) parts.push(`fo:background-color="#${background}"`);
+  if (style.fontFamily) parts.push(`fo:font-family="${escapeXml(style.fontFamily)}"`);
+
+  if (!parts.length) return '';
+  return `<style:style style:name="${getOdtTextStyleName(style)}" style:family="text">
+    <style:text-properties ${parts.join(' ')}/>
+  </style:style>`;
+}
+
+function buildOdtStyleKey(style: InlineStyle): string {
+  const keyParts = [
+    style.bold ? 'b' : '',
+    style.italic ? 'i' : '',
+    style.underline ? 'u' : '',
+    style.superscript ? 'sup' : '',
+    style.subscript ? 'sub' : '',
+    style.color ? `c:${style.color}` : '',
+    style.backgroundColor ? `bg:${style.backgroundColor}` : '',
+    style.fontFamily ? `f:${style.fontFamily}` : '',
+  ].filter(Boolean);
+  return keyParts.join('|');
+}
+
+function getOdtTextStyleName(style: InlineStyle): string {
+  const key = buildOdtStyleKey(style);
+  if (!key) return '';
+  return `T${hashString(key)}`;
+}
+
+function getOdtParagraphStyleName(align: HtmlBlock['align']): string {
+  return `P-${align}`;
+}
+
+function hashString(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) % 0xfffffff;
+  }
+  return hash.toString(16);
+}
+
+function buildOdtInlineRuns(segments: InlineSegment[]): string {
+  const normalized = normalizeSegments(segments);
+  return normalized
+    .map((segment) => {
+      const styleName = getOdtTextStyleName(segment.style);
+      const content = segment.text
+        .split('\n')
+        .map((line, index) =>
+          index === 0 ? escapeXml(line) : `<text:line-break/>${escapeXml(line)}`,
+        )
+        .join('');
+      if (!styleName) {
+        return content;
+      }
+      return `<text:span text:style-name="${styleName}">${content}</text:span>`;
+    })
     .join('');
 }
 
 function buildDocxHeadingStyle(_level: number): string {
-  return `<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>`;
+  return `<w:spacing w:before="240" w:after="120"/>`;
 }
 
 function buildDocxHeadingRunProps(level: number): string {
   const size = level === 1 ? 48 : level === 2 ? 36 : 28;
-  return `<w:rPr><w:b/><w:sz w:val="${size}"/></w:rPr>`;
+  return `<w:b/><w:sz w:val="${size}"/>`;
 }
 
 function buildDocxListStyle(listType: HtmlBlock['listType']): string {
   const numId = listType === 'number' ? 2 : 1;
-  return `<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>`;
+  return `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr>`;
+}
+
+function buildDocxAlignment(align: HtmlBlock['align']): string {
+  if (!align) return '';
+  const map: Record<NonNullable<HtmlBlock['align']>, string> = {
+    left: 'left',
+    center: 'center',
+    right: 'right',
+    justify: 'both',
+  };
+  return `<w:jc w:val="${map[align]}"/>`;
+}
+
+function buildDocxRunProps(style: InlineStyle, headingLevel?: number): string {
+  const props: string[] = [];
+  if (headingLevel) {
+    props.push(buildDocxHeadingRunProps(headingLevel));
+  }
+  if (style.bold) props.push('<w:b/>');
+  if (style.italic) props.push('<w:i/>');
+  if (style.underline) props.push('<w:u w:val="single"/>');
+  if (style.superscript) props.push('<w:vertAlign w:val="superscript"/>');
+  if (style.subscript) props.push('<w:vertAlign w:val="subscript"/>');
+
+  const color = normalizeColorToHex(style.color);
+  if (color) {
+    props.push(`<w:color w:val="${color}"/>`);
+  }
+
+  const highlight = normalizeDocxHighlight(style.backgroundColor);
+  if (highlight) {
+    props.push(`<w:highlight w:val="${highlight}"/>`);
+  }
+
+  if (style.fontFamily) {
+    props.push(
+      `<w:rFonts w:ascii="${escapeXml(style.fontFamily)}" w:hAnsi="${escapeXml(
+        style.fontFamily,
+      )}"/>`,
+    );
+  }
+
+  if (!props.length) {
+    return '';
+  }
+  return `<w:rPr>${props.join('')}</w:rPr>`;
+}
+
+function normalizeDocxHighlight(color?: string): string | null {
+  const hex = normalizeColorToHex(color);
+  if (!hex) return null;
+  const mapping: Record<string, string> = {
+    FFFFFF: 'white',
+    FFFF00: 'yellow',
+    '00FF00': 'green',
+    '00FFFF': 'cyan',
+    FF00FF: 'magenta',
+    FF0000: 'red',
+    '0000FF': 'blue',
+    '000000': 'black',
+    '808080': 'gray',
+  };
+  return mapping[hex] ?? null;
+}
+
+function buildImagePlaceholderSegments(block: HtmlBlock): InlineSegment[] {
+  const isSvg = block.src?.startsWith('data:image/svg+xml');
+  const typeLabel = isSvg ? 'SmartArt' : 'Image';
+  const label = block.alt?.trim();
+  const text = label ? `${typeLabel}: ${label}` : typeLabel;
+  return [{ text, style: {} }];
 }
 
 function getPdfByteLength(value: string): number {
@@ -1087,17 +1802,30 @@ function getPdfByteLength(value: string): number {
   return length;
 }
 
-function encodePdfChunks(chunks: string[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + getPdfByteLength(chunk), 0);
+function getPdfChunkLength(chunk: PdfChunk): number {
+  if (typeof chunk === 'string') {
+    return getPdfByteLength(chunk);
+  }
+  return chunk.length;
+}
+
+function encodePdfChunks(chunks: PdfChunk[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + getPdfChunkLength(chunk), 0);
   const buffer = new Uint8Array(total);
   let offset = 0;
 
   chunks.forEach((chunk) => {
-    for (let i = 0; i < chunk.length; i += 1) {
-      const code = chunk.charCodeAt(i);
-      buffer[offset] = code <= 0xff ? code : 63;
-      offset += 1;
+    if (typeof chunk === 'string') {
+      for (let i = 0; i < chunk.length; i += 1) {
+        const code = chunk.charCodeAt(i);
+        buffer[offset] = code <= 0xff ? code : 63;
+        offset += 1;
+      }
+      return;
     }
+
+    buffer.set(chunk, offset);
+    offset += chunk.length;
   });
 
   return buffer;
@@ -1124,68 +1852,4 @@ function escapeHtmlText(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function decodeSvgDataUrl(dataUrl: string): string | null {
-  if (!dataUrl.startsWith('data:image/svg+xml')) {
-    return null;
-  }
-
-  const [header, data] = dataUrl.split(',');
-  if (!data) {
-    return null;
-  }
-
-  if (header.includes(';base64')) {
-    try {
-      const decoded = atob(data);
-      if (typeof TextDecoder !== 'undefined') {
-        const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
-        return new TextDecoder().decode(bytes);
-      }
-      return decodeURIComponent(escape(decoded));
-    } catch (error) {
-      console.warn('Failed to decode base64 SVG data url', error);
-      return null;
-    }
-  }
-
-  try {
-    return decodeURIComponent(data);
-  } catch (error) {
-    console.warn('Failed to decode SVG data url', error);
-    return data;
-  }
-}
-
-function extractSmartArtAssets(html: string): SmartArtAsset[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const assets: SmartArtAsset[] = [];
-
-  doc.querySelectorAll('img').forEach((img, index) => {
-    const src = img.getAttribute('src') ?? '';
-    const svg = decodeSvgDataUrl(src);
-    if (!svg) return;
-
-    const title = (img.getAttribute('alt') || `SmartArt ${index + 1}`).trim() || `SmartArt ${index + 1}`;
-    assets.push({
-      name: title,
-      title,
-      svg,
-    });
-  });
-
-  return assets;
-}
-
-function ensureUniqueFileName(value: string, usedNames: Set<string>): string {
-  let name = value;
-  let counter = 2;
-  while (usedNames.has(name.toLowerCase())) {
-    name = `${value}-${counter}`;
-    counter += 1;
-  }
-  usedNames.add(name.toLowerCase());
-  return name;
 }
