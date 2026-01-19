@@ -218,9 +218,9 @@ export const RichTextEditor = () => {
   }, [editor]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col app-shell">
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/50">
+      <header className="sticky top-0 z-40 glass-bar">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -286,13 +286,13 @@ export const RichTextEditor = () => {
       </header>
 
       {/* Toolbar */}
-      <div className="sticky top-[89px] z-30 px-4 py-2 bg-background/50 backdrop-blur-sm">
+      <div className="sticky top-[89px] z-30 px-4 py-2 glass-bar glass-bar--toolbar">
         <EditorToolbar editor={editor} />
       </div>
 
       {/* Editor */}
       <main className="flex-1 max-w-4xl mx-auto w-full">
-        <div className="editor-container bg-card rounded-2xl shadow-floating my-6 mx-4 overflow-hidden border border-border/30">
+        <div className="editor-container glass-card shadow-floating my-6 mx-4 overflow-hidden">
           <EditorContent 
             editor={editor} 
             className="editor-content"
@@ -301,7 +301,7 @@ export const RichTextEditor = () => {
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-3 border-t border-border/50 bg-background/50 backdrop-blur-sm">
+      <footer className="px-4 py-3 glass-bar glass-bar--footer">
         <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-4">
             <span>{wordCount} words</span>
