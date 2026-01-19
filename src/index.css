@@ -167,9 +167,10 @@ body {
 /* App background */
 .app-shell {
   background-image:
-    radial-gradient(1200px circle at 15% -10%, hsl(var(--primary) / 0.12), transparent 45%),
-    radial-gradient(900px circle at 85% 0%, hsl(var(--accent-foreground) / 0.12), transparent 50%),
-    linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background) / 0.9) 100%);
+    radial-gradient(1200px circle at 15% -10%, hsl(var(--primary) / 0.24), transparent 45%),
+    radial-gradient(900px circle at 85% 0%, hsl(var(--accent-foreground) / 0.2), transparent 50%),
+    radial-gradient(700px circle at 50% 100%, hsl(var(--primary) / 0.16), transparent 55%),
+    linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background) / 0.85) 100%);
 }
 
 /* iOS 26 Floating Design System */
@@ -200,15 +201,16 @@ body {
 }
 
 .glass-bar {
-  background: linear-gradient(135deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.6));
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  background: linear-gradient(135deg, hsl(var(--card) / 0.92), hsl(var(--card) / 0.6));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border-bottom: 1px solid hsl(var(--border) / 0.45);
   box-shadow: 0 12px 30px -22px hsl(var(--foreground) / 0.35);
+  position: relative;
 }
 
 .glass-bar--toolbar {
-  background: linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--card) / 0.55));
+  background: linear-gradient(135deg, hsl(var(--card) / 0.88), hsl(var(--card) / 0.58));
 }
 
 .glass-bar--footer {
@@ -218,10 +220,10 @@ body {
 }
 
 .glass-card {
-  background: linear-gradient(140deg, hsl(var(--card) / 0.9), hsl(var(--card) / 0.65));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid hsl(var(--border) / 0.35);
+  background: linear-gradient(140deg, hsl(var(--card) / 0.92), hsl(var(--card) / 0.6));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 1.25rem;
 }
 
@@ -398,13 +400,14 @@ body {
 
 .dark .app-shell {
   background-image:
-    radial-gradient(1200px circle at 15% -10%, hsl(var(--primary) / 0.18), transparent 45%),
-    radial-gradient(900px circle at 85% 0%, hsl(var(--accent-foreground) / 0.18), transparent 50%),
-    linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background) / 0.95) 100%);
+    radial-gradient(1200px circle at 15% -10%, hsl(var(--primary) / 0.24), transparent 45%),
+    radial-gradient(900px circle at 85% 0%, hsl(var(--accent-foreground) / 0.22), transparent 50%),
+    radial-gradient(700px circle at 50% 100%, hsl(var(--primary) / 0.2), transparent 55%),
+    linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background) / 0.92) 100%);
 }
 
 .dark .glass-bar {
-  background: linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--card) / 0.55));
+  background: linear-gradient(135deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.55));
   border-bottom-color: hsl(var(--border) / 0.3);
   box-shadow: 0 12px 30px -22px hsl(0 0% 0% / 0.6);
 }
@@ -415,6 +418,6 @@ body {
 }
 
 .dark .glass-card {
-  background: linear-gradient(140deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.6));
+  background: linear-gradient(140deg, hsl(var(--card) / 0.9), hsl(var(--card) / 0.58));
   border-color: hsl(var(--border) / 0.3);
 }
