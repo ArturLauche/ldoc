@@ -218,81 +218,83 @@ export const RichTextEditor = () => {
   }, [editor]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/50">
-        <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-primary/10">
-                <FileText className="h-5 w-5 text-primary" />
+    <div className="min-h-screen bg-background flex flex-col app-shell">
+      <div className="sticky top-0 z-40">
+        {/* Header */}
+        <header className="glass-bar app-header">
+          <div className="flex items-center justify-between px-4 h-14">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-primary/10">
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
+                <span className="font-semibold text-lg tracking-tight">LWrite</span>
               </div>
-              <span className="font-semibold text-lg tracking-tight">LWrite</span>
+              
+              <FileMenu
+                editor={editor}
+                documentName={documentName}
+                setDocumentName={setDocumentName}
+                onShowVersionHistory={() => setShowVersionHistory(true)}
+                hasUnsavedChanges={hasUnsavedChanges}
+              />
             </div>
-            
-            <FileMenu
-              editor={editor}
-              documentName={documentName}
-              setDocumentName={setDocumentName}
-              onShowVersionHistory={() => setShowVersionHistory(true)}
-              hasUnsavedChanges={hasUnsavedChanges}
+
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const activeTheme = theme === 'system' ? resolvedTheme : theme;
+                  setTheme(activeTheme === 'dark' ? 'light' : 'dark');
+                }}
+                aria-label="Toggle dark mode"
+              >
+                {resolvedTheme === 'dark' ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </Button>
+              {/* Save Status */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {hasUnsavedChanges ? (
+                  <>
+                    <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Unsaved changes</span>
+                  </>
+                ) : lastSaved ? (
+                  <>
+                    <Cloud className="h-4 w-4 text-emerald-500" />
+                    <span>Saved</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Document Title */}
+          <div className="px-4 pb-3">
+            <input
+              type="text"
+              value={documentName}
+              onChange={(e) => setDocumentName(e.target.value)}
+              className="text-xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
+              placeholder="Untitled Document"
+              aria-label="Document name"
             />
           </div>
+        </header>
 
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const activeTheme = theme === 'system' ? resolvedTheme : theme;
-                setTheme(activeTheme === 'dark' ? 'light' : 'dark');
-              }}
-              aria-label="Toggle dark mode"
-            >
-              {resolvedTheme === 'dark' ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
-            </Button>
-            {/* Save Status */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {hasUnsavedChanges ? (
-                <>
-                  <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>Unsaved changes</span>
-                </>
-              ) : lastSaved ? (
-                <>
-                  <Cloud className="h-4 w-4 text-emerald-500" />
-                  <span>Saved</span>
-                </>
-              ) : null}
-            </div>
-          </div>
+        {/* Toolbar */}
+        <div className="px-4 py-2 glass-bar glass-bar--toolbar">
+          <EditorToolbar editor={editor} />
         </div>
-
-        {/* Document Title */}
-        <div className="px-4 pb-3">
-          <input
-            type="text"
-            value={documentName}
-            onChange={(e) => setDocumentName(e.target.value)}
-            className="text-xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
-            placeholder="Untitled Document"
-            aria-label="Document name"
-          />
-        </div>
-      </header>
-
-      {/* Toolbar */}
-      <div className="sticky top-[89px] z-30 px-4 py-2 bg-background/50 backdrop-blur-sm">
-        <EditorToolbar editor={editor} />
       </div>
 
       {/* Editor */}
       <main className="flex-1 max-w-4xl mx-auto w-full">
-        <div className="editor-container bg-card rounded-2xl shadow-floating my-6 mx-4 overflow-hidden border border-border/30">
+        <div className="editor-container glass-card shadow-floating my-6 mx-4 overflow-hidden">
           <EditorContent 
             editor={editor} 
             className="editor-content"
@@ -301,7 +303,7 @@ export const RichTextEditor = () => {
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-3 border-t border-border/50 bg-background/50 backdrop-blur-sm">
+      <footer className="px-4 py-3 glass-bar glass-bar--footer">
         <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-4">
             <span>{wordCount} words</span>
