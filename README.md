@@ -1,73 +1,65 @@
-# Welcome to your Lovable project
+# LWrite
 
-## Project info
+LWrite is a browser-based rich text editor built with React and TipTap. It provides a focused writing experience with theming, autosave, version snapshots, import/export utilities, and lightweight document stats. The app runs entirely in the browser and stores documents locally in `localStorage`.【F:src/components/Editor/RichTextEditor.tsx†L25-L244】
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Rich text editing** with headings, lists, links, highlights, alignment, inline styles, and images powered by TipTap and its extensions.【F:src/components/Editor/RichTextEditor.tsx†L6-L113】
+- **Autosave + manual save** with visual save status indicators and keyboard shortcuts (`⌘/Ctrl+S`).【F:src/components/Editor/RichTextEditor.tsx†L25-L194】
+- **Version history** with up to 20 snapshots, preview, restore, and delete actions.【F:src/components/Editor/VersionHistory.tsx†L12-L167】
+- **Import documents** from TXT, HTML, RTF, DOCX, ODT/OTT, and FODT formats.【F:src/components/Editor/DocumentImporter.ts†L3-L183】
+- **Export documents** to TXT, HTML, RTF, DOCX, ODT, and PDF formats.【F:src/components/Editor/FileMenu.tsx†L95-L307】
+- **Word/character counts** and document naming for quick status at a glance.【F:src/components/Editor/RichTextEditor.tsx†L57-L244】
+- **Light/dark/system themes** with a quick toggle in the header.【F:src/components/Editor/RichTextEditor.tsx†L63-L187】
 
-There are several ways of editing your application.
+## Tech stack
 
-**Use Lovable**
+- **Vite + React + TypeScript** for the client application.【F:package.json†L1-L19】
+- **TipTap** for rich text editing.【F:src/components/Editor/RichTextEditor.tsx†L1-L13】
+- **Tailwind CSS + shadcn/ui** for styling and UI primitives.【F:package.json†L45-L88】
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js (recommended: install via [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+- npm (ships with Node.js)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Installation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Run locally
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Then open the local URL printed by Vite (typically http://localhost:5173).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Scripts
 
-**Use GitHub Codespaces**
+```sh
+npm run dev      # Start the dev server
+npm run build    # Build for production
+npm run preview  # Preview the production build
+npm run lint     # Run ESLint
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project structure
 
-## What technologies are used for this project?
+```text
+src/
+  components/Editor/   # Editor UI, toolbar, menus, import/export, version history
+  pages/               # Route-level pages (Index mounts the editor)
+```
 
-This project is built with:
+## Data storage
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Documents and version snapshots are stored in the browser's `localStorage`. Clearing site data or using a different browser/device will reset stored documents and history.【F:src/components/Editor/RichTextEditor.tsx†L25-L194】【F:src/components/Editor/VersionHistory.tsx†L12-L167】
 
-## How can I deploy this project?
+## License
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+This project is currently unlicensed. Add a license if you plan to distribute it.
