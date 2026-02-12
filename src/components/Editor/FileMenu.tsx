@@ -15,6 +15,7 @@ import {
   FileArchive,
 } from 'lucide-react';
 import JSZip from 'jszip';
+import html2pdf from 'html2pdf.js';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -201,8 +202,9 @@ ${editor.getHTML()}
           return;
         }
         case 'pdf': {
-          const blocks = extractBlocksFromHtml(editor.getHTML());
-          const blob = await buildPdfBlob(blocks);
+          const html = editor.getHTML();
+          const blocks = extractBlocksFromHtml(html);
+          const blob = await buildPdfBlob({ html, blocks, documentName });
           const fileName = buildExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
           toast.success(`Exported as ${fileName}`);
@@ -341,7 +343,7 @@ ${editor.getHTML()}
 // Simple RTF to HTML converter
 function convertRtfToHtml(rtf: string): string {
   // Basic conversion - strips RTF formatting and returns plain text wrapped in paragraphs
-  let text = rtf
+  const text = rtf
     .replace(/\\par[d]?/g, '\n')
     .replace(/\{\*?\\[^{}]+\}|[{}]|\\[A-Za-z]+\n?(?:-?\d+)?[ ]?/g, '')
     .replace(/\\'[0-9a-fA-F]{2}/g, '')
@@ -668,7 +670,172 @@ function buildDocxNumberingXml(): string {
 </w:numbering>`;
 }
 
-async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
+async function buildPdfBlob({
+  html,
+  blocks,
+  documentName,
+}: {
+  html: string;
+  blocks: HtmlBlock[];
+  documentName: string;
+}): Promise<Blob> {
+  try {
+    const renderedHtml = buildPdfExportHtmlDocument(html, documentName);
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-100000px';
+    container.style.top = '0';
+    container.style.width = '794px';
+    container.style.pointerEvents = 'none';
+    container.style.opacity = '0';
+    container.setAttribute('aria-hidden', 'true');
+    container.innerHTML = renderedHtml;
+    document.body.appendChild(container);
+
+    const root = container.querySelector('[data-export-root]') as HTMLElement | null;
+    const target = root ?? container;
+    await waitForExportImages(target);
+
+    const worker = html2pdf()
+      .set({
+        margin: [18, 18, 18, 18],
+        filename: `${sanitizeBaseFileName(documentName)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+        },
+        jsPDF: {
+          unit: 'pt',
+          format: 'letter',
+          orientation: 'portrait',
+          compress: true,
+        },
+        pagebreak: { mode: ['css', 'legacy'] },
+      })
+      .from(target);
+
+    const blob = await worker.outputPdf('blob');
+    document.body.removeChild(container);
+    return blob;
+  } catch (error) {
+    console.warn('HTML-based PDF export failed, using fallback generator.', error);
+    return buildPdfBlobFallback(blocks);
+  }
+}
+
+function buildPdfExportHtmlDocument(html: string, documentName: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtmlText(documentName)}</title>
+  <style>
+    @page {
+      margin: 18pt;
+      size: letter;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      line-height: 1.5;
+      overflow: visible;
+    }
+    body {
+      width: 100%;
+      min-height: 100%;
+    }
+    [data-export-root] {
+      width: 100%;
+      max-width: 100%;
+      padding: 0;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      page-break-after: avoid;
+      break-after: avoid;
+      margin: 0.8em 0 0.45em;
+      line-height: 1.2;
+    }
+    p, ul, ol, blockquote, pre, table, hr {
+      margin: 0 0 0.8em;
+    }
+    ul, ol { padding-left: 1.6em; }
+    li { margin: 0.18em 0; }
+    img {
+      max-width: 100% !important;
+      height: auto !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      display: block;
+      margin: 0.7em auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      table-layout: auto;
+    }
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    blockquote {
+      border-left: 3px solid #d1d5db;
+      padding-left: 0.8em;
+      color: #374151;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #d1d5db;
+    }
+  </style>
+</head>
+<body>
+  <article data-export-root>
+    ${html}
+  </article>
+</body>
+</html>`;
+}
+
+async function waitForExportImages(root: HTMLElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll('img'));
+  if (!images.length) return;
+
+  await Promise.all(
+    images.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          const done = () => resolve();
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(resolve, 3000);
+        }),
+    ),
+  );
+}
+
+async function buildPdfBlobFallback(blocks: HtmlBlock[]): Promise<Blob> {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 72;
@@ -1075,6 +1242,30 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
       const level = Number(tag.replace('h', ''));
       handleBlockElement(el, 'heading', { level });
+      return;
+    }
+
+    if (tag === 'pre') {
+      const text = el.textContent ?? '';
+      addTextBlock(
+        { type: 'paragraph', align: normalizeAlign(el.style.textAlign) },
+        [{ text, style: { fontFamily: 'monospace' } }],
+      );
+      return;
+    }
+
+    if (tag === 'table') {
+      const rows = Array.from(el.querySelectorAll('tr'));
+      rows.forEach((row) => {
+        const cells = Array.from(row.querySelectorAll('th,td'))
+          .map((cell) => (cell.textContent ?? '').trim())
+          .filter(Boolean);
+        if (!cells.length) return;
+        addTextBlock(
+          { type: 'paragraph', align: normalizeAlign(el.style.textAlign) },
+          [{ text: cells.join(' | '), style: {} }],
+        );
+      });
       return;
     }
 
@@ -1531,12 +1722,6 @@ function escapePdfText(value: string): string {
       return `\\${octal}`;
     });
 }
-
-type PdfLine =
-  | { type: 'text'; text: string; fontSize: number }
-  | { type: 'rule' }
-  | { type: 'spacer'; fontSize: number };
-
 function paginatePdfLines(lines: PdfLine[], pageHeight: number, margin: number): PdfLine[][] {
   const pages: PdfLine[][] = [];
   let current: PdfLine[] = [];
@@ -1835,7 +2020,7 @@ function sanitizeBaseFileName(value: string): string {
   const trimmed = value.trim();
   const base = trimmed || 'Untitled Document';
   return base
-    .replace(/[\/\\?%*:|"<>]/g, '-')
+    .replace(/[/\\?%*:|"<>]/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 }
