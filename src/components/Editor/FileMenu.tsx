@@ -341,7 +341,7 @@ ${editor.getHTML()}
 // Simple RTF to HTML converter
 function convertRtfToHtml(rtf: string): string {
   // Basic conversion - strips RTF formatting and returns plain text wrapped in paragraphs
-  let text = rtf
+  const text = rtf
     .replace(/\\par[d]?/g, '\n')
     .replace(/\{\*?\\[^{}]+\}|[{}]|\\[A-Za-z]+\n?(?:-?\d+)?[ ]?/g, '')
     .replace(/\\'[0-9a-fA-F]{2}/g, '')
@@ -504,7 +504,9 @@ function buildRtfRunsFromSegments(
         segment.style.bold ? '\\b' : '\\b0',
         segment.style.italic ? '\\i' : '\\i0',
         segment.style.underline ? '\\ul' : '\\ul0',
+        segment.style.strike ? '\\strike' : '\\strike0',
         segment.style.superscript ? '\\super' : segment.style.subscript ? '\\sub' : '\\nosupersub',
+        `\\fs${resolveRtfFontSize(segment.style.fontSize, FONT_SIZE_BASE)}`,
       ].join('');
 
       const text = segment.text
@@ -525,6 +527,13 @@ function getRtfHeadingSize(level: number): number {
   if (level === 1) return 48;
   if (level === 2) return 36;
   return 28;
+}
+
+function resolveRtfFontSize(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const points = resolvePtFromCssSize(value);
+  if (!points) return fallback;
+  return Math.round(points * 2);
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -789,9 +798,11 @@ type InlineStyle = {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  strike?: boolean;
   color?: string;
   backgroundColor?: string;
   fontFamily?: string;
+  fontSize?: string;
   superscript?: boolean;
   subscript?: boolean;
 };
@@ -858,11 +869,13 @@ function mergeInlineStyles(base: InlineStyle, override: InlineStyle): InlineStyl
     bold: base.bold || override.bold,
     italic: base.italic || override.italic,
     underline: base.underline || override.underline,
+    strike: base.strike || override.strike,
     superscript: base.superscript || override.superscript,
     subscript: base.subscript || override.subscript,
     color: override.color ?? base.color,
     backgroundColor: override.backgroundColor ?? base.backgroundColor,
     fontFamily: override.fontFamily ?? base.fontFamily,
+    fontSize: override.fontSize ?? base.fontSize,
   };
 }
 
@@ -901,6 +914,9 @@ function getInlineStyleFromElement(el: HTMLElement): InlineStyle {
   if (tag === 'u') {
     style.underline = true;
   }
+  if (tag === 's' || tag === 'strike' || tag === 'del') {
+    style.strike = true;
+  }
   if (tag === 'sup') {
     style.superscript = true;
   }
@@ -929,6 +945,12 @@ function getInlineStyleFromElement(el: HTMLElement): InlineStyle {
   }
   if (css.textDecoration.includes('underline')) {
     style.underline = true;
+  }
+  if (css.textDecoration.includes('line-through')) {
+    style.strike = true;
+  }
+  if (css.fontSize) {
+    style.fontSize = css.fontSize;
   }
 
   return style;
@@ -1246,7 +1268,7 @@ function buildPdfLinesFromBlocks(
         lines.push({
           type: 'text',
           segments: lineSegments,
-          fontSize,
+          fontSize: getPdfLineFontSize(lineSegments, fontSize),
           align: block.align,
         });
       });
@@ -1359,8 +1381,9 @@ function buildPdfContentStream(
     line.segments.forEach((segment) => {
       const fontName = resolvePdfFontName(segment.style);
       const fontKey = resources.fontRegistry.get(fontName) ?? 'F1';
+      const segmentFontSize = resolvePdfFontSize(line.fontSize, segment.style.fontSize);
       const color = normalizeColorToHex(segment.style.color);
-      stream += `/${fontKey} ${line.fontSize} Tf\n`;
+      stream += `/${fontKey} ${segmentFontSize} Tf\n`;
       if (color) {
         const [r, g, b] = [
           Number.parseInt(color.slice(0, 2), 16) / 255,
@@ -1435,7 +1458,7 @@ function loadPdfImage(src: string): Promise<PreparedPdfImage | null> {
         return;
       }
       ctx.drawImage(img, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const dataUrl = canvas.toDataURL('image/jpeg', 1);
       const base64 = dataUrl.split(',')[1];
       if (!base64) {
         resolve(null);
@@ -1531,11 +1554,6 @@ function escapePdfText(value: string): string {
       return `\\${octal}`;
     });
 }
-
-type PdfLine =
-  | { type: 'text'; text: string; fontSize: number }
-  | { type: 'rule' }
-  | { type: 'spacer'; fontSize: number };
 
 function paginatePdfLines(lines: PdfLine[], pageHeight: number, margin: number): PdfLine[][] {
   const pages: PdfLine[][] = [];
@@ -1643,6 +1661,7 @@ function buildOdtTextStyleDefinition(style: InlineStyle): string {
   if (style.italic) parts.push('fo:font-style="italic"');
   if (style.underline)
     parts.push('style:text-underline-style="solid" style:text-underline-width="auto"');
+  if (style.strike) parts.push('style:text-line-through-style="solid"');
   if (style.superscript) parts.push('style:text-position="super 58%"');
   if (style.subscript) parts.push('style:text-position="sub 58%"');
   const color = normalizeColorToHex(style.color);
@@ -1650,6 +1669,12 @@ function buildOdtTextStyleDefinition(style: InlineStyle): string {
   const background = normalizeColorToHex(style.backgroundColor);
   if (background) parts.push(`fo:background-color="#${background}"`);
   if (style.fontFamily) parts.push(`fo:font-family="${escapeXml(style.fontFamily)}"`);
+  if (style.fontSize) {
+    const points = resolvePtFromCssSize(style.fontSize);
+    if (points) {
+      parts.push(`fo:font-size="${points.toFixed(1)}pt"`);
+    }
+  }
 
   if (!parts.length) return '';
   return `<style:style style:name="${getOdtTextStyleName(style)}" style:family="text">
@@ -1662,11 +1687,13 @@ function buildOdtStyleKey(style: InlineStyle): string {
     style.bold ? 'b' : '',
     style.italic ? 'i' : '',
     style.underline ? 'u' : '',
+    style.strike ? 's' : '',
     style.superscript ? 'sup' : '',
     style.subscript ? 'sub' : '',
     style.color ? `c:${style.color}` : '',
     style.backgroundColor ? `bg:${style.backgroundColor}` : '',
     style.fontFamily ? `f:${style.fontFamily}` : '',
+    style.fontSize ? `fs:${style.fontSize}` : '',
   ].filter(Boolean);
   return keyParts.join('|');
 }
@@ -1741,6 +1768,7 @@ function buildDocxRunProps(style: InlineStyle, headingLevel?: number): string {
   if (style.bold) props.push('<w:b/>');
   if (style.italic) props.push('<w:i/>');
   if (style.underline) props.push('<w:u w:val="single"/>');
+  if (style.strike) props.push('<w:strike/>');
   if (style.superscript) props.push('<w:vertAlign w:val="superscript"/>');
   if (style.subscript) props.push('<w:vertAlign w:val="subscript"/>');
 
@@ -1760,6 +1788,13 @@ function buildDocxRunProps(style: InlineStyle, headingLevel?: number): string {
         style.fontFamily,
       )}"/>`,
     );
+  }
+
+  if (style.fontSize) {
+    const points = resolvePtFromCssSize(style.fontSize);
+    if (points) {
+      props.push(`<w:sz w:val="${Math.round(points * 2)}"/>`);
+    }
   }
 
   if (!props.length) {
@@ -1835,7 +1870,7 @@ function sanitizeBaseFileName(value: string): string {
   const trimmed = value.trim();
   const base = trimmed || 'Untitled Document';
   return base
-    .replace(/[\/\\?%*:|"<>]/g, '-')
+    .replace(/[\\/?%*:|"<>]/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -1852,4 +1887,31 @@ function escapeHtmlText(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function resolvePtFromCssSize(value: string): number | null {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  const numeric = Number.parseFloat(trimmed);
+  if (Number.isNaN(numeric) || numeric <= 0) return null;
+
+  if (trimmed.endsWith('pt')) return numeric;
+  if (trimmed.endsWith('px')) return numeric * 0.75;
+  if (trimmed.endsWith('rem')) return numeric * 12;
+  if (trimmed.endsWith('em')) return numeric * 12;
+
+  return numeric;
+}
+
+function resolvePdfFontSize(fallback: number, value?: string): number {
+  const points = value ? resolvePtFromCssSize(value) : null;
+  return points ? Math.max(6, Math.min(48, Number(points.toFixed(2)))) : fallback;
+}
+
+function getPdfLineFontSize(segments: InlineSegment[], fallback: number): number {
+  const max = segments.reduce((largest, segment) => {
+    const size = resolvePdfFontSize(fallback, segment.style.fontSize);
+    return Math.max(largest, size);
+  }, fallback);
+  return max;
 }
