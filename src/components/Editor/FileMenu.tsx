@@ -837,6 +837,7 @@ type PdfTextLine = {
   type: 'text';
   segments: PdfTextSegment[];
   fontSize: number;
+  baseFontSize: number;
   align?: HtmlBlock['align'];
 };
 
@@ -1270,6 +1271,7 @@ function buildPdfLinesFromBlocks(
           type: 'text',
           segments: lineSegments,
           fontSize: getPdfLineFontSize(lineSegments, fontSize),
+          baseFontSize: fontSize,
           align: block.align,
         });
       });
@@ -1280,7 +1282,9 @@ function buildPdfLinesFromBlocks(
     }
   });
 
-  return lines.length ? lines : [{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12 }];
+  return lines.length
+    ? lines
+    : [{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12, baseFontSize: 12 }];
 }
 
 function wrapPdfSegments(segments: InlineSegment[], maxChars: number): PdfTextSegment[][] {
@@ -1382,7 +1386,7 @@ function buildPdfContentStream(
     line.segments.forEach((segment) => {
       const fontName = resolvePdfFontName(segment.style);
       const fontKey = resources.fontRegistry.get(fontName) ?? 'F1';
-      const segmentFontSize = resolvePdfFontSize(line.fontSize, segment.style.fontSize);
+      const segmentFontSize = resolvePdfFontSize(line.baseFontSize, segment.style.fontSize);
       const color = normalizeColorToHex(segment.style.color);
       stream += `/${fontKey} ${segmentFontSize} Tf\n`;
       if (color) {
@@ -1586,7 +1590,7 @@ function paginatePdfLines(lines: PdfLine[], pageHeight: number, margin: number):
 
   return pages.length
     ? pages
-    : [[{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12 }]];
+    : [[{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12, baseFontSize: 12 }]];
 }
 
 function buildOdtBody(blocks: HtmlBlock[]): string {
