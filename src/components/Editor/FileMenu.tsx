@@ -466,7 +466,7 @@ function buildRtfBlock(
 
   if (block.type === 'image') {
     const placeholder = buildImagePlaceholderSegments(block);
-    return `${paragraphPrefix}${buildRtfRunsFromSegments(placeholder, fonts, colors)}`;
+    return `${paragraphPrefix}${buildRtfRunsFromSegments(placeholder, fonts, colors, fontSize)}`;
   }
 
   if (block.type === 'list-item') {
@@ -474,17 +474,18 @@ function buildRtfBlock(
       block.listType === 'number' ? `${listIndex}. ` : '• ';
     const segments = block.segments ?? [{ text: '', style: {} }];
     const prefixed = prefix ? [{ text: prefix, style: {} }, ...segments] : segments;
-    return `${paragraphPrefix}${buildRtfRunsFromSegments(prefixed, fonts, colors)}`;
+    return `${paragraphPrefix}${buildRtfRunsFromSegments(prefixed, fonts, colors, fontSize)}`;
   }
 
   const segments = block.segments ?? [{ text: '', style: {} }];
-  return `${paragraphPrefix}${buildRtfRunsFromSegments(segments, fonts, colors)}`;
+  return `${paragraphPrefix}${buildRtfRunsFromSegments(segments, fonts, colors, fontSize)}`;
 }
 
 function buildRtfRunsFromSegments(
   segments: InlineSegment[],
   fonts: Map<string, number>,
   colors: Map<string, number>,
+  paragraphFontSize: number,
 ): string {
   return normalizeSegments(segments)
     .map((segment) => {
@@ -506,7 +507,7 @@ function buildRtfRunsFromSegments(
         segment.style.underline ? '\\ul' : '\\ul0',
         segment.style.strike ? '\\strike' : '\\strike0',
         segment.style.superscript ? '\\super' : segment.style.subscript ? '\\sub' : '\\nosupersub',
-        `\\fs${resolveRtfFontSize(segment.style.fontSize, FONT_SIZE_BASE)}`,
+        `\\fs${resolveRtfFontSize(segment.style.fontSize, paragraphFontSize)}`,
       ].join('');
 
       const text = segment.text
