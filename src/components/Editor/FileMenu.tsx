@@ -792,7 +792,7 @@ async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
   }
   pushChunk(`trailer\n<< /Size ${nextId} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
 
-  return new Blob([encodePdfChunks(pdfChunks)], { type: 'application/pdf' });
+  return new Blob([new Uint8Array(encodePdfChunks(pdfChunks))], { type: 'application/pdf' });
 }
 
 type InlineStyle = {

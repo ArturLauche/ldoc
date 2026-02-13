@@ -82,7 +82,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
 
     const validation = validateImageFile(file);
     if (!validation.ok) {
-      toast.error(validation.message);
+      toast.error('message' in validation ? validation.message : 'Invalid image');
       return;
     }
 
@@ -104,7 +104,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
   const handleUrlInsert = () => {
     const normalized = normalizeImageUrl(imageUrl);
     if (!normalized.ok) {
-      toast.error(normalized.message);
+      toast.error('message' in normalized ? normalized.message : 'Invalid URL');
       return;
     }
 
@@ -128,7 +128,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
 
     const validation = validateImageFile(file);
     if (!validation.ok) {
-      toast.error(validation.message);
+      toast.error('message' in validation ? validation.message : 'Invalid image');
       return;
     }
 
