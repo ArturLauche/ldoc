@@ -128,6 +128,9 @@ export const FileMenu = ({
   const exportAs = async (format: 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf') => {
     if (!editor) return;
 
+    const editorHtml = editor.getHTML();
+    const blocks = extractBlocksFromHtml(editorHtml);
+
     let content: string;
     let mimeType: string;
     let extension: string;
@@ -141,9 +144,10 @@ export const FileMenu = ({
           break;
         case 'html':
           content = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtmlText(documentName)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111827; }
@@ -160,19 +164,18 @@ export const FileMenu = ({
   </style>
 </head>
 <body>
-${editor.getHTML()}
+${editorHtml}
 </body>
 </html>`;
           mimeType = 'text/html';
           extension = 'html';
           break;
         case 'rtf':
-          content = convertHtmlToRtf(editor.getHTML());
+          content = convertHtmlToRtf(editorHtml);
           mimeType = 'application/rtf';
           extension = 'rtf';
           break;
         case 'docx': {
-          const blocks = extractBlocksFromHtml(editor.getHTML());
           const blob = await buildDocxBlob(blocks);
           const fileName = buildExportFileName(documentName, 'docx');
           downloadBlob(blob, fileName);
@@ -180,14 +183,20 @@ ${editor.getHTML()}
           return;
         }
         case 'odt': {
-          const blocks = extractBlocksFromHtml(editor.getHTML());
-
           const contentXml = buildOdtContentXml(blocks);
           const manifestXml = buildOdtManifestXml();
+          const stylesXml = buildOdtStylesXml();
+          const metaXml = buildOdtMetaXml();
+          const settingsXml = buildOdtSettingsXml();
           const zip = new JSZip();
 
-          zip.file('mimetype', 'application/vnd.oasis.opendocument.text');
+          zip.file('mimetype', 'application/vnd.oasis.opendocument.text', {
+            compression: 'STORE',
+          });
           zip.file('content.xml', contentXml);
+          zip.file('styles.xml', stylesXml);
+          zip.file('meta.xml', metaXml);
+          zip.file('settings.xml', settingsXml);
           zip.file('META-INF/manifest.xml', manifestXml);
 
           const blob = await zip.generateAsync({
@@ -201,7 +210,6 @@ ${editor.getHTML()}
           return;
         }
         case 'pdf': {
-          const blocks = extractBlocksFromHtml(editor.getHTML());
           const blob = await buildPdfBlob(blocks);
           const fileName = buildExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
@@ -581,7 +589,51 @@ function buildOdtManifestXml(): string {
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
   <manifest:file-entry manifest:media-type="application/vnd.oasis.opendocument.text" manifest:full-path="/" />
   <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="content.xml" />
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="styles.xml" />
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="meta.xml" />
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="settings.xml" />
 </manifest:manifest>`;
+}
+
+function buildOdtStylesXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  office:version="1.2">
+  <office:styles>
+    <style:default-style style:family="paragraph">
+      <style:paragraph-properties fo:hyphenation-ladder-count="no-limit" text:number-lines="false" text:line-number="0"/>
+      <style:text-properties fo:font-size="12pt"/>
+    </style:default-style>
+  </office:styles>
+</office:document-styles>`;
+}
+
+function buildOdtMetaXml(): string {
+  const now = new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"
+  office:version="1.2">
+  <office:meta>
+    <meta:generator>LWrite</meta:generator>
+    <meta:creation-date>${escapeXml(now)}</meta:creation-date>
+  </office:meta>
+</office:document-meta>`;
+}
+
+function buildOdtSettingsXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"
+  office:version="1.2">
+  <office:settings>
+    <config:config-item-set config:name="ooo:view-settings" />
+    <config:config-item-set config:name="ooo:configuration-settings" />
+  </office:settings>
+</office:document-settings>`;
 }
 
 async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
@@ -591,12 +643,18 @@ async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const relsXml = buildDocxRelsXml();
   const documentRelsXml = buildDocxDocumentRelsXml();
   const numberingXml = buildDocxNumberingXml();
+  const stylesXml = buildDocxStylesXml();
+  const coreXml = buildDocxCoreXml();
+  const appXml = buildDocxAppXml();
 
   zip.file('[Content_Types].xml', contentTypesXml);
   zip.file('_rels/.rels', relsXml);
+  zip.file('docProps/core.xml', coreXml);
+  zip.file('docProps/app.xml', appXml);
   zip.file('word/_rels/document.xml.rels', documentRelsXml);
   zip.file('word/document.xml', documentXml);
   zip.file('word/numbering.xml', numberingXml);
+  zip.file('word/styles.xml', stylesXml);
 
   return zip.generateAsync({
     type: 'blob',
@@ -627,8 +685,11 @@ function buildDocxContentTypesXml(): string {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>`;
 }
 
@@ -636,6 +697,8 @@ function buildDocxRelsXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
 </Relationships>`;
 }
 
@@ -643,6 +706,7 @@ function buildDocxDocumentRelsXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
 }
 
@@ -676,6 +740,51 @@ function buildDocxNumberingXml(): string {
     <w:abstractNumId w:val="2"/>
   </w:num>
 </w:numbering>`;
+}
+
+function buildDocxStylesXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
+        <w:sz w:val="22"/>
+      </w:rPr>
+    </w:rPrDefault>
+  </w:docDefaults>
+</w:styles>`;
+}
+
+function buildDocxCoreXml(): string {
+  const now = new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:dcterms="http://purl.org/dc/terms/"
+  xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>LWrite Export</dc:title>
+  <dc:creator>LWrite</dc:creator>
+  <cp:lastModifiedBy>LWrite</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${escapeXml(now)}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${escapeXml(now)}</dcterms:modified>
+</cp:coreProperties>`;
+}
+
+function buildDocxAppXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>LWrite</Application>
+  <DocSecurity>0</DocSecurity>
+  <ScaleCrop>false</ScaleCrop>
+  <Company></Company>
+  <LinksUpToDate>false</LinksUpToDate>
+  <SharedDoc>false</SharedDoc>
+  <HyperlinksChanged>false</HyperlinksChanged>
+  <AppVersion>1.0</AppVersion>
+</Properties>`;
 }
 
 async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
@@ -1874,10 +1983,19 @@ function encodePdfChunks(chunks: PdfChunk[]): Uint8Array {
 function sanitizeBaseFileName(value: string): string {
   const trimmed = value.trim();
   const base = trimmed || 'Untitled Document';
-  return base
-    .replace(/[\\/?%*:|"<>]/g, '-')
+  const normalized = base
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '');
+
+  const cleaned = normalized
+    .replace(/[\/?%*:|"<> -]/g, '-')
+    .replace(/\.+$/g, '')
+    .replace(/^\.+/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+  const fallback = cleaned || 'Untitled Document';
+  return fallback.slice(0, 180);
 }
 
 function buildExportFileName(value: string, extension: string): string {
