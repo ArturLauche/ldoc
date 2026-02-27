@@ -12,7 +12,7 @@ import FontFamily from '@tiptap/extension-font-family';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes } from '@tiptap/core';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ComponentType } from 'react';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
 import { VersionHistory } from './VersionHistory';
@@ -61,6 +61,9 @@ export const RichTextEditor = () => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+  const [useLobeEditor, setUseLobeEditor] = useState(false);
+  const [isLoadingLobeEditor, setIsLoadingLobeEditor] = useState(false);
+  const [LobeEditorComponent, setLobeEditorComponent] = useState<ComponentType<Record<string, unknown>> | null>(null);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   const editor = useEditor({
@@ -217,6 +220,35 @@ export const RichTextEditor = () => {
     }
   }, [editor]);
 
+  const loadLobeEditor = useCallback(async () => {
+    if (LobeEditorComponent) {
+      setUseLobeEditor(true);
+      return;
+    }
+
+    setIsLoadingLobeEditor(true);
+    try {
+      const module = await import(/* @vite-ignore */ 'https://esm.sh/@lobehub/editor?bundle');
+      const LobeComponent =
+        module?.LobeEditor ||
+        module?.Editor ||
+        module?.default;
+
+      if (!LobeComponent) {
+        throw new Error('Could not find an editor component export');
+      }
+
+      setLobeEditorComponent(() => LobeComponent as ComponentType<Record<string, unknown>>);
+      setUseLobeEditor(true);
+      toast.success('Lobe editor loaded in experimental mode');
+    } catch (error) {
+      console.error('Failed to load lobe editor:', error);
+      toast.error('Unable to load lobehub/lobe-editor in this environment');
+    } finally {
+      setIsLoadingLobeEditor(false);
+    }
+  }, [LobeEditorComponent]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col app-shell">
       <div className="sticky top-0 z-40">
@@ -255,6 +287,25 @@ export const RichTextEditor = () => {
                 ) : (
                   <Moon className="h-4 w-4" />
                 )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (useLobeEditor) {
+                    setUseLobeEditor(false);
+                    return;
+                  }
+
+                  void loadLobeEditor();
+                }}
+                disabled={isLoadingLobeEditor}
+              >
+                {isLoadingLobeEditor
+                  ? 'Loading Lobe…'
+                  : useLobeEditor
+                    ? 'Use built-in editor'
+                    : 'Try Lobe editor'}
               </Button>
               {/* Save Status */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -295,10 +346,16 @@ export const RichTextEditor = () => {
       {/* Editor */}
       <main className="flex-1 max-w-4xl mx-auto w-full">
         <div className="editor-container glass-card shadow-floating my-6 mx-4 overflow-hidden">
-          <EditorContent 
-            editor={editor} 
-            className="editor-content"
-          />
+          {useLobeEditor && LobeEditorComponent ? (
+            <div className="p-4 min-h-[500px]">
+              <LobeEditorComponent />
+            </div>
+          ) : (
+            <EditorContent
+              editor={editor}
+              className="editor-content"
+            />
+          )}
         </div>
       </main>
 
