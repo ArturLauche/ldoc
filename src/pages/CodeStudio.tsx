@@ -20,6 +20,8 @@ type CodeFile = {
   content: string;
 };
 
+const STORAGE_KEY = "ldoc.code-studio.state.v1";
+
 const starterFiles: CodeFile[] = [
   {
     name: "index.html",
@@ -101,6 +103,25 @@ button?.addEventListener("click", () => {
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const ensureUrlProtocol = (value: string) => {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return /^(https?:)?\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const isLikelyHttpUrl = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const buildPreviewDocument = (files: CodeFile[], htmlName: string) => {
   const htmlFile = files.find((file) => file.name === htmlName);
 
@@ -144,14 +165,63 @@ const buildPreviewDocument = (files: CodeFile[], htmlName: string) => {
 };
 
 const CodeStudio = () => {
-  const [activeFile, setActiveFile] = useState(starterFiles[0].name);
+  const [activeFile, setActiveFile] = useState(() => starterFiles[0].name);
   const [query, setQuery] = useState("");
-  const [files, setFiles] = useState(starterFiles);
+  const [files, setFiles] = useState<CodeFile[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+
+      if (!saved) {
+        return starterFiles;
+      }
+
+      const parsed = JSON.parse(saved) as { files?: CodeFile[] };
+      return parsed.files?.length ? parsed.files : starterFiles;
+    } catch {
+      return starterFiles;
+    }
+  });
   const [showSettings, setShowSettings] = useState(false);
-  const [previewMode, setPreviewMode] = useState<"project" | "url">("project");
-  const [previewUrl, setPreviewUrl] = useState("https://example.com");
-  const [autoRun, setAutoRun] = useState(true);
-  const [previewFile, setPreviewFile] = useState("index.html");
+  const [previewMode, setPreviewMode] = useState<"project" | "url">(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return "project";
+      const parsed = JSON.parse(saved) as { previewMode?: "project" | "url" };
+      return parsed.previewMode === "url" ? "url" : "project";
+    } catch {
+      return "project";
+    }
+  });
+  const [previewUrl, setPreviewUrl] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return "https://example.com";
+      const parsed = JSON.parse(saved) as { previewUrl?: string };
+      return parsed.previewUrl?.trim() ? parsed.previewUrl : "https://example.com";
+    } catch {
+      return "https://example.com";
+    }
+  });
+  const [autoRun, setAutoRun] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return true;
+      const parsed = JSON.parse(saved) as { autoRun?: boolean };
+      return parsed.autoRun ?? true;
+    } catch {
+      return true;
+    }
+  });
+  const [previewFile, setPreviewFile] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return "index.html";
+      const parsed = JSON.parse(saved) as { previewFile?: string };
+      return parsed.previewFile ?? "index.html";
+    } catch {
+      return "index.html";
+    }
+  });
 
   const selectedFile = files.find((file) => file.name === activeFile) ?? files[0];
 
@@ -166,6 +236,10 @@ const CodeStudio = () => {
   );
 
   const [renderedPreview, setRenderedPreview] = useState(computedPreview);
+  const [lastRunAt, setLastRunAt] = useState(() => new Date());
+
+  const normalizedPreviewUrl = useMemo(() => ensureUrlProtocol(previewUrl), [previewUrl]);
+  const previewUrlIsValid = useMemo(() => isLikelyHttpUrl(normalizedPreviewUrl), [normalizedPreviewUrl]);
 
   useEffect(() => {
     if (htmlFileNames.length > 0 && !htmlFileNames.includes(previewFile)) {
@@ -174,10 +248,49 @@ const CodeStudio = () => {
   }, [htmlFileNames, previewFile]);
 
   useEffect(() => {
-    if (autoRun) {
-      setRenderedPreview(computedPreview);
+    if (!autoRun) {
+      return;
     }
+
+    const timer = window.setTimeout(() => {
+      setRenderedPreview(computedPreview);
+      setLastRunAt(new Date());
+    }, 220);
+
+    return () => window.clearTimeout(timer);
   }, [autoRun, computedPreview]);
+
+  useEffect(() => {
+    const payload = {
+      files,
+      previewMode,
+      previewUrl,
+      autoRun,
+      previewFile,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }, [autoRun, files, previewFile, previewMode, previewUrl]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const runShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter";
+
+      if (runShortcut) {
+        event.preventDefault();
+        setRenderedPreview(computedPreview);
+        setLastRunAt(new Date());
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [computedPreview]);
+
+  const handleRun = () => {
+    setRenderedPreview(computedPreview);
+    setLastRunAt(new Date());
+  };
 
   const updateContent = (value: string) => {
     setFiles((prev) =>
@@ -207,7 +320,7 @@ const CodeStudio = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setRenderedPreview(computedPreview)}
+              onClick={handleRun}
             >
               <Play className="mr-1 h-4 w-4" />
               Run
@@ -329,6 +442,11 @@ const CodeStudio = () => {
                     onChange={(event) => setPreviewUrl(event.target.value)}
                     placeholder="https://example.com"
                   />
+                  {!previewUrlIsValid && previewUrl.trim() ? (
+                    <p className="text-xs text-destructive">
+                      Enter a valid HTTP(S) website URL for the embedded preview.
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     Some websites block iframe embedding via security headers.
                   </p>
@@ -344,13 +462,22 @@ const CodeStudio = () => {
                 className="h-full min-h-[320px] w-full flex-1 bg-white"
               />
             ) : (
-              <iframe
-                title="Website viewer"
-                sandbox="allow-scripts allow-same-origin allow-forms"
-                src={previewUrl}
-                className="h-full min-h-[320px] w-full flex-1 bg-white"
-              />
+              previewUrlIsValid ? (
+                <iframe
+                  title="Website viewer"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  src={normalizedPreviewUrl}
+                  className="h-full min-h-[320px] w-full flex-1 bg-white"
+                />
+              ) : (
+                <div className="flex h-full min-h-[320px] flex-1 items-center justify-center bg-muted/20 p-6 text-sm text-muted-foreground">
+                  Provide a valid URL to load website preview.
+                </div>
+              )
             )}
+            <div className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
+              Last preview refresh: {lastRunAt.toLocaleTimeString()} • Shortcut: Ctrl/Cmd + Enter
+            </div>
           </section>
         </div>
       </section>
