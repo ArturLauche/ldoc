@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { useSEO } from "@/hooks/useSEO";
 
 type CodeFile = {
   name: string;
@@ -165,6 +166,13 @@ const buildPreviewDocument = (files: CodeFile[], htmlName: string) => {
 };
 
 const CodeStudio = () => {
+  useSEO({
+    title: "Code Studio | LWrite",
+    description:
+      "Build and preview HTML, CSS, and JavaScript snippets in a browser-based code sandbox with persistent local storage.",
+    canonicalPath: "/code",
+  });
+
   const [activeFile, setActiveFile] = useState(() => starterFiles[0].name);
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState<CodeFile[]>(() => {
