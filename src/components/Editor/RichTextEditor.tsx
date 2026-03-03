@@ -13,6 +13,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes } from '@tiptap/core';
 import { useState, useEffect, useCallback } from 'react';
+import { defaultLocale, getLocaleFromStorage, localeLabels, setLocaleInStorage, t, type Locale } from '@/lib/translations';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
 import { VersionHistory } from './VersionHistory';
@@ -61,7 +62,8 @@ const EnhancedImage = Image.extend({
 
 export const RichTextEditor = () => {
   const [documentId, setDocumentId] = useState(() => createDocumentId());
-  const [documentName, setDocumentName] = useState('Untitled Document');
+  const [locale, setLocale] = useState<Locale>(defaultLocale);
+  const [documentName, setDocumentName] = useState(t(defaultLocale, 'untitledDocument'));
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -95,7 +97,7 @@ export const RichTextEditor = () => {
       Subscript,
       FontFamily,
       Placeholder.configure({
-        placeholder: 'Start writing something amazing...',
+        placeholder: t(locale, 'placeholder'),
       }),
       EnhancedImage.configure({
         inline: false,
@@ -154,10 +156,10 @@ export const RichTextEditor = () => {
       setHasUnsavedChanges(false);
 
       if (options?.showToast) {
-        toast.success('Document saved');
+        toast.success(t(locale, 'saveSuccess'));
       }
     },
-    [documentId, documentName, editor],
+    [documentId, documentName, editor, locale],
   );
 
   // Load saved document on mount
@@ -175,7 +177,7 @@ export const RichTextEditor = () => {
         if (doc.content && editor) {
           editor.commands.setContent(doc.content);
           setDocumentId(doc.id || createDocumentId());
-          setDocumentName(doc.name || 'Untitled Document');
+          setDocumentName(doc.name || t(locale, 'untitledDocument'));
           setLastSaved(doc.savedAt ? new Date(doc.savedAt) : null);
           setHasUnsavedChanges(false);
           updateCounts();
@@ -188,7 +190,7 @@ export const RichTextEditor = () => {
     } catch (error) {
       console.error('Failed to load saved document:', error);
     }
-  }, [editor, updateCounts]);
+  }, [editor, updateCounts, locale]);
 
   // Autosave
   useEffect(() => {
@@ -199,13 +201,22 @@ export const RichTextEditor = () => {
     }, AUTOSAVE_DELAY);
 
     return () => clearTimeout(timer);
-  }, [editor, hasUnsavedChanges, saveDocument]);
+  }, [editor, hasUnsavedChanges, saveDocument, locale]);
 
   useEffect(() => {
     if (editor) {
       updateCounts();
     }
-  }, [editor, updateCounts]);
+  }, [editor, updateCounts, locale]);
+
+
+  useEffect(() => {
+    setLocale(getLocaleFromStorage());
+  }, []);
+
+  useEffect(() => {
+    setLocaleInStorage(locale);
+  }, [locale]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -218,17 +229,17 @@ export const RichTextEditor = () => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
         if (hasUnsavedChanges) {
-          if (confirm('You have unsaved changes. Create a new document anyway?')) {
+          if (confirm(t(locale, 'unsavedConfirm'))) {
             editor?.commands.setContent('<p></p>');
             setDocumentId(createDocumentId());
-            setDocumentName('Untitled Document');
+            setDocumentName(t(locale, 'untitledDocument'));
             localStorage.removeItem(STORAGE_KEY);
             localStorage.removeItem(LEGACY_STORAGE_KEY);
           }
         } else {
           editor?.commands.setContent('<p></p>');
           setDocumentId(createDocumentId());
-          setDocumentName('Untitled Document');
+          setDocumentName(t(locale, 'untitledDocument'));
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(LEGACY_STORAGE_KEY);
         }
@@ -237,7 +248,7 @@ export const RichTextEditor = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editor, hasUnsavedChanges, saveDocument]);
+  }, [editor, hasUnsavedChanges, saveDocument, locale]);
 
   const handleLoadSavedDocument = useCallback(
     (doc: StoredDocument) => {
@@ -256,13 +267,13 @@ export const RichTextEditor = () => {
     if (!editor) return;
     editor.commands.setContent('<p></p>');
     setDocumentId(createDocumentId());
-    setDocumentName('Untitled Document');
+    setDocumentName(t(locale, 'untitledDocument'));
     setLastSaved(null);
     setHasUnsavedChanges(false);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     updateCounts();
-  }, [editor, updateCounts]);
+  }, [editor, updateCounts, locale]);
 
   const handleRestoreVersion = useCallback((content: string) => {
     if (editor) {
@@ -299,6 +310,21 @@ export const RichTextEditor = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <label className="text-sm text-muted-foreground flex items-center gap-2">
+                <span>{t(locale, 'language')}</span>
+                <select
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value as Locale)}
+                  className="bg-background border rounded-md px-2 py-1 text-sm"
+                  aria-label={t(locale, 'language')}
+                >
+                  {Object.entries(localeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 variant="ghost"
                 size="icon"
@@ -306,7 +332,7 @@ export const RichTextEditor = () => {
                   const activeTheme = theme === 'system' ? resolvedTheme : theme;
                   setTheme(activeTheme === 'dark' ? 'light' : 'dark');
                 }}
-                aria-label="Toggle dark mode"
+                aria-label={t(locale, 'toggleTheme')}
               >
                 {resolvedTheme === 'dark' ? (
                   <Sun className="h-4 w-4" />
@@ -319,12 +345,12 @@ export const RichTextEditor = () => {
                 {hasUnsavedChanges ? (
                   <>
                     <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Unsaved changes</span>
+                    <span>{t(locale, 'unsavedChanges')}</span>
                   </>
                 ) : lastSaved ? (
                   <>
                     <Cloud className="h-4 w-4 text-emerald-500" />
-                    <span>Saved</span>
+                    <span>{t(locale, 'saved')}</span>
                   </>
                 ) : null}
               </div>
@@ -338,8 +364,8 @@ export const RichTextEditor = () => {
               value={documentName}
               onChange={(e) => setDocumentName(e.target.value)}
               className="text-xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
-              placeholder="Untitled Document"
-              aria-label="Document name"
+              placeholder={t(locale, 'untitledDocument')}
+              aria-label={t(locale, 'documentName')}
             />
           </div>
         </header>
@@ -364,11 +390,11 @@ export const RichTextEditor = () => {
       <footer className="px-4 py-3 glass-bar glass-bar--footer">
         <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-4">
-            <span>{wordCount} words</span>
-            <span>{characterCount} characters</span>
+            <span>{wordCount} {t(locale, 'words')}</span>
+            <span>{characterCount} {t(locale, 'characters')}</span>
           </div>
           {lastSaved && (
-            <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
+            <span>{t(locale, 'lastSaved')}: {lastSaved.toLocaleTimeString()}</span>
           )}
         </div>
       </footer>
