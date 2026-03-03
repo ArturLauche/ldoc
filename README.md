@@ -8,7 +8,9 @@ LWrite is a browser-based rich text editor built with React and TipTap. It provi
 - **Autosave + manual save** with visual save status indicators and keyboard shortcuts (`⌘/Ctrl+S`).【F:src/components/Editor/RichTextEditor.tsx†L25-L194】
 - **Version history** with up to 20 snapshots, preview, restore, and delete actions.【F:src/components/Editor/VersionHistory.tsx†L12-L167】
 - **Import documents** from TXT, HTML, RTF, DOCX, ODT/OTT, and FODT formats.【F:src/components/Editor/DocumentImporter.ts†L3-L183】
-- **Export documents** to TXT, HTML, RTF, DOCX, ODT, and PDF formats.【F:src/components/Editor/FileMenu.tsx†L95-L307】
+- **Export documents** to TXT, HTML, RTF, DOCX, ODT, and PDF formats.【F:src/components/Editor/FileMenu.tsx†L146-L276】
+- **Searchable local document library** for quickly finding and reopening documents by title or content.【F:src/components/Editor/FileMenu.tsx†L83-L91】【F:src/components/Editor/FileMenu.tsx†L404-L451】
+- **Unified library backup/restore** to export or import all documents in a single `.json` format.【F:src/components/Editor/FileMenu.tsx†L129-L162】【F:src/lib/documentLibrary.ts†L119-L166】
 - **Word/character counts** and document naming for quick status at a glance.【F:src/components/Editor/RichTextEditor.tsx†L57-L244】
 - **Light/dark/system themes** with a quick toggle in the header.【F:src/components/Editor/RichTextEditor.tsx†L63-L187】
 
@@ -58,7 +60,7 @@ src/
 
 ## Data storage
 
-Documents and version snapshots are stored in the browser's `localStorage`. Clearing site data or using a different browser/device will reset stored documents and history.【F:src/components/Editor/RichTextEditor.tsx†L25-L194】【F:src/components/Editor/VersionHistory.tsx†L12-L167】
+Documents, document snapshots, and version history are stored in the browser's `localStorage`. LWrite now keeps a dedicated document library for safer local persistence and supports exporting/importing that library for backups or migration between browsers/devices.【F:src/lib/documentLibrary.ts†L1-L166】【F:src/components/Editor/RichTextEditor.tsx†L125-L186】【F:src/components/Editor/VersionHistory.tsx†L12-L167】
 
 ## License
 

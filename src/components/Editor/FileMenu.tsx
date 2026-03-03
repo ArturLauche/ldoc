@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
@@ -13,6 +13,9 @@ import {
   FileOutput,
   FileBadge2,
   FileArchive,
+  Search,
+  Files,
+  Upload,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { Button } from '@/components/ui/button';
@@ -36,55 +39,80 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { importDocument, getSupportedFormats } from './DocumentImporter';
+import {
+  exportUnifiedLibraryFile,
+  getLibraryDocuments,
+  importUnifiedLibraryFile,
+  type StoredDocument,
+} from '@/lib/documentLibrary';
 
 interface FileMenuProps {
   editor: Editor | null;
+  documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
+  onSaveDocument: () => void;
+  onLoadDocument: (doc: StoredDocument) => void;
+  onCreateNewDocument: () => void;
   onShowVersionHistory: () => void;
   hasUnsavedChanges: boolean;
 }
 
-const STORAGE_KEY = 'lwrite-current-doc';
-const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
-
 export const FileMenu = ({
   editor,
+  documentId,
   documentName,
   setDocumentName,
+  onSaveDocument,
+  onLoadDocument,
+  onCreateNewDocument,
   onShowVersionHistory,
   hasUnsavedChanges,
 }: FileMenuProps) => {
   const [renameOpen, setRenameOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [newName, setNewName] = useState(documentName);
   const [isImporting, setIsImporting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
+
+  useEffect(() => {
+    setLibraryDocuments(getLibraryDocuments());
+  }, [refreshKey, libraryOpen]);
+  const filteredDocuments = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return libraryDocuments;
+    return libraryDocuments.filter(
+      (doc) =>
+        doc.name.toLowerCase().includes(query) || doc.content.toLowerCase().includes(query),
+    );
+  }, [libraryDocuments, searchQuery]);
 
   const handleNewDocument = () => {
     if (!editor) return;
-    
+
     if (hasUnsavedChanges) {
       if (!confirm('You have unsaved changes. Create a new document anyway?')) {
         return;
       }
     }
-    
-    editor.commands.setContent('<p></p>');
-    setDocumentName('Untitled Document');
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+    onCreateNewDocument();
     toast.success('New document created');
   };
 
   const handleOpenFile = async () => {
     if (!editor) return;
-    
+
     try {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = getSupportedFormats();
-      
+
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
@@ -94,8 +122,11 @@ export const FileMenu = ({
 
         try {
           const result = await importDocument(file);
+          onCreateNewDocument();
           editor.commands.setContent(result.content);
           setDocumentName(result.fileName);
+          onSaveDocument();
+          setRefreshKey((value) => value + 1);
           toast.success(`Opened: ${file.name}`, { id: 'import' });
         } catch (error) {
           console.error('Import error:', error);
@@ -104,7 +135,7 @@ export const FileMenu = ({
           setIsImporting(false);
         }
       };
-      
+
       input.click();
     } catch (error) {
       toast.error('Failed to open file');
@@ -112,17 +143,42 @@ export const FileMenu = ({
   };
 
   const handleSave = () => {
-    if (!editor) return;
-    
-    const content = editor.getHTML();
-    const docData = {
-      name: documentName,
-      content,
-      savedAt: new Date().toISOString(),
+    onSaveDocument();
+    setRefreshKey((value) => value + 1);
+  };
+
+  const handleExportLibrary = () => {
+    try {
+      const payload = exportUnifiedLibraryFile();
+      const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
+      const blob = new Blob([payload], { type: 'application/json' });
+      downloadBlob(blob, fileName);
+      toast.success(`Exported ${libraryDocuments.length} documents`);
+    } catch (error) {
+      console.error('Library export failed:', error);
+      toast.error('Failed to export your document library');
+    }
+  };
+
+  const handleImportLibrary = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.lwrite.json,application/json';
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const raw = await file.text();
+        const result = importUnifiedLibraryFile(raw);
+        setRefreshKey((value) => value + 1);
+        toast.success(`Library import finished: ${result.imported} imported, ${result.skipped} skipped`);
+      } catch (error) {
+        console.error('Library import failed:', error);
+        toast.error('Invalid library file');
+      }
     };
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
-    toast.success('Document saved');
+    input.click();
   };
 
   const exportAs = async (format: 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf') => {
@@ -266,6 +322,26 @@ ${editorHtml}
             Save
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
+            <Search className="h-4 w-4 mr-2" />
+            Search Documents
+          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Files className="h-4 w-4 mr-2" />
+              Library Transfer
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
+              <DropdownMenuItem onClick={handleExportLibrary}>
+                <Download className="h-4 w-4 mr-2" />
+                Export All Docs (.json)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleImportLibrary}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import All Docs (.json)
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Download className="h-4 w-4 mr-2" />
@@ -299,10 +375,12 @@ ${editorHtml}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => {
-            setNewName(documentName);
-            setRenameOpen(true);
-          }}>
+          <DropdownMenuItem
+            onClick={() => {
+              setNewName(documentName);
+              setRenameOpen(true);
+            }}
+          >
             Rename...
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onShowVersionHistory}>
@@ -316,9 +394,7 @@ ${editorHtml}
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Document</DialogTitle>
-            <DialogDescription>
-              Enter a new name for your document.
-            </DialogDescription>
+            <DialogDescription>Enter a new name for your document.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -339,6 +415,60 @@ ${editorHtml}
               Cancel
             </Button>
             <Button onClick={handleRename}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Document Library</DialogTitle>
+            <DialogDescription>
+              Search and open your safely stored local documents.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Search by title or content..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              aria-label="Search saved documents"
+            />
+            <ScrollArea className="h-[320px] border rounded-md">
+              <div className="p-2 space-y-2">
+                {filteredDocuments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-2">No matching documents.</p>
+                ) : (
+                  filteredDocuments.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      className={`w-full text-left p-3 rounded-md border transition hover:bg-accent ${
+                        doc.id === documentId ? 'border-primary bg-primary/5' : 'border-border'
+                      }`}
+                      onClick={() => {
+                        if (hasUnsavedChanges && !confirm('Discard unsaved changes and open this document?')) {
+                          return;
+                        }
+                        onLoadDocument(doc);
+                        setLibraryOpen(false);
+                        toast.success(`Opened ${doc.name}`);
+                      }}
+                    >
+                      <div className="font-medium truncate">{doc.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Saved {new Date(doc.updatedAt).toLocaleString()}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLibraryOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1987,8 +2117,12 @@ function sanitizeBaseFileName(value: string): string {
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '');
 
-  const cleaned = normalized
-    .replace(/[\/?%*:|"<> -]/g, '-')
+  const withoutControlChars = Array.from(normalized)
+    .filter((character) => character.charCodeAt(0) >= 32)
+    .join('');
+
+  const cleaned = withoutControlChars
+    .replace(/[/?%*:|"<>]/g, '-')
     .replace(/\.+$/g, '')
     .replace(/^\.+/g, '')
     .replace(/\s+/g, ' ')

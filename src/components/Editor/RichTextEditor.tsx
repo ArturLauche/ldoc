@@ -20,11 +20,16 @@ import { toast } from 'sonner';
 import { Cloud, FileText, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
+import {
+  LEGACY_STORAGE_KEY,
+  STORAGE_KEY,
+  createDocumentId,
+  migrateLegacyDocumentToLibrary,
+  upsertLibraryDocument,
+  type StoredDocument,
+} from '@/lib/documentLibrary';
 
 const AUTOSAVE_DELAY = 3000;
-const STORAGE_KEY = 'lwrite-current-doc';
-const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
-
 const EnhancedImage = Image.extend({
   addAttributes() {
     return {
@@ -55,6 +60,7 @@ const EnhancedImage = Image.extend({
 });
 
 export const RichTextEditor = () => {
+  const [documentId, setDocumentId] = useState(() => createDocumentId());
   const [documentName, setDocumentName] = useState('Untitled Document');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -120,16 +126,57 @@ export const RichTextEditor = () => {
     setCharacterCount(text.length);
   }, [editor]);
 
+  const saveDocument = useCallback(
+    (options?: { showToast?: boolean }) => {
+      if (!editor) return;
+
+      const content = editor.getHTML();
+      const savedAt = new Date().toISOString();
+      const savedDoc = upsertLibraryDocument({
+        id: documentId,
+        name: documentName,
+        content,
+        updatedAt: savedAt,
+      });
+
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          id: savedDoc.id,
+          name: savedDoc.name,
+          content: savedDoc.content,
+          savedAt,
+        }),
+      );
+
+      setDocumentId(savedDoc.id);
+      setLastSaved(new Date(savedAt));
+      setHasUnsavedChanges(false);
+
+      if (options?.showToast) {
+        toast.success('Document saved');
+      }
+    },
+    [documentId, documentName, editor],
+  );
+
   // Load saved document on mount
   useEffect(() => {
+    migrateLegacyDocumentToLibrary();
     try {
       const saved = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
       if (saved) {
-        const doc = JSON.parse(saved);
+        const doc = JSON.parse(saved) as {
+          id?: string;
+          content?: string;
+          name?: string;
+          savedAt?: string;
+        };
         if (doc.content && editor) {
           editor.commands.setContent(doc.content);
+          setDocumentId(doc.id || createDocumentId());
           setDocumentName(doc.name || 'Untitled Document');
-          setLastSaved(new Date(doc.savedAt));
+          setLastSaved(doc.savedAt ? new Date(doc.savedAt) : null);
           setHasUnsavedChanges(false);
           updateCounts();
         }
@@ -141,27 +188,18 @@ export const RichTextEditor = () => {
     } catch (error) {
       console.error('Failed to load saved document:', error);
     }
-  }, [editor]);
+  }, [editor, updateCounts]);
 
   // Autosave
   useEffect(() => {
     if (!editor || !hasUnsavedChanges) return;
 
     const timer = setTimeout(() => {
-      const content = editor.getHTML();
-      const docData = {
-        name: documentName,
-        content,
-        savedAt: new Date().toISOString(),
-      };
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
-      setLastSaved(new Date());
-      setHasUnsavedChanges(false);
+      saveDocument();
     }, AUTOSAVE_DELAY);
 
     return () => clearTimeout(timer);
-  }, [editor, hasUnsavedChanges, documentName]);
+  }, [editor, hasUnsavedChanges, saveDocument]);
 
   useEffect(() => {
     if (editor) {
@@ -174,18 +212,7 @@ export const RichTextEditor = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (editor) {
-          const content = editor.getHTML();
-          const docData = {
-            name: documentName,
-            content,
-            savedAt: new Date().toISOString(),
-          };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(docData));
-          setLastSaved(new Date());
-          setHasUnsavedChanges(false);
-          toast.success('Document saved');
-        }
+        saveDocument({ showToast: true });
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
@@ -193,12 +220,14 @@ export const RichTextEditor = () => {
         if (hasUnsavedChanges) {
           if (confirm('You have unsaved changes. Create a new document anyway?')) {
             editor?.commands.setContent('<p></p>');
+            setDocumentId(createDocumentId());
             setDocumentName('Untitled Document');
             localStorage.removeItem(STORAGE_KEY);
             localStorage.removeItem(LEGACY_STORAGE_KEY);
           }
         } else {
           editor?.commands.setContent('<p></p>');
+          setDocumentId(createDocumentId());
           setDocumentName('Untitled Document');
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(LEGACY_STORAGE_KEY);
@@ -208,7 +237,32 @@ export const RichTextEditor = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editor, documentName, hasUnsavedChanges]);
+  }, [editor, hasUnsavedChanges, saveDocument]);
+
+  const handleLoadSavedDocument = useCallback(
+    (doc: StoredDocument) => {
+      if (!editor) return;
+      editor.commands.setContent(doc.content);
+      setDocumentId(doc.id);
+      setDocumentName(doc.name);
+      setLastSaved(new Date(doc.updatedAt));
+      setHasUnsavedChanges(false);
+      updateCounts();
+    },
+    [editor, updateCounts],
+  );
+
+  const handleCreateNewDocument = useCallback(() => {
+    if (!editor) return;
+    editor.commands.setContent('<p></p>');
+    setDocumentId(createDocumentId());
+    setDocumentName('Untitled Document');
+    setLastSaved(null);
+    setHasUnsavedChanges(false);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    updateCounts();
+  }, [editor, updateCounts]);
 
   const handleRestoreVersion = useCallback((content: string) => {
     if (editor) {
@@ -233,8 +287,12 @@ export const RichTextEditor = () => {
               
               <FileMenu
                 editor={editor}
+                documentId={documentId}
                 documentName={documentName}
                 setDocumentName={setDocumentName}
+                onSaveDocument={() => saveDocument({ showToast: true })}
+                onLoadDocument={handleLoadSavedDocument}
+                onCreateNewDocument={handleCreateNewDocument}
                 onShowVersionHistory={() => setShowVersionHistory(true)}
                 hasUnsavedChanges={hasUnsavedChanges}
               />
