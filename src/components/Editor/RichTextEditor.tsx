@@ -13,7 +13,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes } from '@tiptap/core';
 import { useState, useEffect, useCallback } from 'react';
-import { defaultLocale, getLocaleFromStorage, localeLabels, setLocaleInStorage, t, type Locale } from '@/lib/translations';
+import { getBrowserLocale, t, type Locale } from '@/lib/translations';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
 import { VersionHistory } from './VersionHistory';
@@ -62,8 +62,8 @@ const EnhancedImage = Image.extend({
 
 export const RichTextEditor = () => {
   const [documentId, setDocumentId] = useState(() => createDocumentId());
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  const [documentName, setDocumentName] = useState(t(defaultLocale, 'untitledDocument'));
+  const [locale] = useState<Locale>(() => getBrowserLocale());
+  const [documentName, setDocumentName] = useState(() => t(getBrowserLocale(), 'untitledDocument'));
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -210,14 +210,6 @@ export const RichTextEditor = () => {
   }, [editor, updateCounts, locale]);
 
 
-  useEffect(() => {
-    setLocale(getLocaleFromStorage());
-  }, []);
-
-  useEffect(() => {
-    setLocaleInStorage(locale);
-  }, [locale]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -310,21 +302,6 @@ export const RichTextEditor = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="text-sm text-muted-foreground flex items-center gap-2">
-                <span>{t(locale, 'language')}</span>
-                <select
-                  value={locale}
-                  onChange={(event) => setLocale(event.target.value as Locale)}
-                  className="bg-background border rounded-md px-2 py-1 text-sm"
-                  aria-label={t(locale, 'language')}
-                >
-                  {Object.entries(localeLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <Button
                 variant="ghost"
                 size="icon"
