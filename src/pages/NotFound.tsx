@@ -1,11 +1,11 @@
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useSEO } from "@/hooks/useSEO";
-import { getLocaleFromStorage, t } from "@/lib/translations";
+import { getBrowserLocale, t } from "@/lib/translations";
 
 const NotFound = () => {
   const location = useLocation();
-  const locale = getLocaleFromStorage();
+  const locale = getBrowserLocale();
 
   useSEO({
     title: "404 | LWrite",
