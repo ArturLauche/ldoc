@@ -302,6 +302,7 @@ export const RichTextEditor = () => {
               
               <FileMenu
                 editor={editor}
+                locale={locale}
                 documentId={documentId}
                 documentName={documentName}
                 setDocumentName={setDocumentName}
@@ -361,7 +362,7 @@ export const RichTextEditor = () => {
 
         {/* Toolbar */}
         <div className="px-4 py-2 glass-bar glass-bar--toolbar">
-          <EditorToolbar editor={editor} />
+          <EditorToolbar editor={editor} locale={locale} />
         </div>
       </div>
 

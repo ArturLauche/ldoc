@@ -42,6 +42,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { importDocument, getSupportedFormats } from './DocumentImporter';
+import { t, type Locale } from '@/lib/translations';
 import {
   exportUnifiedLibraryFile,
   getLibraryDocuments,
@@ -51,6 +52,7 @@ import {
 
 interface FileMenuProps {
   editor: Editor | null;
+  locale: Locale;
   documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
@@ -63,6 +65,7 @@ interface FileMenuProps {
 
 export const FileMenu = ({
   editor,
+  locale,
   documentId,
   documentName,
   setDocumentName,
@@ -96,13 +99,13 @@ export const FileMenu = ({
     if (!editor) return;
 
     if (hasUnsavedChanges) {
-      if (!confirm('You have unsaved changes. Create a new document anyway?')) {
+      if (!confirm(t(locale, 'unsavedConfirm'))) {
         return;
       }
     }
 
     onCreateNewDocument();
-    toast.success('New document created');
+    toast.success(t(locale, 'newDocumentCreated'));
   };
 
   const handleOpenFile = async () => {
@@ -118,7 +121,7 @@ export const FileMenu = ({
         if (!file) return;
 
         setIsImporting(true);
-        toast.loading('Importing document...', { id: 'import' });
+        toast.loading(t(locale, 'importInProgress'), { id: 'import' });
 
         try {
           const result = await importDocument(file);
@@ -130,7 +133,7 @@ export const FileMenu = ({
           toast.success(`Opened: ${file.name}`, { id: 'import' });
         } catch (error) {
           console.error('Import error:', error);
-          toast.error('Failed to import document. Try a different format.', { id: 'import' });
+          toast.error(t(locale, 'importFailed'), { id: 'import' });
         } finally {
           setIsImporting(false);
         }
@@ -138,7 +141,7 @@ export const FileMenu = ({
 
       input.click();
     } catch (error) {
-      toast.error('Failed to open file');
+      toast.error(t(locale, 'openFailed'));
     }
   };
 
@@ -175,7 +178,7 @@ export const FileMenu = ({
         toast.success(`Library import finished: ${result.imported} imported, ${result.skipped} skipped`);
       } catch (error) {
         console.error('Library import failed:', error);
-        toast.error('Invalid library file');
+        toast.error(t(locale, 'invalidLibraryFile'));
       }
     };
     input.click();
@@ -200,7 +203,7 @@ export const FileMenu = ({
           break;
         case 'html':
           content = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${locale}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -243,7 +246,7 @@ ${editorHtml}
           const blob = await buildDocxBlob(blocks);
           const fileName = buildExportFileName(documentName, 'docx');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'odt': {
@@ -270,14 +273,14 @@ ${editorHtml}
 
           const fileName = buildExportFileName(documentName, 'odt');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'pdf': {
           const blob = await buildPdfBlob(blocks);
           const fileName = buildExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         default:
@@ -288,7 +291,7 @@ ${editorHtml}
       const blob = new Blob([content], { type: mimeType });
       downloadBlob(blob, fileName);
 
-      toast.success(`Exported as ${fileName}`);
+      toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Export failed. Please try again.');
@@ -299,7 +302,7 @@ ${editorHtml}
     if (newName.trim()) {
       setDocumentName(newName.trim());
       setRenameOpen(false);
-      toast.success('Document renamed');
+      toast.success(t(locale, 'documentRenamed'));
     }
   };
 
@@ -316,44 +319,44 @@ ${editorHtml}
         <DropdownMenuContent className="w-56 bg-popover border border-border shadow-lg z-50" align="start">
           <DropdownMenuItem onClick={handleNewDocument}>
             <FilePlus className="h-4 w-4 mr-2" />
-            New Document
+            {t(locale, 'fileMenuNewDocument')}
             <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleOpenFile} disabled={isImporting}>
             <FolderOpen className="h-4 w-4 mr-2" />
-            {isImporting ? 'Importing...' : 'Open...'}
+            {isImporting ? t(locale, 'importInProgress') : t(locale, 'fileMenuOpen')}
             <span className="ml-auto text-xs text-muted-foreground">⌘O</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSave}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {t(locale, 'fileMenuSave')}
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
             <Search className="h-4 w-4 mr-2" />
-            Search Documents
+            {t(locale, 'searchDocuments')}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Files className="h-4 w-4 mr-2" />
-              Library Transfer
+              {t(locale, 'libraryTransfer')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={handleExportLibrary}>
                 <Download className="h-4 w-4 mr-2" />
-                Export All Docs (.json)
+                {t(locale, 'exportAllDocs')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleImportLibrary}>
                 <Upload className="h-4 w-4 mr-2" />
-                Import All Docs (.json)
+                {t(locale, 'importAllDocs')}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Download className="h-4 w-4 mr-2" />
-              Export As
+              {t(locale, 'fileMenuExportAs')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={() => void exportAs('txt')}>
@@ -389,11 +392,11 @@ ${editorHtml}
               setRenameOpen(true);
             }}
           >
-            Rename...
+            {t(locale, 'fileMenuRename')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onShowVersionHistory}>
             <History className="h-4 w-4 mr-2" />
-            Version History
+            {t(locale, 'fileMenuVersionHistory')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -401,8 +404,8 @@ ${editorHtml}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Rename Document</DialogTitle>
-            <DialogDescription>Enter a new name for your document.</DialogDescription>
+            <DialogTitle>{t(locale, 'renameDocument')}</DialogTitle>
+            <DialogDescription>{t(locale, 'renameDocumentDescription')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -420,7 +423,7 @@ ${editorHtml}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              Cancel
+              {t(locale, 'cancel')}
             </Button>
             <Button onClick={handleRename}>Save</Button>
           </DialogFooter>
@@ -430,14 +433,14 @@ ${editorHtml}
       <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Document Library</DialogTitle>
+            <DialogTitle>{t(locale, 'documentLibrary')}</DialogTitle>
             <DialogDescription>
-              Search and open your safely stored local documents.
+              {t(locale, 'documentLibraryDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder="Search by title or content..."
+              placeholder={t(locale, 'searchByTitleOrContent')}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               aria-label="Search saved documents"
@@ -445,7 +448,7 @@ ${editorHtml}
             <ScrollArea className="h-[320px] border rounded-md">
               <div className="p-2 space-y-2">
                 {filteredDocuments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">No matching documents.</p>
+                  <p className="text-sm text-muted-foreground p-2">{t(locale, 'noMatchingDocuments')}</p>
                 ) : (
                   filteredDocuments.map((doc) => (
                     <button
@@ -455,7 +458,7 @@ ${editorHtml}
                         doc.id === documentId ? 'border-primary bg-primary/5' : 'border-border'
                       }`}
                       onClick={() => {
-                        if (hasUnsavedChanges && !confirm('Discard unsaved changes and open this document?')) {
+                        if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
                           return;
                         }
                         onLoadDocument(doc);
@@ -475,7 +478,7 @@ ${editorHtml}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLibraryOpen(false)}>
-              Close
+              {t(locale, 'close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -504,12 +507,22 @@ function blocksToPlainText(blocks: HtmlBlock[]): string {
       if (block.type === 'image') return [`[Image: ${block.alt ?? 'Image'}]`];
       if (block.type === 'diagram') return [buildDiagramPlaceholderSegments(block).map((segment) => segment.text).join('')];
       if (block.type === 'table') {
-        return (block.rows ?? []).map((row) => row.map((cell) => cell.segments.map((segment) => segment.text).join('').trim()).join(' | '));
+        return (block.rows ?? []).map((row) =>
+          row
+            .map((cell) => formatCellPlainText(cell))
+            .join(' | '),
+        );
       }
       const prefix = block.type === 'list-item' ? (block.listType === 'number' ? '1. ' : '• ') : '';
       return [prefix + (block.segments ?? []).map((segment) => segment.text).join('')];
     })
     .join('\n');
+}
+
+function formatCellPlainText(cell: HtmlTableCell): string {
+  const value = cell.segments.map((segment) => segment.text).join('').replace(/\s+/g, ' ').trim();
+  if (!value) return ' ';
+  return cell.header ? value.toUpperCase() : value;
 }
 
 function convertHtmlToRtf(html: string): string {
@@ -1497,8 +1510,15 @@ function buildDocxTable(block: HtmlBlock): string {
     .map((row) => {
       const cellXml = row
         .map((cell) => {
-          const runs = buildDocxRunsFromSegments(cell.segments.length ? cell.segments : [{ text: '', style: {} }]);
-          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${runs}</w:p></w:tc>`;
+          const segments = cell.header
+            ? cell.segments.map((segment) => ({
+                ...segment,
+                style: { ...segment.style, bold: true },
+              }))
+            : cell.segments;
+          const runs = buildDocxRunsFromSegments(segments.length ? segments : [{ text: '', style: {} }]);
+          const headerFill = cell.header ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' : '';
+          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${headerFill}</w:tcPr><w:p>${runs}</w:p></w:tc>`;
         })
         .join('');
       return `<w:tr>${cellXml}</w:tr>`;
@@ -1575,7 +1595,15 @@ function buildOdtTable(block: HtmlBlock): string {
   const body = rows
     .map((row) => {
       const cells = row
-        .map((cell) => `<table:table-cell office:value-type="string"><text:p>${buildOdtInlineRuns(cell.segments)}</text:p></table:table-cell>`)
+        .map((cell) => {
+          const segments = cell.header
+            ? cell.segments.map((segment) => ({
+                ...segment,
+                style: { ...segment.style, bold: true },
+              }))
+            : cell.segments;
+          return `<table:table-cell office:value-type="string"><text:p>${buildOdtInlineRuns(segments)}</text:p></table:table-cell>`;
+        })
         .join('');
       return `<table:table-row>${cells}</table:table-row>`;
     })
