@@ -18,6 +18,20 @@ declare module '@tiptap/core' {
 }
 
 const DEFAULT_ITEMS = ['Step 1', 'Step 2', 'Step 3'];
+const TEMPLATE_ACCENTS: Record<SmartDiagramTemplate, string> = {
+  process: 'process',
+  cycle: 'cycle',
+  hierarchy: 'hierarchy',
+};
+
+function normalizeItems(value?: string): string[] {
+  const items = (value ?? '')
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return items.length ? items : DEFAULT_ITEMS;
+}
 
 export const SmartDiagram = Node.create({
   name: 'smartDiagram',
@@ -45,32 +59,42 @@ export const SmartDiagram = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const attrs = HTMLAttributes as SmartDiagramAttrs;
-    const items = (attrs.items ?? '').split('|').map((item) => item.trim()).filter(Boolean);
-    const resolvedItems = items.length ? items : DEFAULT_ITEMS;
-
-    const connectorSymbol = attrs.template === 'cycle' ? '⟲' : attrs.template === 'hierarchy' ? '↓' : '→';
+    const items = normalizeItems(attrs.items);
+    const template = (attrs.template ?? 'process') as SmartDiagramTemplate;
 
     return [
       'div',
       mergeAttributes(
         {
           'data-smart-diagram': 'true',
-          'data-template': attrs.template,
+          'data-template': template,
           'data-title': attrs.title,
-          'data-items': resolvedItems.join('|'),
+          'data-items': items.join('|'),
+          'data-item-count': String(items.length),
           contenteditable: 'false',
-          class: 'smart-diagram smart-diagram--' + (attrs.template ?? 'process'),
+          class: `smart-diagram smart-diagram--${template} smart-diagram--accent-${TEMPLATE_ACCENTS[template]}`,
         },
         HTMLAttributes,
       ),
-      ['div', { class: 'smart-diagram__title' }, attrs.title ?? 'Diagram'],
+      [
+        'div',
+        { class: 'smart-diagram__header' },
+        ['div', { class: 'smart-diagram__eyebrow' }, template],
+        ['div', { class: 'smart-diagram__title' }, attrs.title ?? 'Diagram'],
+        ['div', { class: 'smart-diagram__meta' }, `${items.length} item${items.length === 1 ? '' : 's'}`],
+      ],
       [
         'div',
         { class: 'smart-diagram__nodes' },
-        ...resolvedItems.flatMap((item, index) => {
-          const nodes: DOMOutputSpec[] = [['div', { class: 'smart-diagram__node' }, item]];
-          if (index < resolvedItems.length - 1) {
-            nodes.push(['span', { class: 'smart-diagram__connector' }, connectorSymbol]);
+        ...items.flatMap((item, index) => {
+          const nodes: DOMOutputSpec[] = [[
+            'div',
+            { class: 'smart-diagram__node', 'data-step': String(index + 1) },
+            ['span', { class: 'smart-diagram__node-index' }, String(index + 1)],
+            ['span', { class: 'smart-diagram__node-label' }, item],
+          ]];
+          if (index < items.length - 1) {
+            nodes.push(['span', { class: 'smart-diagram__connector', 'aria-hidden': 'true' }]);
           }
           return nodes;
         }),
@@ -83,7 +107,7 @@ export const SmartDiagram = Node.create({
       insertSmartDiagram:
         (attrs) =>
         ({ commands }) => {
-          const items = attrs?.items?.split('|').map((item) => item.trim()).filter(Boolean) ?? DEFAULT_ITEMS;
+          const items = normalizeItems(attrs?.items);
           return commands.insertContent({
             type: this.name,
             attrs: {
@@ -99,7 +123,11 @@ export const SmartDiagram = Node.create({
           if (!editor.isActive(this.name)) {
             return false;
           }
-          return commands.updateAttributes(this.name, attrs);
+          const nextAttrs = {
+            ...attrs,
+            ...(attrs.items ? { items: normalizeItems(attrs.items).join('|') } : {}),
+          };
+          return commands.updateAttributes(this.name, nextAttrs);
         },
     };
   },
