@@ -12,6 +12,7 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     smartDiagram: {
       insertSmartDiagram: (attrs?: Partial<SmartDiagramAttrs>) => ReturnType;
+      updateSmartDiagram: (attrs: Partial<SmartDiagramAttrs>) => ReturnType;
     };
   }
 }
@@ -47,6 +48,8 @@ export const SmartDiagram = Node.create({
     const items = (attrs.items ?? '').split('|').map((item) => item.trim()).filter(Boolean);
     const resolvedItems = items.length ? items : DEFAULT_ITEMS;
 
+    const connectorSymbol = attrs.template === 'cycle' ? '⟲' : attrs.template === 'hierarchy' ? '↓' : '→';
+
     return [
       'div',
       mergeAttributes(
@@ -67,7 +70,7 @@ export const SmartDiagram = Node.create({
         ...resolvedItems.flatMap((item, index) => {
           const nodes: DOMOutputSpec[] = [['div', { class: 'smart-diagram__node' }, item]];
           if (index < resolvedItems.length - 1) {
-            nodes.push(['span', { class: 'smart-diagram__connector' }, '→']);
+            nodes.push(['span', { class: 'smart-diagram__connector' }, connectorSymbol]);
           }
           return nodes;
         }),
@@ -89,6 +92,14 @@ export const SmartDiagram = Node.create({
               items: items.join('|'),
             },
           });
+        },
+      updateSmartDiagram:
+        (attrs) =>
+        ({ editor, commands }) => {
+          if (!editor.isActive(this.name)) {
+            return false;
+          }
+          return commands.updateAttributes(this.name, attrs);
         },
     };
   },

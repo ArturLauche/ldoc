@@ -464,6 +464,8 @@ body {
   border-collapse: collapse;
   margin: 1rem 0;
   table-layout: fixed;
+  overflow: hidden;
+  border-radius: 0.75rem;
 }
 
 .editor-content .ProseMirror th,
@@ -476,6 +478,19 @@ body {
 .editor-content .ProseMirror th {
   background: hsl(var(--muted) / 0.2);
   font-weight: 600;
+}
+
+.editor-content .ProseMirror .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid hsl(var(--primary) / 0.45);
+  pointer-events: none;
+}
+
+.editor-content .ProseMirror th,
+.editor-content .ProseMirror td {
+  position: relative;
 }
 
 .editor-content .ProseMirror .smart-diagram {
@@ -496,6 +511,19 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.editor-content .ProseMirror .smart-diagram--hierarchy .smart-diagram__nodes {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.editor-content .ProseMirror .smart-diagram--cycle .smart-diagram__nodes {
+  justify-content: center;
+}
+
+.editor-content .ProseMirror .smart-diagram--cycle .smart-diagram__node {
+  border-radius: 999px;
 }
 
 .editor-content .ProseMirror .smart-diagram__node {
