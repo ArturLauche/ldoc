@@ -79,9 +79,8 @@ export const SmartDiagram = Node.create({
       [
         'div',
         { class: 'smart-diagram__header' },
-        ['div', { class: 'smart-diagram__eyebrow' }, template],
         ['div', { class: 'smart-diagram__title' }, attrs.title ?? 'Diagram'],
-        ['div', { class: 'smart-diagram__meta' }, `${items.length} item${items.length === 1 ? '' : 's'}`],
+        ['div', { class: 'smart-diagram__meta', 'aria-hidden': 'true' }, String(items.length).padStart(2, '0')],
       ],
       [
         'div',

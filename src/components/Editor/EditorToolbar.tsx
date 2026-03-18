@@ -90,13 +90,6 @@ const lineSpacings = [
 ];
 
 
-const TABLE_PRESETS = [
-  { label: '3 × 3', rows: '3', cols: '3', withHeader: true },
-  { label: '4 × 4', rows: '4', cols: '4', withHeader: true },
-  { label: 'Agenda', rows: '5', cols: '3', withHeader: true },
-  { label: 'Matrix', rows: '4', cols: '5', withHeader: false },
-];
-
 const normalizeDiagramItems = (value: string) =>
   value
     .split('\n')
@@ -151,9 +144,9 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   const [tableRows, setTableRows] = useState('3');
   const [tableCols, setTableCols] = useState('3');
   const [tableWithHeader, setTableWithHeader] = useState(true);
-  const [diagramTitle, setDiagramTitle] = useState('Process');
+  const [diagramTitle, setDiagramTitle] = useState(() => t(locale, 'toolbarDefaultDiagramTitle'));
   const [diagramTemplate, setDiagramTemplate] = useState<SmartDiagramTemplate>('process');
-  const [diagramItems, setDiagramItems] = useState('Idee\nReview\nRelease');
+  const [diagramItems, setDiagramItems] = useState(() => t(locale, 'toolbarDefaultDiagramItems'));
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -177,6 +170,13 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
     editor.chain().focus().insertTable({ rows, cols, withHeaderRow: tableWithHeader }).run();
   };
 
+  const tablePresets = useMemo(() => ([
+    { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
+    { label: t(locale, 'toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
+    { label: t(locale, 'toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
+    { label: t(locale, 'toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
+  ]), [locale]);
+
   const diagramItemList = useMemo(() => normalizeDiagramItems(diagramItems), [diagramItems]);
   const diagramItemsValue = diagramItemList.join('|');
   const diagramLimitReached = diagramItemList.length >= 8;
@@ -189,7 +189,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       if (!editor.isActive('smartDiagram')) return;
       const attrs = editor.getAttributes('smartDiagram');
       setDiagramTemplate((attrs.template as SmartDiagramTemplate) || 'process');
-      setDiagramTitle(attrs.title || 'Diagram');
+      setDiagramTitle(attrs.title || t(locale, 'toolbarDefaultDiagramTitle'));
       setDiagramItems(String(attrs.items || '').split('|').join('\n'));
     };
 
@@ -201,7 +201,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       editor.off('selectionUpdate', syncDiagramSelection);
       editor.off('transaction', syncDiagramSelection);
     };
-  }, [editor]);
+  }, [editor, locale]);
 
   const insertDiagram = () => {
     if (!editor || !canInsertDiagram) return;
@@ -210,7 +210,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       .focus()
       .insertSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || 'Diagram',
+        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
         items: diagramItemsValue,
       })
       .run();
@@ -223,7 +223,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       .focus()
       .updateSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || 'Diagram',
+        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
         items: diagramItemsValue,
       })
       .run();
@@ -538,7 +538,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {TABLE_PRESETS.map((preset) => (
+                {tablePresets.map((preset) => (
                   <Button
                     key={preset.label}
                     size="sm"

@@ -530,16 +530,11 @@ body {
 }
 
 .editor-content .ProseMirror .smart-diagram__header {
-  display: grid;
-  gap: 0.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 1rem;
-}
-
-.editor-content .ProseMirror .smart-diagram__eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.7rem;
-  color: hsl(var(--muted-foreground));
 }
 
 .editor-content .ProseMirror .smart-diagram__title {
@@ -548,8 +543,18 @@ body {
 }
 
 .editor-content .ProseMirror .smart-diagram__meta {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.8rem;
-  color: hsl(var(--muted-foreground));
+  font-weight: 700;
+  color: var(--diagram-accent);
+  background: hsl(var(--background) / 0.86);
+  border: 1px solid hsl(var(--primary) / 0.12);
+  flex-shrink: 0;
 }
 
 .editor-content .ProseMirror .smart-diagram__nodes {
