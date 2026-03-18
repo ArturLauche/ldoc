@@ -22,6 +22,9 @@ import {
   Palette,
   Highlighter,
   ChevronsUpDown,
+  Table as TableIcon,
+  Rows3,
+  Workflow,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -412,6 +415,56 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
               {spacing.name}
             </Button>
           ))}
+        </PopoverContent>
+      </Popover>
+
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      {/* Tables */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert table">
+            <TableIcon className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-44 p-2 bg-popover border border-border shadow-lg z-50">
+          <div className="flex flex-col gap-1">
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+              <Rows3 className="h-4 w-4 mr-2" /> Insert 3x3
+            </Button>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowAfter().run()}>
+              Add Row
+            </Button>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+              Add Column
+            </Button>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteTable().run()}>
+              Delete Table
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Smart diagram */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert smart diagram">
+            <Workflow className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-52 p-2 bg-popover border border-border shadow-lg z-50">
+          <div className="flex flex-col gap-1">
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().insertSmartDiagram({ template: 'process', title: 'Process', items: 'Idee|Review|Release' }).run()}>
+              Process Diagram
+            </Button>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().insertSmartDiagram({ template: 'cycle', title: 'Cycle', items: 'Planen|Umsetzen|Prüfen|Optimieren' }).run()}>
+              Cycle Diagram
+            </Button>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().insertSmartDiagram({ template: 'hierarchy', title: 'Hierarchy', items: 'Leitung|Team A|Team B' }).run()}>
+              Hierarchy Diagram
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
 

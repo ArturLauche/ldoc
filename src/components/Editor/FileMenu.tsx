@@ -194,7 +194,7 @@ export const FileMenu = ({
     try {
       switch (format) {
         case 'txt':
-          content = editor.getText();
+          content = blocksToPlainText(blocks);
           mimeType = 'text/plain';
           extension = 'txt';
           break;
@@ -217,6 +217,14 @@ export const FileMenu = ({
     mark { background-color: #fef08a; }
     img { max-width: 100%; height: auto; display: block; margin: 1rem auto; }
     hr { border: none; border-top: 1px solid #d1d5db; margin: 1.5em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #d1d5db; padding: 0.5rem; vertical-align: top; }
+    th { background: #f3f4f6; text-align: left; }
+    .smart-diagram { border: 1px solid #d1d5db; border-radius: 10px; padding: 0.75rem; margin: 1rem 0; }
+    .smart-diagram__title { font-weight: 600; margin-bottom: 0.5rem; }
+    .smart-diagram__nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+    .smart-diagram__node { border: 1px solid #cbd5e1; border-radius: 999px; padding: 0.25rem 0.75rem; background: #eef2ff; }
+    .smart-diagram__connector { color: #64748b; }
   </style>
 </head>
 <body>
@@ -489,6 +497,21 @@ function convertRtfToHtml(rtf: string): string {
 }
 
 // Simple HTML to RTF converter
+function blocksToPlainText(blocks: HtmlBlock[]): string {
+  return blocks
+    .flatMap((block) => {
+      if (block.type === 'horizontal-rule') return ['----------------------------------------'];
+      if (block.type === 'image') return [`[Image: ${block.alt ?? 'Image'}]`];
+      if (block.type === 'diagram') return [buildDiagramPlaceholderSegments(block).map((segment) => segment.text).join('')];
+      if (block.type === 'table') {
+        return (block.rows ?? []).map((row) => row.map((cell) => cell.segments.map((segment) => segment.text).join('').trim()).join(' | '));
+      }
+      const prefix = block.type === 'list-item' ? (block.listType === 'number' ? '1. ' : '• ') : '';
+      return [prefix + (block.segments ?? []).map((segment) => segment.text).join('')];
+    })
+    .join('\n');
+}
+
 function convertHtmlToRtf(html: string): string {
   const blocks = extractBlocksFromHtml(html);
   return buildRtfDocument(blocks);
@@ -525,7 +548,7 @@ function collectRtfFonts(blocks: HtmlBlock[]): Map<string, number> {
   fonts.set('Arial', 0);
   let index = 1;
   blocks.forEach((block) => {
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const font = segment.style.fontFamily ? normalizeFontFamilyValue(segment.style.fontFamily) : '';
       if (font && !fonts.has(font)) {
         fonts.set(font, index);
@@ -540,7 +563,7 @@ function collectRtfColors(blocks: HtmlBlock[]): Map<string, number> {
   const colors = new Map<string, number>();
   let index = 1;
   blocks.forEach((block) => {
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const color = normalizeColorToHex(segment.style.color);
       if (color && !colors.has(color)) {
         colors.set(color, index);
@@ -605,6 +628,24 @@ function buildRtfBlock(
   if (block.type === 'image') {
     const placeholder = buildImagePlaceholderSegments(block);
     return `${paragraphPrefix}${buildRtfRunsFromSegments(placeholder, fonts, colors, fontSize)}`;
+  }
+
+  if (block.type === 'diagram') {
+    const title = [{ text: `${block.diagramTitle ?? 'Diagram'}: `, style: { bold: true } } as InlineSegment];
+    const steps = (block.segments ?? []).map((segment, index) => ({ text: `${index ? ' → ' : ''}${segment.text}`, style: segment.style }));
+    return `${paragraphPrefix}${buildRtfRunsFromSegments([...title, ...steps], fonts, colors, fontSize)}`;
+  }
+
+  if (block.type === 'table') {
+    const lines = (block.rows ?? []).map((row) => {
+      const rowSegments: InlineSegment[] = [];
+      row.forEach((cell, idx) => {
+        if (idx) rowSegments.push({ text: ' | ', style: {} });
+        rowSegments.push(...(cell.segments.length ? cell.segments : [{ text: ' ', style: {} }]));
+      });
+      return `${paragraphPrefix}${buildRtfRunsFromSegments(rowSegments, fonts, colors, fontSize)}\\par`;
+    });
+    return lines.join('');
   }
 
   if (block.type === 'list-item') {
@@ -704,6 +745,7 @@ function buildOdtContentXml(blocks: HtmlBlock[]): string {
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
   office:version="1.2">
   <office:automatic-styles>
     ${styles}
@@ -731,6 +773,7 @@ function buildOdtStylesXml(): string {
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
   office:version="1.2">
   <office:styles>
     <style:default-style style:family="paragraph">
@@ -794,7 +837,7 @@ async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
 }
 
 function buildDocxDocumentXml(blocks: HtmlBlock[]): string {
-  const paragraphXml = (blocks.length ? blocks : [{ type: 'paragraph', text: '' }]).map(
+  const paragraphXml = (blocks.length ? blocks : [{ type: 'paragraph', segments: [{ text: '', style: {} }] }]).map(
     (block) => buildDocxParagraph(block),
   );
 
@@ -1052,8 +1095,20 @@ type InlineSegment = {
   style: InlineStyle;
 };
 
+type HtmlTableCell = {
+  segments: InlineSegment[];
+  header?: boolean;
+};
+
 type HtmlBlock = {
-  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'image';
+  type:
+    | 'paragraph'
+    | 'heading'
+    | 'list-item'
+    | 'horizontal-rule'
+    | 'image'
+    | 'table'
+    | 'diagram';
   segments?: InlineSegment[];
   level?: number;
   listType?: 'bullet' | 'number';
@@ -1061,6 +1116,9 @@ type HtmlBlock = {
   src?: string;
   alt?: string;
   widthPct?: number;
+  rows?: HtmlTableCell[][];
+  diagramTitle?: string;
+  diagramTemplate?: string;
 };
 
 type PreparedHtmlBlock = HtmlBlock & {
@@ -1140,6 +1198,11 @@ function normalizeSegments(segments: InlineSegment[]): InlineSegment[] {
 
 function hasVisibleText(segments: InlineSegment[]): boolean {
   return segments.some((segment) => segment.text.replace(/\s+/g, '').length > 0);
+}
+
+function iterateBlockSegments(block: HtmlBlock, cb: (segment: InlineSegment) => void) {
+  block.segments?.forEach(cb);
+  block.rows?.forEach((row) => row.forEach((cell) => cell.segments.forEach(cb)));
 }
 
 function getInlineStyleFromElement(el: HTMLElement): InlineStyle {
@@ -1279,6 +1342,40 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     });
   };
 
+  const addTableBlock = (table: HTMLTableElement) => {
+    const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
+      Array.from(row.querySelectorAll('th, td')).map((cell) => {
+        const segments: InlineSegment[] = [];
+        collectInlineSegments(cell, getInlineStyleFromElement(cell as HTMLElement), segments);
+        return {
+          segments: normalizeSegments(segments),
+          header: cell.tagName.toLowerCase() === 'th',
+        };
+      }),
+    ).filter((row) => row.length > 0);
+
+    if (!rows.length) return;
+    blocks.push({ type: 'table', rows });
+  };
+
+  const addDiagramBlock = (element: HTMLElement) => {
+    const title = element.getAttribute('data-title') ?? 'Diagram';
+    const template = element.getAttribute('data-template') ?? 'process';
+    const rawItems = element.getAttribute('data-items') ?? '';
+    const itemSegments = rawItems
+      .split('|')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => ({ text: item, style: {} as InlineStyle }));
+
+    blocks.push({
+      type: 'diagram',
+      diagramTitle: title,
+      diagramTemplate: template,
+      segments: itemSegments.length ? itemSegments : [{ text: 'Diagram', style: {} }],
+    });
+  };
+
   const collectInlineSegments = (node: Node, style: InlineStyle, segments: InlineSegment[]) => {
     if (node.nodeType === Node.TEXT_NODE) {
       segments.push({ text: node.textContent ?? '', style });
@@ -1330,6 +1427,11 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     const el = node as HTMLElement;
     const tag = el.tagName.toLowerCase();
 
+    if (el.hasAttribute('data-smart-diagram')) {
+      addDiagramBlock(el);
+      return;
+    }
+
     if (tag === 'p' || tag === 'div') {
       handleBlockElement(el, 'paragraph', {});
       return;
@@ -1364,6 +1466,12 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
       return;
     }
 
+    if (tag === 'table') {
+      addTableBlock(el as HTMLTableElement);
+      return;
+    }
+
+
     el.childNodes.forEach(walk);
   };
 
@@ -1382,7 +1490,36 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   ];
 }
 
+function buildDocxTable(block: HtmlBlock): string {
+  const rows = block.rows ?? [];
+  if (!rows.length) return '';
+  const rowXml = rows
+    .map((row) => {
+      const cellXml = row
+        .map((cell) => {
+          const runs = buildDocxRunsFromSegments(cell.segments.length ? cell.segments : [{ text: '', style: {} }]);
+          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${runs}</w:p></w:tc>`;
+        })
+        .join('');
+      return `<w:tr>${cellXml}</w:tr>`;
+    })
+    .join('');
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders></w:tblPr>${rowXml}</w:tbl>`;
+}
+
+function buildDiagramPlaceholderSegments(block: HtmlBlock): InlineSegment[] {
+  const items = block.segments?.map((segment) => segment.text).filter(Boolean) ?? [];
+  return [
+    { text: `${block.diagramTitle ?? 'Diagram'} (${block.diagramTemplate ?? 'process'})`, style: { bold: true } },
+    { text: items.length ? `: ${items.join(' → ')}` : '', style: {} },
+  ];
+}
+
 function buildDocxParagraph(block: HtmlBlock): string {
+  if (block.type === 'table') {
+    return buildDocxTable(block);
+  }
+
   if (block.type === 'horizontal-rule') {
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
   }
@@ -1402,7 +1539,9 @@ function buildDocxParagraph(block: HtmlBlock): string {
   const segments =
     block.type === 'image'
       ? buildImagePlaceholderSegments(block)
-      : block.segments ?? [{ text: '', style: {} }];
+      : block.type === 'diagram'
+        ? buildDiagramPlaceholderSegments(block)
+        : block.segments ?? [{ text: '', style: {} }];
   const runs = buildDocxRunsFromSegments(
     segments,
     block.type === 'heading' ? block.level : undefined,
@@ -1428,7 +1567,27 @@ function buildDocxRunsFromSegments(segments: InlineSegment[], headingLevel?: num
     .join('');
 }
 
+function buildOdtTable(block: HtmlBlock): string {
+  const rows = block.rows ?? [];
+  if (!rows.length) return '<text:p></text:p>';
+  const maxCols = Math.max(...rows.map((row) => row.length), 1);
+  const columns = Array.from({ length: maxCols }).map(() => `<table:table-column/>`).join('');
+  const body = rows
+    .map((row) => {
+      const cells = row
+        .map((cell) => `<table:table-cell office:value-type="string"><text:p>${buildOdtInlineRuns(cell.segments)}</text:p></table:table-cell>`)
+        .join('');
+      return `<table:table-row>${cells}</table:table-row>`;
+    })
+    .join('');
+  return `<table:table table:name="Table">${columns}${body}</table:table>`;
+}
+
 function buildOdtBlock(block: HtmlBlock, index: number): string {
+  if (block.type === 'table') {
+    return buildOdtTable(block);
+  }
+
   if (block.type === 'horizontal-rule') {
     return `<text:p>${escapeXml('─'.repeat(48))}</text:p>`;
   }
@@ -1448,6 +1607,10 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
   if (block.type === 'image') {
     const segments = buildImagePlaceholderSegments(block);
     return `<text:p>${buildOdtInlineRuns(segments)}</text:p>`;
+  }
+
+  if (block.type === 'diagram') {
+    return `<text:p>${buildOdtInlineRuns(buildDiagramPlaceholderSegments(block))}</text:p>`;
   }
 
   const tagName = block.type === 'heading' ? 'text:h' : 'text:p';
@@ -1477,6 +1640,21 @@ function buildPdfLinesFromBlocks(
 
     if (block.type === 'horizontal-rule') {
       lines.push({ type: 'rule' });
+    } else if (block.type === 'table') {
+      (block.rows ?? []).forEach((row) => {
+        const combined: InlineSegment[] = [];
+        row.forEach((cell, cellIndex) => {
+          if (cellIndex) combined.push({ text: ' | ', style: { bold: true } });
+          combined.push(...(cell.segments.length ? cell.segments : [{ text: ' ', style: {} }]));
+        });
+        lines.push({
+          type: 'text',
+          segments: combined,
+          fontSize: 11,
+          baseFontSize: 11,
+          align: block.align,
+        });
+      });
     } else if (block.type === 'image' && block.image) {
       const widthTarget = block.widthPct ? (maxWidth * block.widthPct) / 100 : maxWidth;
       const width = Math.min(block.image.width, widthTarget);
@@ -1494,7 +1672,9 @@ function buildPdfLinesFromBlocks(
       const baseSegments =
         block.type === 'image'
           ? buildImagePlaceholderSegments(block)
-          : block.segments ?? [{ text: '', style: {} }];
+          : block.type === 'diagram'
+            ? buildDiagramPlaceholderSegments(block)
+            : block.segments ?? [{ text: '', style: {} }];
       const prefix =
         block.type === 'list-item'
           ? block.listType === 'number'
@@ -1873,7 +2053,7 @@ function buildOdtAutomaticStyles(blocks: HtmlBlock[]): string {
     if (block.align) {
       paragraphAlignments.add(block.align);
     }
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const key = buildOdtStyleKey(segment.style);
       if (key) {
         textStyles.set(key, segment.style);

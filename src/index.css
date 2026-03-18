@@ -458,3 +458,54 @@ body {
     inset 0 1px 0 hsl(0 0% 100% / 0.24),
     0 12px 32px -24px hsl(0 0% 0% / 0.6);
 }
+
+.editor-content .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  table-layout: fixed;
+}
+
+.editor-content .ProseMirror th,
+.editor-content .ProseMirror td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.editor-content .ProseMirror th {
+  background: hsl(var(--muted) / 0.2);
+  font-weight: 600;
+}
+
+.editor-content .ProseMirror .smart-diagram {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  margin: 1rem 0;
+  background: hsl(var(--card) / 0.8);
+}
+
+.editor-content .ProseMirror .smart-diagram__title {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.editor-content .ProseMirror .smart-diagram__nodes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editor-content .ProseMirror .smart-diagram__node {
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.25);
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.editor-content .ProseMirror .smart-diagram__connector {
+  color: hsl(var(--muted-foreground));
+}
