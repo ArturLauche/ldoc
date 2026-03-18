@@ -44,12 +44,13 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { t, type Locale } from '@/lib/translations';
+import type { SmartDiagramTemplate } from './SmartDiagram';
 
 
 interface EditorToolbarProps {
@@ -87,6 +88,14 @@ const lineSpacings = [
   { name: '1.5', value: '1.5' },
   { name: 'Double', value: '2' },
 ];
+
+
+const normalizeDiagramItems = (value: string) =>
+  value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 
 const ToolbarButton = ({
   onClick,
@@ -135,9 +144,9 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   const [tableRows, setTableRows] = useState('3');
   const [tableCols, setTableCols] = useState('3');
   const [tableWithHeader, setTableWithHeader] = useState(true);
-  const [diagramTitle, setDiagramTitle] = useState('Process');
-  const [diagramTemplate, setDiagramTemplate] = useState<'process' | 'cycle' | 'hierarchy'>('process');
-  const [diagramItems, setDiagramItems] = useState('Idee\nReview\nRelease');
+  const [diagramTitle, setDiagramTitle] = useState(() => t(locale, 'toolbarDefaultDiagramTitle'));
+  const [diagramTemplate, setDiagramTemplate] = useState<SmartDiagramTemplate>('process');
+  const [diagramItems, setDiagramItems] = useState(() => t(locale, 'toolbarDefaultDiagramItems'));
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -151,49 +160,76 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
     setLinkUrl('');
   }, [editor, linkUrl]);
 
-  if (!editor) return null;
-  const isInTable = editor.isActive('table');
-  const isInDiagram = editor.isActive('smartDiagram');
+  const isInTable = editor?.isActive('table') ?? false;
+  const isInDiagram = editor?.isActive('smartDiagram') ?? false;
 
   const createTable = () => {
+    if (!editor) return;
     const rows = Math.max(1, Math.min(12, Number.parseInt(tableRows, 10) || 3));
     const cols = Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3));
     editor.chain().focus().insertTable({ rows, cols, withHeaderRow: tableWithHeader }).run();
   };
 
+  const tablePresets = useMemo(() => ([
+    { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
+    { label: t(locale, 'toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
+    { label: t(locale, 'toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
+    { label: t(locale, 'toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
+  ]), [locale]);
+
+  const diagramItemList = useMemo(() => normalizeDiagramItems(diagramItems), [diagramItems]);
+  const diagramItemsValue = diagramItemList.join('|');
+  const diagramLimitReached = diagramItemList.length >= 8;
+  const canInsertDiagram = diagramItemList.length >= 2;
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncDiagramSelection = () => {
+      if (!editor.isActive('smartDiagram')) return;
+      const attrs = editor.getAttributes('smartDiagram');
+      setDiagramTemplate((attrs.template as SmartDiagramTemplate) || 'process');
+      setDiagramTitle(attrs.title || t(locale, 'toolbarDefaultDiagramTitle'));
+      setDiagramItems(String(attrs.items || '').split('|').join('\n'));
+    };
+
+    syncDiagramSelection();
+    editor.on('selectionUpdate', syncDiagramSelection);
+    editor.on('transaction', syncDiagramSelection);
+
+    return () => {
+      editor.off('selectionUpdate', syncDiagramSelection);
+      editor.off('transaction', syncDiagramSelection);
+    };
+  }, [editor, locale]);
+
   const insertDiagram = () => {
-    const items = diagramItems
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .join('|');
+    if (!editor || !canInsertDiagram) return;
     editor
       .chain()
       .focus()
       .insertSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || 'Diagram',
-        items,
+        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
+        items: diagramItemsValue,
       })
       .run();
   };
 
   const updateDiagram = () => {
-    const items = diagramItems
-      .split('\n')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .join('|');
+    if (!editor || !canInsertDiagram) return;
     editor
       .chain()
       .focus()
       .updateSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || 'Diagram',
-        items,
+        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
+        items: diagramItemsValue,
       })
       .run();
   };
+
+  if (!editor) return null;
 
   return (
     <div className="floating-toolbar flex flex-wrap items-center gap-1 p-2">
@@ -501,6 +537,23 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   placeholder={t(locale, 'toolbarColumns')}
                 />
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                {tablePresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    size="sm"
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => {
+                      setTableRows(preset.rows);
+                      setTableCols(preset.cols);
+                      setTableWithHeader(preset.withHeader);
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
               <Button
                 size="sm"
                 variant="outline"
@@ -543,6 +596,12 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} disabled={!isInTable}>
                   {t(locale, 'toolbarToggleHeaderColumn')}
                 </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteRow().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarDeleteRow')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteColumn().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarDeleteColumn')}
+                </Button>
               </div>
               <Button size="sm" variant="destructive" className="w-full mt-2" onClick={() => editor.chain().focus().deleteTable().run()} disabled={!isInTable}>
                 {t(locale, 'toolbarDeleteTable')}
@@ -582,15 +641,22 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
               </SelectContent>
             </Select>
             <Textarea
-              rows={4}
+              rows={5}
               value={diagramItems}
               onChange={(e) => setDiagramItems(e.target.value)}
               placeholder={t(locale, 'toolbarDiagramItems')}
               aria-label={t(locale, 'toolbarDiagramItems')}
             />
+            <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-2">
+                <span>{t(locale, 'toolbarDiagramHint')}</span>
+                <span>{diagramItemList.length}/8</span>
+              </div>
+              {diagramLimitReached && <p className="mt-1">{t(locale, 'toolbarDiagramHintOverflow')}</p>}
+            </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" onClick={insertDiagram}>{t(locale, 'toolbarInsertDiagram')}</Button>
-              <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram}>
+              <Button size="sm" onClick={insertDiagram} disabled={!canInsertDiagram}>{t(locale, 'toolbarInsertDiagram')}</Button>
+              <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram || !canInsertDiagram}>
                 {t(locale, 'toolbarUpdateDiagram')}
               </Button>
             </div>

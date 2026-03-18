@@ -1111,6 +1111,9 @@ type InlineSegment = {
 type HtmlTableCell = {
   segments: InlineSegment[];
   header?: boolean;
+  colSpan?: number;
+  rowSpan?: number;
+  placeholder?: boolean;
 };
 
 type HtmlBlock = {
@@ -1356,16 +1359,75 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   };
 
   const addTableBlock = (table: HTMLTableElement) => {
-    const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
-      Array.from(row.querySelectorAll('th, td')).map((cell) => {
-        const segments: InlineSegment[] = [];
-        collectInlineSegments(cell, getInlineStyleFromElement(cell as HTMLElement), segments);
-        return {
-          segments: normalizeSegments(segments),
-          header: cell.tagName.toLowerCase() === 'th',
-        };
-      }),
-    ).filter((row) => row.length > 0);
+    const rows: HtmlTableCell[][] = [];
+    const pendingRowSpans = new Map<number, HtmlTableCell>();
+
+    Array.from(table.querySelectorAll('tr')).forEach((row) => {
+      const normalizedRow: HtmlTableCell[] = [];
+      let columnIndex = 0;
+
+      const placePendingCells = () => {
+        while (pendingRowSpans.has(columnIndex)) {
+          const spanCell = pendingRowSpans.get(columnIndex);
+          if (!spanCell) break;
+          normalizedRow.push(spanCell);
+          if ((spanCell.rowSpan ?? 1) <= 2) {
+            pendingRowSpans.delete(columnIndex);
+          } else {
+            pendingRowSpans.set(columnIndex, {
+              ...spanCell,
+              rowSpan: (spanCell.rowSpan ?? 1) - 1,
+            });
+          }
+          columnIndex += spanCell.colSpan ?? 1;
+        }
+      };
+
+      placePendingCells();
+
+      Array.from(row.children)
+        .filter((cell): cell is HTMLTableCellElement => ['TH', 'TD'].includes(cell.tagName))
+        .forEach((cell) => {
+          placePendingCells();
+          const segments: InlineSegment[] = [];
+          collectInlineSegments(cell, getInlineStyleFromElement(cell), segments);
+          const colSpan = Math.max(1, cell.colSpan || 1);
+          const rowSpan = Math.max(1, cell.rowSpan || 1);
+          const normalizedCell: HtmlTableCell = {
+            segments: normalizeSegments(segments),
+            header: cell.tagName.toLowerCase() === 'th',
+            colSpan,
+            rowSpan,
+          };
+          normalizedRow.push(normalizedCell);
+
+          for (let span = 1; span < colSpan; span += 1) {
+            normalizedRow.push({
+              segments: [],
+              header: normalizedCell.header,
+              colSpan: 1,
+              rowSpan,
+              placeholder: true,
+            });
+          }
+
+          if (rowSpan > 1) {
+            pendingRowSpans.set(columnIndex, {
+              segments: normalizedCell.segments,
+              header: normalizedCell.header,
+              colSpan,
+              rowSpan,
+              placeholder: true,
+            });
+          }
+          columnIndex += colSpan;
+        });
+
+      placePendingCells();
+      if (normalizedRow.some((cell) => !cell.placeholder)) {
+        rows.push(normalizedRow);
+      }
+    });
 
     if (!rows.length) return;
     blocks.push({ type: 'table', rows });
@@ -1510,6 +1572,13 @@ function buildDocxTable(block: HtmlBlock): string {
     .map((row) => {
       const cellXml = row
         .map((cell) => {
+          if (cell.placeholder) {
+            if ((cell.rowSpan ?? 1) > 1) {
+              const gridSpan = (cell.colSpan ?? 1) > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : '';
+              return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${gridSpan}<w:vMerge/></w:tcPr><w:p/></w:tc>`;
+            }
+            return '';
+          }
           const segments = cell.header
             ? cell.segments.map((segment) => ({
                 ...segment,
@@ -1518,7 +1587,9 @@ function buildDocxTable(block: HtmlBlock): string {
             : cell.segments;
           const runs = buildDocxRunsFromSegments(segments.length ? segments : [{ text: '', style: {} }]);
           const headerFill = cell.header ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' : '';
-          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${headerFill}</w:tcPr><w:p>${runs}</w:p></w:tc>`;
+          const gridSpan = (cell.colSpan ?? 1) > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : '';
+          const vMerge = (cell.rowSpan ?? 1) > 1 ? '<w:vMerge w:val="restart"/>' : '';
+          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${gridSpan}${vMerge}${headerFill}</w:tcPr><w:p>${runs}</w:p></w:tc>`;
         })
         .join('');
       return `<w:tr>${cellXml}</w:tr>`;
@@ -1596,13 +1667,24 @@ function buildOdtTable(block: HtmlBlock): string {
     .map((row) => {
       const cells = row
         .map((cell) => {
+          if (cell.placeholder) {
+            if ((cell.rowSpan ?? 1) > 1) {
+              const spanAttrs = (cell.colSpan ?? 1) > 1 ? ` table:number-columns-spanned="${cell.colSpan}"` : '';
+              return `<table:covered-table-cell${spanAttrs}/>`;
+            }
+            return '';
+          }
           const segments = cell.header
             ? cell.segments.map((segment) => ({
                 ...segment,
                 style: { ...segment.style, bold: true },
               }))
             : cell.segments;
-          return `<table:table-cell office:value-type="string"><text:p>${buildOdtInlineRuns(segments)}</text:p></table:table-cell>`;
+          const spanAttrs = [
+            (cell.colSpan ?? 1) > 1 ? ` table:number-columns-spanned="${cell.colSpan}"` : '',
+            (cell.rowSpan ?? 1) > 1 ? ` table:number-rows-spanned="${cell.rowSpan}"` : '',
+          ].join('');
+          return `<table:table-cell office:value-type="string"${spanAttrs}><text:p>${buildOdtInlineRuns(segments)}</text:p></table:table-cell>`;
         })
         .join('');
       return `<table:table-row>${cells}</table:table-row>`;
@@ -1672,8 +1754,14 @@ function buildPdfLinesFromBlocks(
       (block.rows ?? []).forEach((row) => {
         const combined: InlineSegment[] = [];
         row.forEach((cell, cellIndex) => {
-          if (cellIndex) combined.push({ text: ' | ', style: { bold: true } });
+          if (cell.placeholder) {
+            return;
+          }
+          if (combined.length || cellIndex) combined.push({ text: ' | ', style: { bold: true } });
           combined.push(...(cell.segments.length ? cell.segments : [{ text: ' ', style: {} }]));
+          if ((cell.colSpan ?? 1) > 1) {
+            combined.push({ text: ` (×${cell.colSpan})`, style: { italic: true } });
+          }
         });
         lines.push({
           type: 'text',
