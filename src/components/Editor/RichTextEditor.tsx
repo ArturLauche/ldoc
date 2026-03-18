@@ -12,6 +12,11 @@ import FontFamily from '@tiptap/extension-font-family';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes } from '@tiptap/core';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { SmartDiagram } from './SmartDiagram';
 import { useState, useEffect, useCallback } from 'react';
 import { getBrowserLocale, t, type Locale } from '@/lib/translations';
 import { EditorToolbar } from './EditorToolbar';
@@ -106,6 +111,13 @@ export const RichTextEditor = () => {
           class: 'rounded-lg max-w-full h-auto my-4 mx-auto block',
         },
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      SmartDiagram,
     ],
     content: '<p></p>',
     onUpdate: () => {
@@ -290,6 +302,7 @@ export const RichTextEditor = () => {
               
               <FileMenu
                 editor={editor}
+                locale={locale}
                 documentId={documentId}
                 documentName={documentName}
                 setDocumentName={setDocumentName}
@@ -349,7 +362,7 @@ export const RichTextEditor = () => {
 
         {/* Toolbar */}
         <div className="px-4 py-2 glass-bar glass-bar--toolbar">
-          <EditorToolbar editor={editor} />
+          <EditorToolbar editor={editor} locale={locale} />
         </div>
       </div>
 

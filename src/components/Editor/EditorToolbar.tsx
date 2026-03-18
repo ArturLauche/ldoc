@@ -22,6 +22,11 @@ import {
   Palette,
   Highlighter,
   ChevronsUpDown,
+  Table as TableIcon,
+  Rows3,
+  Workflow,
+  SplitSquareHorizontal,
+  Combine,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,10 +47,14 @@ import { cn } from '@/lib/utils';
 import { useCallback, useState } from 'react';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { t, type Locale } from '@/lib/translations';
 
 
 interface EditorToolbarProps {
   editor: Editor | null;
+  locale: Locale;
 }
 
 const fontSizes = [
@@ -121,8 +130,14 @@ const ToolbarButton = ({
   </Tooltip>
 );
 
-export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
+export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   const [linkUrl, setLinkUrl] = useState('');
+  const [tableRows, setTableRows] = useState('3');
+  const [tableCols, setTableCols] = useState('3');
+  const [tableWithHeader, setTableWithHeader] = useState(true);
+  const [diagramTitle, setDiagramTitle] = useState('Process');
+  const [diagramTemplate, setDiagramTemplate] = useState<'process' | 'cycle' | 'hierarchy'>('process');
+  const [diagramItems, setDiagramItems] = useState('Idee\nReview\nRelease');
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -137,10 +152,47 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   }, [editor, linkUrl]);
 
   if (!editor) return null;
+  const isInTable = editor.isActive('table');
+  const isInDiagram = editor.isActive('smartDiagram');
 
-  const getCurrentFontFamily = () => {
-    const fontFamily = editor.getAttributes('textStyle').fontFamily;
-    return fontFamily || '';
+  const createTable = () => {
+    const rows = Math.max(1, Math.min(12, Number.parseInt(tableRows, 10) || 3));
+    const cols = Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3));
+    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: tableWithHeader }).run();
+  };
+
+  const insertDiagram = () => {
+    const items = diagramItems
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join('|');
+    editor
+      .chain()
+      .focus()
+      .insertSmartDiagram({
+        template: diagramTemplate,
+        title: diagramTitle.trim() || 'Diagram',
+        items,
+      })
+      .run();
+  };
+
+  const updateDiagram = () => {
+    const items = diagramItems
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join('|');
+    editor
+      .chain()
+      .focus()
+      .updateSmartDiagram({
+        template: diagramTemplate,
+        title: diagramTitle.trim() || 'Diagram',
+        items,
+      })
+      .run();
   };
 
   return (
@@ -412,6 +464,137 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
               {spacing.name}
             </Button>
           ))}
+        </PopoverContent>
+      </Popover>
+
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      {/* Tables */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert table">
+            <TableIcon className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-3 bg-popover border border-border shadow-lg z-50">
+          <div className="space-y-3">
+            <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarCreateTable')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={tableRows}
+                  onChange={(e) => setTableRows(e.target.value)}
+                  aria-label={t(locale, 'toolbarRows')}
+                  placeholder={t(locale, 'toolbarRows')}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={tableCols}
+                  onChange={(e) => setTableCols(e.target.value)}
+                  aria-label={t(locale, 'toolbarColumns')}
+                  placeholder={t(locale, 'toolbarColumns')}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => setTableWithHeader((value) => !value)}
+              >
+                {tableWithHeader ? t(locale, 'toolbarHeaderRowOn') : t(locale, 'toolbarHeaderRowOff')}
+              </Button>
+              <Button size="sm" className="w-full" onClick={createTable}>
+                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')}
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarTableTools')}</p>
+              <div className="grid grid-cols-2 gap-1">
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowBefore().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarAddRowBefore')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowAfter().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarAddRowAfter')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnBefore().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarAddColumnBefore')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnAfter().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarAddColumnAfter')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().mergeCells().run()} disabled={!isInTable}>
+                  <Combine className="h-4 w-4 mr-1" /> {t(locale, 'toolbarMergeCells')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().splitCell().run()} disabled={!isInTable}>
+                  <SplitSquareHorizontal className="h-4 w-4 mr-1" /> {t(locale, 'toolbarSplitCell')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderRow().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarToggleHeaderRow')}
+                </Button>
+                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} disabled={!isInTable}>
+                  {t(locale, 'toolbarToggleHeaderColumn')}
+                </Button>
+              </div>
+              <Button size="sm" variant="destructive" className="w-full mt-2" onClick={() => editor.chain().focus().deleteTable().run()} disabled={!isInTable}>
+                {t(locale, 'toolbarDeleteTable')}
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Smart diagram */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert smart diagram">
+            <Workflow className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarDiagram')}</p>
+            <Input
+              value={diagramTitle}
+              onChange={(e) => setDiagramTitle(e.target.value)}
+              placeholder={t(locale, 'toolbarDiagramTitle')}
+              aria-label={t(locale, 'toolbarDiagramTitle')}
+            />
+            <Select
+              value={diagramTemplate}
+              onValueChange={(value) => setDiagramTemplate(value as 'process' | 'cycle' | 'hierarchy')}
+            >
+              <SelectTrigger aria-label={t(locale, 'toolbarDiagramTemplate')}>
+                <SelectValue placeholder={t(locale, 'toolbarDiagramTemplate')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="process">{t(locale, 'toolbarProcess')}</SelectItem>
+                <SelectItem value="cycle">{t(locale, 'toolbarCycle')}</SelectItem>
+                <SelectItem value="hierarchy">{t(locale, 'toolbarHierarchy')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Textarea
+              rows={4}
+              value={diagramItems}
+              onChange={(e) => setDiagramItems(e.target.value)}
+              placeholder={t(locale, 'toolbarDiagramItems')}
+              aria-label={t(locale, 'toolbarDiagramItems')}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" onClick={insertDiagram}>{t(locale, 'toolbarInsertDiagram')}</Button>
+              <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram}>
+                {t(locale, 'toolbarUpdateDiagram')}
+              </Button>
+            </div>
+          </div>
         </PopoverContent>
       </Popover>
 

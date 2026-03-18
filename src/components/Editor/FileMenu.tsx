@@ -42,6 +42,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { importDocument, getSupportedFormats } from './DocumentImporter';
+import { t, type Locale } from '@/lib/translations';
 import {
   exportUnifiedLibraryFile,
   getLibraryDocuments,
@@ -51,6 +52,7 @@ import {
 
 interface FileMenuProps {
   editor: Editor | null;
+  locale: Locale;
   documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
@@ -63,6 +65,7 @@ interface FileMenuProps {
 
 export const FileMenu = ({
   editor,
+  locale,
   documentId,
   documentName,
   setDocumentName,
@@ -96,13 +99,13 @@ export const FileMenu = ({
     if (!editor) return;
 
     if (hasUnsavedChanges) {
-      if (!confirm('You have unsaved changes. Create a new document anyway?')) {
+      if (!confirm(t(locale, 'unsavedConfirm'))) {
         return;
       }
     }
 
     onCreateNewDocument();
-    toast.success('New document created');
+    toast.success(t(locale, 'newDocumentCreated'));
   };
 
   const handleOpenFile = async () => {
@@ -118,7 +121,7 @@ export const FileMenu = ({
         if (!file) return;
 
         setIsImporting(true);
-        toast.loading('Importing document...', { id: 'import' });
+        toast.loading(t(locale, 'importInProgress'), { id: 'import' });
 
         try {
           const result = await importDocument(file);
@@ -130,7 +133,7 @@ export const FileMenu = ({
           toast.success(`Opened: ${file.name}`, { id: 'import' });
         } catch (error) {
           console.error('Import error:', error);
-          toast.error('Failed to import document. Try a different format.', { id: 'import' });
+          toast.error(t(locale, 'importFailed'), { id: 'import' });
         } finally {
           setIsImporting(false);
         }
@@ -138,7 +141,7 @@ export const FileMenu = ({
 
       input.click();
     } catch (error) {
-      toast.error('Failed to open file');
+      toast.error(t(locale, 'openFailed'));
     }
   };
 
@@ -175,7 +178,7 @@ export const FileMenu = ({
         toast.success(`Library import finished: ${result.imported} imported, ${result.skipped} skipped`);
       } catch (error) {
         console.error('Library import failed:', error);
-        toast.error('Invalid library file');
+        toast.error(t(locale, 'invalidLibraryFile'));
       }
     };
     input.click();
@@ -194,13 +197,13 @@ export const FileMenu = ({
     try {
       switch (format) {
         case 'txt':
-          content = editor.getText();
+          content = blocksToPlainText(blocks);
           mimeType = 'text/plain';
           extension = 'txt';
           break;
         case 'html':
           content = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${locale}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -217,6 +220,14 @@ export const FileMenu = ({
     mark { background-color: #fef08a; }
     img { max-width: 100%; height: auto; display: block; margin: 1rem auto; }
     hr { border: none; border-top: 1px solid #d1d5db; margin: 1.5em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #d1d5db; padding: 0.5rem; vertical-align: top; }
+    th { background: #f3f4f6; text-align: left; }
+    .smart-diagram { border: 1px solid #d1d5db; border-radius: 10px; padding: 0.75rem; margin: 1rem 0; }
+    .smart-diagram__title { font-weight: 600; margin-bottom: 0.5rem; }
+    .smart-diagram__nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+    .smart-diagram__node { border: 1px solid #cbd5e1; border-radius: 999px; padding: 0.25rem 0.75rem; background: #eef2ff; }
+    .smart-diagram__connector { color: #64748b; }
   </style>
 </head>
 <body>
@@ -235,7 +246,7 @@ ${editorHtml}
           const blob = await buildDocxBlob(blocks);
           const fileName = buildExportFileName(documentName, 'docx');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'odt': {
@@ -262,14 +273,14 @@ ${editorHtml}
 
           const fileName = buildExportFileName(documentName, 'odt');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'pdf': {
           const blob = await buildPdfBlob(blocks);
           const fileName = buildExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
-          toast.success(`Exported as ${fileName}`);
+          toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         default:
@@ -280,7 +291,7 @@ ${editorHtml}
       const blob = new Blob([content], { type: mimeType });
       downloadBlob(blob, fileName);
 
-      toast.success(`Exported as ${fileName}`);
+      toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Export failed. Please try again.');
@@ -291,7 +302,7 @@ ${editorHtml}
     if (newName.trim()) {
       setDocumentName(newName.trim());
       setRenameOpen(false);
-      toast.success('Document renamed');
+      toast.success(t(locale, 'documentRenamed'));
     }
   };
 
@@ -308,44 +319,44 @@ ${editorHtml}
         <DropdownMenuContent className="w-56 bg-popover border border-border shadow-lg z-50" align="start">
           <DropdownMenuItem onClick={handleNewDocument}>
             <FilePlus className="h-4 w-4 mr-2" />
-            New Document
+            {t(locale, 'fileMenuNewDocument')}
             <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleOpenFile} disabled={isImporting}>
             <FolderOpen className="h-4 w-4 mr-2" />
-            {isImporting ? 'Importing...' : 'Open...'}
+            {isImporting ? t(locale, 'importInProgress') : t(locale, 'fileMenuOpen')}
             <span className="ml-auto text-xs text-muted-foreground">⌘O</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSave}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {t(locale, 'fileMenuSave')}
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
             <Search className="h-4 w-4 mr-2" />
-            Search Documents
+            {t(locale, 'searchDocuments')}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Files className="h-4 w-4 mr-2" />
-              Library Transfer
+              {t(locale, 'libraryTransfer')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={handleExportLibrary}>
                 <Download className="h-4 w-4 mr-2" />
-                Export All Docs (.json)
+                {t(locale, 'exportAllDocs')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleImportLibrary}>
                 <Upload className="h-4 w-4 mr-2" />
-                Import All Docs (.json)
+                {t(locale, 'importAllDocs')}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Download className="h-4 w-4 mr-2" />
-              Export As
+              {t(locale, 'fileMenuExportAs')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={() => void exportAs('txt')}>
@@ -381,11 +392,11 @@ ${editorHtml}
               setRenameOpen(true);
             }}
           >
-            Rename...
+            {t(locale, 'fileMenuRename')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onShowVersionHistory}>
             <History className="h-4 w-4 mr-2" />
-            Version History
+            {t(locale, 'fileMenuVersionHistory')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -393,8 +404,8 @@ ${editorHtml}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Rename Document</DialogTitle>
-            <DialogDescription>Enter a new name for your document.</DialogDescription>
+            <DialogTitle>{t(locale, 'renameDocument')}</DialogTitle>
+            <DialogDescription>{t(locale, 'renameDocumentDescription')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -412,7 +423,7 @@ ${editorHtml}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              Cancel
+              {t(locale, 'cancel')}
             </Button>
             <Button onClick={handleRename}>Save</Button>
           </DialogFooter>
@@ -422,14 +433,14 @@ ${editorHtml}
       <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Document Library</DialogTitle>
+            <DialogTitle>{t(locale, 'documentLibrary')}</DialogTitle>
             <DialogDescription>
-              Search and open your safely stored local documents.
+              {t(locale, 'documentLibraryDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder="Search by title or content..."
+              placeholder={t(locale, 'searchByTitleOrContent')}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               aria-label="Search saved documents"
@@ -437,7 +448,7 @@ ${editorHtml}
             <ScrollArea className="h-[320px] border rounded-md">
               <div className="p-2 space-y-2">
                 {filteredDocuments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">No matching documents.</p>
+                  <p className="text-sm text-muted-foreground p-2">{t(locale, 'noMatchingDocuments')}</p>
                 ) : (
                   filteredDocuments.map((doc) => (
                     <button
@@ -447,7 +458,7 @@ ${editorHtml}
                         doc.id === documentId ? 'border-primary bg-primary/5' : 'border-border'
                       }`}
                       onClick={() => {
-                        if (hasUnsavedChanges && !confirm('Discard unsaved changes and open this document?')) {
+                        if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
                           return;
                         }
                         onLoadDocument(doc);
@@ -467,7 +478,7 @@ ${editorHtml}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLibraryOpen(false)}>
-              Close
+              {t(locale, 'close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -489,6 +500,31 @@ function convertRtfToHtml(rtf: string): string {
 }
 
 // Simple HTML to RTF converter
+function blocksToPlainText(blocks: HtmlBlock[]): string {
+  return blocks
+    .flatMap((block) => {
+      if (block.type === 'horizontal-rule') return ['----------------------------------------'];
+      if (block.type === 'image') return [`[Image: ${block.alt ?? 'Image'}]`];
+      if (block.type === 'diagram') return [buildDiagramPlaceholderSegments(block).map((segment) => segment.text).join('')];
+      if (block.type === 'table') {
+        return (block.rows ?? []).map((row) =>
+          row
+            .map((cell) => formatCellPlainText(cell))
+            .join(' | '),
+        );
+      }
+      const prefix = block.type === 'list-item' ? (block.listType === 'number' ? '1. ' : '• ') : '';
+      return [prefix + (block.segments ?? []).map((segment) => segment.text).join('')];
+    })
+    .join('\n');
+}
+
+function formatCellPlainText(cell: HtmlTableCell): string {
+  const value = cell.segments.map((segment) => segment.text).join('').replace(/\s+/g, ' ').trim();
+  if (!value) return ' ';
+  return cell.header ? value.toUpperCase() : value;
+}
+
 function convertHtmlToRtf(html: string): string {
   const blocks = extractBlocksFromHtml(html);
   return buildRtfDocument(blocks);
@@ -525,7 +561,7 @@ function collectRtfFonts(blocks: HtmlBlock[]): Map<string, number> {
   fonts.set('Arial', 0);
   let index = 1;
   blocks.forEach((block) => {
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const font = segment.style.fontFamily ? normalizeFontFamilyValue(segment.style.fontFamily) : '';
       if (font && !fonts.has(font)) {
         fonts.set(font, index);
@@ -540,7 +576,7 @@ function collectRtfColors(blocks: HtmlBlock[]): Map<string, number> {
   const colors = new Map<string, number>();
   let index = 1;
   blocks.forEach((block) => {
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const color = normalizeColorToHex(segment.style.color);
       if (color && !colors.has(color)) {
         colors.set(color, index);
@@ -605,6 +641,24 @@ function buildRtfBlock(
   if (block.type === 'image') {
     const placeholder = buildImagePlaceholderSegments(block);
     return `${paragraphPrefix}${buildRtfRunsFromSegments(placeholder, fonts, colors, fontSize)}`;
+  }
+
+  if (block.type === 'diagram') {
+    const title = [{ text: `${block.diagramTitle ?? 'Diagram'}: `, style: { bold: true } } as InlineSegment];
+    const steps = (block.segments ?? []).map((segment, index) => ({ text: `${index ? ' → ' : ''}${segment.text}`, style: segment.style }));
+    return `${paragraphPrefix}${buildRtfRunsFromSegments([...title, ...steps], fonts, colors, fontSize)}`;
+  }
+
+  if (block.type === 'table') {
+    const lines = (block.rows ?? []).map((row) => {
+      const rowSegments: InlineSegment[] = [];
+      row.forEach((cell, idx) => {
+        if (idx) rowSegments.push({ text: ' | ', style: {} });
+        rowSegments.push(...(cell.segments.length ? cell.segments : [{ text: ' ', style: {} }]));
+      });
+      return `${paragraphPrefix}${buildRtfRunsFromSegments(rowSegments, fonts, colors, fontSize)}\\par`;
+    });
+    return lines.join('');
   }
 
   if (block.type === 'list-item') {
@@ -704,6 +758,7 @@ function buildOdtContentXml(blocks: HtmlBlock[]): string {
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
   office:version="1.2">
   <office:automatic-styles>
     ${styles}
@@ -731,6 +786,7 @@ function buildOdtStylesXml(): string {
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
   office:version="1.2">
   <office:styles>
     <style:default-style style:family="paragraph">
@@ -794,7 +850,7 @@ async function buildDocxBlob(blocks: HtmlBlock[]): Promise<Blob> {
 }
 
 function buildDocxDocumentXml(blocks: HtmlBlock[]): string {
-  const paragraphXml = (blocks.length ? blocks : [{ type: 'paragraph', text: '' }]).map(
+  const paragraphXml = (blocks.length ? blocks : [{ type: 'paragraph', segments: [{ text: '', style: {} }] }]).map(
     (block) => buildDocxParagraph(block),
   );
 
@@ -1052,8 +1108,20 @@ type InlineSegment = {
   style: InlineStyle;
 };
 
+type HtmlTableCell = {
+  segments: InlineSegment[];
+  header?: boolean;
+};
+
 type HtmlBlock = {
-  type: 'paragraph' | 'heading' | 'list-item' | 'horizontal-rule' | 'image';
+  type:
+    | 'paragraph'
+    | 'heading'
+    | 'list-item'
+    | 'horizontal-rule'
+    | 'image'
+    | 'table'
+    | 'diagram';
   segments?: InlineSegment[];
   level?: number;
   listType?: 'bullet' | 'number';
@@ -1061,6 +1129,9 @@ type HtmlBlock = {
   src?: string;
   alt?: string;
   widthPct?: number;
+  rows?: HtmlTableCell[][];
+  diagramTitle?: string;
+  diagramTemplate?: string;
 };
 
 type PreparedHtmlBlock = HtmlBlock & {
@@ -1140,6 +1211,11 @@ function normalizeSegments(segments: InlineSegment[]): InlineSegment[] {
 
 function hasVisibleText(segments: InlineSegment[]): boolean {
   return segments.some((segment) => segment.text.replace(/\s+/g, '').length > 0);
+}
+
+function iterateBlockSegments(block: HtmlBlock, cb: (segment: InlineSegment) => void) {
+  block.segments?.forEach(cb);
+  block.rows?.forEach((row) => row.forEach((cell) => cell.segments.forEach(cb)));
 }
 
 function getInlineStyleFromElement(el: HTMLElement): InlineStyle {
@@ -1279,6 +1355,40 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     });
   };
 
+  const addTableBlock = (table: HTMLTableElement) => {
+    const rows = Array.from(table.querySelectorAll('tr')).map((row) =>
+      Array.from(row.querySelectorAll('th, td')).map((cell) => {
+        const segments: InlineSegment[] = [];
+        collectInlineSegments(cell, getInlineStyleFromElement(cell as HTMLElement), segments);
+        return {
+          segments: normalizeSegments(segments),
+          header: cell.tagName.toLowerCase() === 'th',
+        };
+      }),
+    ).filter((row) => row.length > 0);
+
+    if (!rows.length) return;
+    blocks.push({ type: 'table', rows });
+  };
+
+  const addDiagramBlock = (element: HTMLElement) => {
+    const title = element.getAttribute('data-title') ?? 'Diagram';
+    const template = element.getAttribute('data-template') ?? 'process';
+    const rawItems = element.getAttribute('data-items') ?? '';
+    const itemSegments = rawItems
+      .split('|')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => ({ text: item, style: {} as InlineStyle }));
+
+    blocks.push({
+      type: 'diagram',
+      diagramTitle: title,
+      diagramTemplate: template,
+      segments: itemSegments.length ? itemSegments : [{ text: 'Diagram', style: {} }],
+    });
+  };
+
   const collectInlineSegments = (node: Node, style: InlineStyle, segments: InlineSegment[]) => {
     if (node.nodeType === Node.TEXT_NODE) {
       segments.push({ text: node.textContent ?? '', style });
@@ -1330,6 +1440,11 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
     const el = node as HTMLElement;
     const tag = el.tagName.toLowerCase();
 
+    if (el.hasAttribute('data-smart-diagram')) {
+      addDiagramBlock(el);
+      return;
+    }
+
     if (tag === 'p' || tag === 'div') {
       handleBlockElement(el, 'paragraph', {});
       return;
@@ -1364,6 +1479,12 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
       return;
     }
 
+    if (tag === 'table') {
+      addTableBlock(el as HTMLTableElement);
+      return;
+    }
+
+
     el.childNodes.forEach(walk);
   };
 
@@ -1382,7 +1503,43 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   ];
 }
 
+function buildDocxTable(block: HtmlBlock): string {
+  const rows = block.rows ?? [];
+  if (!rows.length) return '';
+  const rowXml = rows
+    .map((row) => {
+      const cellXml = row
+        .map((cell) => {
+          const segments = cell.header
+            ? cell.segments.map((segment) => ({
+                ...segment,
+                style: { ...segment.style, bold: true },
+              }))
+            : cell.segments;
+          const runs = buildDocxRunsFromSegments(segments.length ? segments : [{ text: '', style: {} }]);
+          const headerFill = cell.header ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' : '';
+          return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${headerFill}</w:tcPr><w:p>${runs}</w:p></w:tc>`;
+        })
+        .join('');
+      return `<w:tr>${cellXml}</w:tr>`;
+    })
+    .join('');
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders></w:tblPr>${rowXml}</w:tbl>`;
+}
+
+function buildDiagramPlaceholderSegments(block: HtmlBlock): InlineSegment[] {
+  const items = block.segments?.map((segment) => segment.text).filter(Boolean) ?? [];
+  return [
+    { text: `${block.diagramTitle ?? 'Diagram'} (${block.diagramTemplate ?? 'process'})`, style: { bold: true } },
+    { text: items.length ? `: ${items.join(' → ')}` : '', style: {} },
+  ];
+}
+
 function buildDocxParagraph(block: HtmlBlock): string {
+  if (block.type === 'table') {
+    return buildDocxTable(block);
+  }
+
   if (block.type === 'horizontal-rule') {
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
   }
@@ -1402,7 +1559,9 @@ function buildDocxParagraph(block: HtmlBlock): string {
   const segments =
     block.type === 'image'
       ? buildImagePlaceholderSegments(block)
-      : block.segments ?? [{ text: '', style: {} }];
+      : block.type === 'diagram'
+        ? buildDiagramPlaceholderSegments(block)
+        : block.segments ?? [{ text: '', style: {} }];
   const runs = buildDocxRunsFromSegments(
     segments,
     block.type === 'heading' ? block.level : undefined,
@@ -1428,7 +1587,35 @@ function buildDocxRunsFromSegments(segments: InlineSegment[], headingLevel?: num
     .join('');
 }
 
+function buildOdtTable(block: HtmlBlock): string {
+  const rows = block.rows ?? [];
+  if (!rows.length) return '<text:p></text:p>';
+  const maxCols = Math.max(...rows.map((row) => row.length), 1);
+  const columns = Array.from({ length: maxCols }).map(() => `<table:table-column/>`).join('');
+  const body = rows
+    .map((row) => {
+      const cells = row
+        .map((cell) => {
+          const segments = cell.header
+            ? cell.segments.map((segment) => ({
+                ...segment,
+                style: { ...segment.style, bold: true },
+              }))
+            : cell.segments;
+          return `<table:table-cell office:value-type="string"><text:p>${buildOdtInlineRuns(segments)}</text:p></table:table-cell>`;
+        })
+        .join('');
+      return `<table:table-row>${cells}</table:table-row>`;
+    })
+    .join('');
+  return `<table:table table:name="Table">${columns}${body}</table:table>`;
+}
+
 function buildOdtBlock(block: HtmlBlock, index: number): string {
+  if (block.type === 'table') {
+    return buildOdtTable(block);
+  }
+
   if (block.type === 'horizontal-rule') {
     return `<text:p>${escapeXml('─'.repeat(48))}</text:p>`;
   }
@@ -1448,6 +1635,10 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
   if (block.type === 'image') {
     const segments = buildImagePlaceholderSegments(block);
     return `<text:p>${buildOdtInlineRuns(segments)}</text:p>`;
+  }
+
+  if (block.type === 'diagram') {
+    return `<text:p>${buildOdtInlineRuns(buildDiagramPlaceholderSegments(block))}</text:p>`;
   }
 
   const tagName = block.type === 'heading' ? 'text:h' : 'text:p';
@@ -1477,6 +1668,21 @@ function buildPdfLinesFromBlocks(
 
     if (block.type === 'horizontal-rule') {
       lines.push({ type: 'rule' });
+    } else if (block.type === 'table') {
+      (block.rows ?? []).forEach((row) => {
+        const combined: InlineSegment[] = [];
+        row.forEach((cell, cellIndex) => {
+          if (cellIndex) combined.push({ text: ' | ', style: { bold: true } });
+          combined.push(...(cell.segments.length ? cell.segments : [{ text: ' ', style: {} }]));
+        });
+        lines.push({
+          type: 'text',
+          segments: combined,
+          fontSize: 11,
+          baseFontSize: 11,
+          align: block.align,
+        });
+      });
     } else if (block.type === 'image' && block.image) {
       const widthTarget = block.widthPct ? (maxWidth * block.widthPct) / 100 : maxWidth;
       const width = Math.min(block.image.width, widthTarget);
@@ -1494,7 +1700,9 @@ function buildPdfLinesFromBlocks(
       const baseSegments =
         block.type === 'image'
           ? buildImagePlaceholderSegments(block)
-          : block.segments ?? [{ text: '', style: {} }];
+          : block.type === 'diagram'
+            ? buildDiagramPlaceholderSegments(block)
+            : block.segments ?? [{ text: '', style: {} }];
       const prefix =
         block.type === 'list-item'
           ? block.listType === 'number'
@@ -1873,7 +2081,7 @@ function buildOdtAutomaticStyles(blocks: HtmlBlock[]): string {
     if (block.align) {
       paragraphAlignments.add(block.align);
     }
-    block.segments?.forEach((segment) => {
+    iterateBlockSegments(block, (segment) => {
       const key = buildOdtStyleKey(segment.style);
       if (key) {
         textStyles.set(key, segment.style);
