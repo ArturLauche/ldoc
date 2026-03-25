@@ -36,6 +36,9 @@ const editorFeatureDefaults = {
   toolbarDiagramItems: 'One item per line',
   toolbarInsertDiagram: 'Insert',
   toolbarUpdateDiagram: 'Update selected',
+  toolbarDiagramAddItem: 'Add item',
+  toolbarDiagramRemoveItem: 'Remove item',
+  toolbarDiagramAutoItemLabel: 'Step',
   toolbarProcess: 'Process',
   toolbarCycle: 'Cycle',
   toolbarHierarchy: 'Hierarchy',
@@ -66,6 +69,18 @@ const editorFeatureDefaults = {
   fileMenuRename: 'Rename...',
   fileMenuVersionHistory: 'Version History',
   fileMenuSavedLabel: 'Saved',
+  fileMenuLabel: 'File',
+  fileMenuFormatTxt: 'Plain Text (.txt)',
+  fileMenuFormatHtml: 'HTML Document (.html)',
+  fileMenuFormatRtf: 'Rich Text Format (.rtf)',
+  fileMenuFormatDocx: 'Word Document (.docx)',
+  fileMenuFormatOdt: 'OpenDocument Text (.odt)',
+  fileMenuFormatPdf: 'PDF Document (.pdf)',
+  renameDocumentNameLabel: 'Document name',
+  openedFileToast: 'Opened: {name}',
+  openedDocumentToast: 'Opened {name}',
+  exportedLibraryToast: 'Exported {count} documents',
+  importedLibraryToast: 'Library import finished: {imported} imported, {skipped} skipped',
 } as const;
 
 export const translationMessages = {

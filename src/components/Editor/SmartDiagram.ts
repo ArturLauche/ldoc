@@ -24,6 +24,18 @@ const TEMPLATE_ACCENTS: Record<SmartDiagramTemplate, string> = {
   hierarchy: 'hierarchy',
 };
 
+function normalizeTemplate(value?: string): SmartDiagramTemplate {
+  if (value === 'process' || value === 'cycle' || value === 'hierarchy') {
+    return value;
+  }
+  return 'process';
+}
+
+function normalizeTitle(value?: string): string {
+  const normalized = (value ?? '').replace(/\s+/g, ' ').trim();
+  return normalized ? normalized.slice(0, 80) : 'Diagram';
+}
+
 function normalizeItems(value?: string): string[] {
   const items = (value ?? '')
     .split('|')
@@ -60,7 +72,8 @@ export const SmartDiagram = Node.create({
   renderHTML({ HTMLAttributes }) {
     const attrs = HTMLAttributes as SmartDiagramAttrs;
     const items = normalizeItems(attrs.items);
-    const template = (attrs.template ?? 'process') as SmartDiagramTemplate;
+    const template = normalizeTemplate(attrs.template);
+    const title = normalizeTitle(attrs.title);
 
     return [
       'div',
@@ -68,7 +81,7 @@ export const SmartDiagram = Node.create({
         {
           'data-smart-diagram': 'true',
           'data-template': template,
-          'data-title': attrs.title,
+          'data-title': title,
           'data-items': items.join('|'),
           'data-item-count': String(items.length),
           contenteditable: 'false',
@@ -79,7 +92,7 @@ export const SmartDiagram = Node.create({
       [
         'div',
         { class: 'smart-diagram__header' },
-        ['div', { class: 'smart-diagram__title' }, attrs.title ?? 'Diagram'],
+        ['div', { class: 'smart-diagram__title' }, title],
         ['div', { class: 'smart-diagram__meta', 'aria-hidden': 'true' }, String(items.length).padStart(2, '0')],
       ],
       [
@@ -111,7 +124,7 @@ export const SmartDiagram = Node.create({
             type: this.name,
             attrs: {
               template: attrs?.template ?? 'process',
-              title: attrs?.title ?? 'Diagram',
+              title: normalizeTitle(attrs?.title),
               items: items.join('|'),
             },
           });
@@ -124,6 +137,8 @@ export const SmartDiagram = Node.create({
           }
           const nextAttrs = {
             ...attrs,
+            ...(attrs.template ? { template: normalizeTemplate(attrs.template) } : {}),
+            ...(attrs.title ? { title: normalizeTitle(attrs.title) } : {}),
             ...(attrs.items ? { items: normalizeItems(attrs.items).join('|') } : {}),
           };
           return commands.updateAttributes(this.name, nextAttrs);

@@ -27,6 +27,8 @@ import {
   Workflow,
   SplitSquareHorizontal,
   Combine,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -181,6 +183,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   const diagramItemsValue = diagramItemList.join('|');
   const diagramLimitReached = diagramItemList.length >= 8;
   const canInsertDiagram = diagramItemList.length >= 2;
+  const tableSummary = `${Math.max(1, Math.min(12, Number.parseInt(tableRows, 10) || 3))}×${Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3))}`;
 
   useEffect(() => {
     if (!editor) return;
@@ -563,7 +566,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 {tableWithHeader ? t(locale, 'toolbarHeaderRowOn') : t(locale, 'toolbarHeaderRowOff')}
               </Button>
               <Button size="sm" className="w-full" onClick={createTable}>
-                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')}
+                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')} ({tableSummary})
               </Button>
             </div>
 
@@ -647,6 +650,31 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
               placeholder={t(locale, 'toolbarDiagramItems')}
               aria-label={t(locale, 'toolbarDiagramItems')}
             />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="justify-start"
+                onClick={() =>
+                  setDiagramItems(
+                    (value) =>
+                      `${value.trim()}\n${t(locale, 'toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
+                  )
+                }
+                disabled={diagramLimitReached}
+              >
+                <Plus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramAddItem')}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="justify-start"
+                onClick={() => setDiagramItems(diagramItemList.slice(0, -1).join('\n'))}
+                disabled={diagramItemList.length <= 2}
+              >
+                <Minus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramRemoveItem')}
+              </Button>
+            </div>
             <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-2">
                 <span>{t(locale, 'toolbarDiagramHint')}</span>

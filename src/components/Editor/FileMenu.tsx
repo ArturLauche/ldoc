@@ -50,6 +50,13 @@ import {
   type StoredDocument,
 } from '@/lib/documentLibrary';
 
+function formatMessage(template: string, values: Record<string, string | number>): string {
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
+
 interface FileMenuProps {
   editor: Editor | null;
   locale: Locale;
@@ -79,6 +86,7 @@ export const FileMenu = ({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [newName, setNewName] = useState(documentName);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
@@ -130,7 +138,7 @@ export const FileMenu = ({
           setDocumentName(result.fileName);
           onSaveDocument();
           setRefreshKey((value) => value + 1);
-          toast.success(`Opened: ${file.name}`, { id: 'import' });
+          toast.success(formatMessage(t(locale, 'openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
           console.error('Import error:', error);
           toast.error(t(locale, 'importFailed'), { id: 'import' });
@@ -156,7 +164,9 @@ export const FileMenu = ({
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
-      toast.success(`Exported ${libraryDocuments.length} documents`);
+      toast.success(
+        formatMessage(t(locale, 'exportedLibraryToast'), { count: libraryDocuments.length }),
+      );
     } catch (error) {
       console.error('Library export failed:', error);
       toast.error('Failed to export your document library');
@@ -175,7 +185,12 @@ export const FileMenu = ({
         const raw = await file.text();
         const result = importUnifiedLibraryFile(raw);
         setRefreshKey((value) => value + 1);
-        toast.success(`Library import finished: ${result.imported} imported, ${result.skipped} skipped`);
+        toast.success(
+          formatMessage(t(locale, 'importedLibraryToast'), {
+            imported: result.imported,
+            skipped: result.skipped,
+          }),
+        );
       } catch (error) {
         console.error('Library import failed:', error);
         toast.error(t(locale, 'invalidLibraryFile'));
@@ -185,7 +200,7 @@ export const FileMenu = ({
   };
 
   const exportAs = async (format: 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf') => {
-    if (!editor) return;
+    if (!editor || isExporting) return;
 
     const editorHtml = editor.getHTML();
     const blocks = extractBlocksFromHtml(editorHtml);
@@ -194,6 +209,7 @@ export const FileMenu = ({
     let mimeType: string;
     let extension: string;
 
+    setIsExporting(true);
     try {
       switch (format) {
         case 'txt':
@@ -295,6 +311,8 @@ ${editorHtml}
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -312,7 +330,7 @@ ${editorHtml}
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-9 px-3 gap-2 font-medium">
             <FileText className="h-4 w-4" />
-            File
+            {t(locale, 'fileMenuLabel')}
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
@@ -359,29 +377,29 @@ ${editorHtml}
               {t(locale, 'fileMenuExportAs')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
-              <DropdownMenuItem onClick={() => void exportAs('txt')}>
+              <DropdownMenuItem onClick={() => void exportAs('txt')} disabled={isExporting}>
                 <FileType className="h-4 w-4 mr-2" />
-                Plain Text (.txt)
+                {t(locale, 'fileMenuFormatTxt')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('html')}>
+              <DropdownMenuItem onClick={() => void exportAs('html')} disabled={isExporting}>
                 <FileText className="h-4 w-4 mr-2" />
-                HTML Document (.html)
+                {t(locale, 'fileMenuFormatHtml')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('rtf')}>
+              <DropdownMenuItem onClick={() => void exportAs('rtf')} disabled={isExporting}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Rich Text Format (.rtf)
+                {t(locale, 'fileMenuFormatRtf')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('docx')}>
+              <DropdownMenuItem onClick={() => void exportAs('docx')} disabled={isExporting}>
                 <FileBadge2 className="h-4 w-4 mr-2" />
-                Word Document (.docx)
+                {t(locale, 'fileMenuFormatDocx')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('odt')}>
+              <DropdownMenuItem onClick={() => void exportAs('odt')} disabled={isExporting}>
                 <FileArchive className="h-4 w-4 mr-2" />
-                OpenDocument Text (.odt)
+                {t(locale, 'fileMenuFormatOdt')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('pdf')}>
+              <DropdownMenuItem onClick={() => void exportAs('pdf')} disabled={isExporting}>
                 <FileOutput className="h-4 w-4 mr-2" />
-                PDF Document (.pdf)
+                {t(locale, 'fileMenuFormatPdf')}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -409,7 +427,7 @@ ${editorHtml}
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Document name</Label>
+              <Label htmlFor="name">{t(locale, 'renameDocumentNameLabel')}</Label>
               <Input
                 id="name"
                 value={newName}
@@ -463,7 +481,7 @@ ${editorHtml}
                         }
                         onLoadDocument(doc);
                         setLibraryOpen(false);
-                        toast.success(`Opened ${doc.name}`);
+                        toast.success(formatMessage(t(locale, 'openedDocumentToast'), { name: doc.name }));
                       }}
                     >
                       <div className="font-medium truncate">{doc.name}</div>
@@ -1361,8 +1379,14 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   const addTableBlock = (table: HTMLTableElement) => {
     const rows: HtmlTableCell[][] = [];
     const pendingRowSpans = new Map<number, HtmlTableCell>();
+    const sectionRows = [
+      ...Array.from(table.tHead?.rows ?? []),
+      ...Array.from(table.tBodies).flatMap((body) => Array.from(body.rows)),
+      ...Array.from(table.tFoot?.rows ?? []),
+    ];
+    const directRows = sectionRows.length ? sectionRows : Array.from(table.rows);
 
-    Array.from(table.querySelectorAll('tr')).forEach((row) => {
+    directRows.forEach((row) => {
       const normalizedRow: HtmlTableCell[] = [];
       let columnIndex = 0;
 
