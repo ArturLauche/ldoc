@@ -17,6 +17,8 @@ interface UnifiedLibraryFile {
   documents: StoredDocument[];
 }
 
+const MAX_DOCUMENT_NAME_LENGTH = 180;
+
 function isStoredDocument(value: unknown): value is StoredDocument {
   if (!value || typeof value !== 'object') return false;
   const doc = value as Record<string, unknown>;
@@ -27,6 +29,27 @@ function isStoredDocument(value: unknown): value is StoredDocument {
     typeof doc.createdAt === 'string' &&
     typeof doc.updatedAt === 'string'
   );
+}
+
+function asValidIsoDate(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) return fallback;
+  return new Date(time).toISOString();
+}
+
+function normalizeDocument(input: StoredDocument): StoredDocument {
+  const now = new Date().toISOString();
+  const normalizedName = input.name.trim().slice(0, MAX_DOCUMENT_NAME_LENGTH) || 'Untitled Document';
+  const createdAt = asValidIsoDate(input.createdAt, now);
+  const updatedAt = asValidIsoDate(input.updatedAt, createdAt);
+  return {
+    id: input.id.trim() || createDocumentId(),
+    name: normalizedName,
+    content: input.content,
+    createdAt,
+    updatedAt,
+  };
 }
 
 export function createDocumentId(): string {
@@ -41,9 +64,15 @@ export function getLibraryDocuments(): StoredDocument[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isStoredDocument).sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt),
-    );
+    const dedupedById = new Map<string, StoredDocument>();
+    parsed.filter(isStoredDocument).forEach((doc) => {
+      const normalized = normalizeDocument(doc);
+      const previous = dedupedById.get(normalized.id);
+      if (!previous || previous.updatedAt < normalized.updatedAt) {
+        dedupedById.set(normalized.id, normalized);
+      }
+    });
+    return Array.from(dedupedById.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   } catch {
     return [];
   }
@@ -59,17 +88,17 @@ export function upsertLibraryDocument(data: {
   content: string;
   updatedAt?: string;
 }): StoredDocument {
-  const now = data.updatedAt ?? new Date().toISOString();
+  const now = asValidIsoDate(data.updatedAt, new Date().toISOString());
   const documents = getLibraryDocuments();
   const existing = data.id ? documents.find((doc) => doc.id === data.id) : undefined;
 
-  const document: StoredDocument = {
+  const document = normalizeDocument({
     id: existing?.id ?? data.id ?? createDocumentId(),
     name: data.name,
     content: data.content,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-  };
+  });
 
   const next = [document, ...documents.filter((doc) => doc.id !== document.id)].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
@@ -149,9 +178,10 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
       return;
     }
 
-    const previous = byId.get(doc.id);
-    if (!previous || previous.updatedAt < doc.updatedAt) {
-      byId.set(doc.id, doc);
+    const normalized = normalizeDocument(doc);
+    const previous = byId.get(normalized.id);
+    if (!previous || previous.updatedAt < normalized.updatedAt) {
+      byId.set(normalized.id, normalized);
       imported += 1;
     } else {
       skipped += 1;

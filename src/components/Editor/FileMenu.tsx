@@ -63,6 +63,8 @@ interface FileMenuProps {
   hasUnsavedChanges: boolean;
 }
 
+type ExportFormat = 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf';
+
 export const FileMenu = ({
   editor,
   locale,
@@ -184,11 +186,12 @@ export const FileMenu = ({
     input.click();
   };
 
-  const exportAs = async (format: 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf') => {
+  const exportAs = async (format: ExportFormat) => {
     if (!editor) return;
 
     const editorHtml = editor.getHTML();
     const blocks = extractBlocksFromHtml(editorHtml);
+    const safeDocumentName = sanitizeDocumentName(documentName);
 
     let content: string;
     let mimeType: string;
@@ -207,7 +210,7 @@ export const FileMenu = ({
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtmlText(documentName)}</title>
+  <title>${escapeHtmlText(safeDocumentName)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #111827; }
     h1 { font-size: 2em; margin: 0.6em 0 0.4em; }
@@ -244,7 +247,7 @@ ${editorHtml}
           break;
         case 'docx': {
           const blob = await buildDocxBlob(blocks);
-          const fileName = buildExportFileName(documentName, 'docx');
+          const fileName = buildExportFileName(safeDocumentName, 'docx');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
@@ -271,14 +274,14 @@ ${editorHtml}
             mimeType: 'application/vnd.oasis.opendocument.text',
           });
 
-          const fileName = buildExportFileName(documentName, 'odt');
+          const fileName = buildExportFileName(safeDocumentName, 'odt');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'pdf': {
           const blob = await buildPdfBlob(blocks);
-          const fileName = buildExportFileName(documentName, 'pdf');
+          const fileName = buildExportFileName(safeDocumentName, 'pdf');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
@@ -287,7 +290,7 @@ ${editorHtml}
           return;
       }
 
-      const fileName = buildExportFileName(documentName, extension);
+      const fileName = buildExportFileName(safeDocumentName, extension);
       const blob = new Blob([content], { type: mimeType });
       downloadBlob(blob, fileName);
 
@@ -1176,6 +1179,9 @@ type PreparedPdfImage = {
 type PdfChunk = string | Uint8Array;
 
 const EMPTY_STYLE: InlineStyle = {};
+const MAX_TABLE_EXPORT_ROWS = 120;
+const MAX_TABLE_EXPORT_COLUMNS = 40;
+const MAX_DIAGRAM_EXPORT_ITEMS = 16;
 
 const FONT_SIZE_BASE = 24;
 
@@ -1361,8 +1367,9 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   const addTableBlock = (table: HTMLTableElement) => {
     const rows: HtmlTableCell[][] = [];
     const pendingRowSpans = new Map<number, HtmlTableCell>();
+    const tableRows = Array.from(table.rows).slice(0, MAX_TABLE_EXPORT_ROWS);
 
-    Array.from(table.querySelectorAll('tr')).forEach((row) => {
+    tableRows.forEach((row) => {
       const normalizedRow: HtmlTableCell[] = [];
       let columnIndex = 0;
 
@@ -1391,8 +1398,8 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
           placePendingCells();
           const segments: InlineSegment[] = [];
           collectInlineSegments(cell, getInlineStyleFromElement(cell), segments);
-          const colSpan = Math.max(1, cell.colSpan || 1);
-          const rowSpan = Math.max(1, cell.rowSpan || 1);
+          const colSpan = Math.max(1, Math.min(MAX_TABLE_EXPORT_COLUMNS, cell.colSpan || 1));
+          const rowSpan = Math.max(1, Math.min(MAX_TABLE_EXPORT_ROWS, cell.rowSpan || 1));
           const normalizedCell: HtmlTableCell = {
             segments: normalizeSegments(segments),
             header: cell.tagName.toLowerCase() === 'th',
@@ -1401,7 +1408,7 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
           };
           normalizedRow.push(normalizedCell);
 
-          for (let span = 1; span < colSpan; span += 1) {
+          for (let span = 1; span < colSpan && normalizedRow.length < MAX_TABLE_EXPORT_COLUMNS; span += 1) {
             normalizedRow.push({
               segments: [],
               header: normalizedCell.header,
@@ -1421,9 +1428,15 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
             });
           }
           columnIndex += colSpan;
+          if (columnIndex >= MAX_TABLE_EXPORT_COLUMNS) {
+            return;
+          }
         });
 
       placePendingCells();
+      if (normalizedRow.length > MAX_TABLE_EXPORT_COLUMNS) {
+        normalizedRow.splice(MAX_TABLE_EXPORT_COLUMNS);
+      }
       if (normalizedRow.some((cell) => !cell.placeholder)) {
         rows.push(normalizedRow);
       }
@@ -1434,13 +1447,19 @@ function extractBlocksFromHtml(html: string): HtmlBlock[] {
   };
 
   const addDiagramBlock = (element: HTMLElement) => {
-    const title = element.getAttribute('data-title') ?? 'Diagram';
-    const template = element.getAttribute('data-template') ?? 'process';
-    const rawItems = element.getAttribute('data-items') ?? '';
+    const title = (element.getAttribute('data-title') ?? '').trim() || 'Diagram';
+    const template = (element.getAttribute('data-template') ?? 'process').trim() || 'process';
+    const rawItemsAttr = element.getAttribute('data-items') ?? '';
+    const fallbackItems = Array.from(element.querySelectorAll('.smart-diagram__node-label'))
+      .map((node) => node.textContent?.trim() ?? '')
+      .filter(Boolean)
+      .join('|');
+    const rawItems = rawItemsAttr || fallbackItems;
     const itemSegments = rawItems
       .split('|')
       .map((item) => item.trim())
       .filter(Boolean)
+      .slice(0, MAX_DIAGRAM_EXPORT_ITEMS)
       .map((item) => ({ text: item, style: {} as InlineStyle }));
 
     blocks.push({
@@ -2426,6 +2445,11 @@ function sanitizeBaseFileName(value: string): string {
 
   const fallback = cleaned || 'Untitled Document';
   return fallback.slice(0, 180);
+}
+
+function sanitizeDocumentName(value: string): string {
+  const sanitized = sanitizeBaseFileName(value).replace(/\.[^/.]+$/, '');
+  return sanitized || 'Untitled Document';
 }
 
 function buildExportFileName(value: string, extension: string): string {

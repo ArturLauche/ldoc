@@ -91,11 +91,14 @@ const lineSpacings = [
 
 
 const normalizeDiagramItems = (value: string) =>
-  value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 8);
+  Array.from(
+    new Set(
+      value
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 8);
 
 const ToolbarButton = ({
   onClick,
@@ -169,6 +172,12 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
     const cols = Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3));
     editor.chain().focus().insertTable({ rows, cols, withHeaderRow: tableWithHeader }).run();
   };
+
+  const parsedTableRows = Number.parseInt(tableRows, 10);
+  const parsedTableCols = Number.parseInt(tableCols, 10);
+  const normalizedTableRows = Number.isFinite(parsedTableRows) ? Math.max(1, Math.min(12, parsedTableRows)) : 3;
+  const normalizedTableCols = Number.isFinite(parsedTableCols) ? Math.max(1, Math.min(8, parsedTableCols)) : 3;
+  const tableSizeWasAdjusted = parsedTableRows !== normalizedTableRows || parsedTableCols !== normalizedTableCols;
 
   const tablePresets = useMemo(() => ([
     { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
@@ -562,6 +571,10 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
               >
                 {tableWithHeader ? t(locale, 'toolbarHeaderRowOn') : t(locale, 'toolbarHeaderRowOff')}
               </Button>
+              <p className="text-[11px] text-muted-foreground">
+                Table size: {normalizedTableRows} × {normalizedTableCols}
+                {tableSizeWasAdjusted ? ' (adjusted to allowed range)' : ''}
+              </p>
               <Button size="sm" className="w-full" onClick={createTable}>
                 <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')}
               </Button>
@@ -647,6 +660,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
               placeholder={t(locale, 'toolbarDiagramItems')}
               aria-label={t(locale, 'toolbarDiagramItems')}
             />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="w-full justify-start text-xs"
+              onClick={() => setDiagramItems(diagramItemList.join('\n'))}
+            >
+              Normalize list (trim + remove duplicates)
+            </Button>
             <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-2">
                 <span>{t(locale, 'toolbarDiagramHint')}</span>
