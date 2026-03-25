@@ -16,6 +16,59 @@ export interface ImportResult {
   format: SupportedFormat;
 }
 
+const SUPPORTED_FORMATS: SupportedFormat[] = ['txt', 'html', 'htm', 'rtf', 'docx', 'odt', 'ott', 'fodt'];
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function textToParagraphHtml(text: string): string {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const normalized = lines.length ? lines : [''];
+  return normalized.map((line) => `<p>${escapeHtml(line)}</p>`).join('');
+}
+
+function sanitizeImportedHtml(value: string): string {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(value, 'text/html');
+
+    doc.querySelectorAll('script, style, iframe, object, embed').forEach((el) => el.remove());
+    doc.querySelectorAll('*').forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (attr.name.toLowerCase().startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+
+    return doc.body.innerHTML || '<p></p>';
+  } catch (error) {
+    console.error('Failed to sanitize imported HTML:', error);
+    return value;
+  }
+}
+
+function detectFormat(file: File): SupportedFormat {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (extension && SUPPORTED_FORMATS.includes(extension as SupportedFormat)) {
+    return extension as SupportedFormat;
+  }
+
+  const mime = file.type.toLowerCase();
+  if (mime.includes('wordprocessingml.document')) return 'docx';
+  if (mime.includes('opendocument.text')) return 'odt';
+  if (mime.includes('rtf')) return 'rtf';
+  if (mime.includes('html')) return 'html';
+
+  return 'txt';
+}
+
 // Import DOCX using mammoth
 async function importDocx(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
@@ -67,7 +120,7 @@ async function importOdt(file: File): Promise<string> {
   } catch (error) {
     console.error('ODT import error:', error);
     const text = await file.text();
-    return `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
+    return textToParagraphHtml(text);
   }
 }
 
@@ -89,7 +142,7 @@ async function importFodt(file: File): Promise<string> {
   } catch (error) {
     console.error('FODT import error:', error);
     const text = await file.text();
-    return `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
+    return textToParagraphHtml(text);
   }
 }
 
@@ -132,51 +185,44 @@ function processOdtNode(node: Element): string {
 
 // Simple RTF to HTML converter
 function importRtf(text: string): string {
-  let content = text
+  const content = text
     .replace(/\\par[d]?/g, '\n')
     .replace(/\{\*?\\[^{}]+\}|[{}]|\\[A-Za-z]+\n?(?:-?\d+)?[ ]?/g, '')
     .replace(/\\'[0-9a-fA-F]{2}/g, '')
     .trim();
   
-  return `<p>${content.split('\n').filter(p => p.trim()).join('</p><p>')}</p>`;
+  return textToParagraphHtml(content);
 }
 
 // Main import function
 export async function importDocument(file: File): Promise<ImportResult> {
-  const fileName = file.name.replace(/\.[^/.]+$/, '');
-  const extension = file.name.split('.').pop()?.toLowerCase() as SupportedFormat;
+  const fileName = file.name.replace(/\.[^/.]+$/, '').trim() || 'Untitled';
+  const format = detectFormat(file);
   
-  let content: string;
-  
-  switch (extension) {
+  const content: string = await (async () => {
+    switch (format) {
     case 'docx':
-      content = await importDocx(file);
-      break;
+      return importDocx(file);
     case 'odt':
     case 'ott':
-      content = await importOdt(file);
-      break;
+      return importOdt(file);
     case 'fodt':
-      content = await importFodt(file);
-      break;
+      return importFodt(file);
     case 'html':
     case 'htm':
-      content = await file.text();
-      break;
+      return sanitizeImportedHtml(await file.text());
     case 'rtf':
-      content = importRtf(await file.text());
-      break;
+      return importRtf(await file.text());
     case 'txt':
     default:
-      const text = await file.text();
-      content = `<p>${text.replace(/\n/g, '</p><p>')}</p>`;
-      break;
-  }
+      return textToParagraphHtml(await file.text());
+    }
+  })();
   
   return {
     content,
     fileName,
-    format: extension,
+    format,
   };
 }
 
