@@ -149,6 +149,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   const [diagramTitle, setDiagramTitle] = useState(() => t(locale, 'toolbarDefaultDiagramTitle'));
   const [diagramTemplate, setDiagramTemplate] = useState<SmartDiagramTemplate>('process');
   const [diagramItems, setDiagramItems] = useState(() => t(locale, 'toolbarDefaultDiagramItems'));
+  const [activeFontSize, setActiveFontSize] = useState('16px');
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -205,6 +206,24 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       editor.off('transaction', syncDiagramSelection);
     };
   }, [editor, locale]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncFontSize = () => {
+      const fontSize = editor.getAttributes('textStyle').fontSize;
+      setActiveFontSize(typeof fontSize === 'string' && fontSize.length > 0 ? fontSize : '16px');
+    };
+
+    syncFontSize();
+    editor.on('selectionUpdate', syncFontSize);
+    editor.on('transaction', syncFontSize);
+
+    return () => {
+      editor.off('selectionUpdate', syncFontSize);
+      editor.off('transaction', syncFontSize);
+    };
+  }, [editor]);
 
   const insertDiagram = () => {
     if (!editor || !canInsertDiagram) return;
@@ -272,12 +291,13 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
 
       {/* Font Size */}
       <Select
+        value={activeFontSize}
         onValueChange={(value) => {
           editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
         }}
       >
         <SelectTrigger className="w-16 h-8 text-xs font-medium bg-background/50 border-border/50" aria-label="Font size">
-          <SelectValue placeholder="16" />
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {fontSizes.map((size) => (

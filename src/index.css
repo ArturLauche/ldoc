@@ -157,8 +157,41 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+html {
+    font-size: 16px;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
 body {
     @apply bg-background text-foreground;
+    transition: background-color 260ms ease, color 260ms ease;
+  }
+
+  .app-shell,
+  .glass-panel,
+  .floating-toolbar,
+  .glass-bar,
+  .glass-card,
+  .editor-container {
+    transition:
+      background-color 260ms ease,
+      border-color 260ms ease,
+      color 260ms ease,
+      box-shadow 260ms ease,
+      background-image 260ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body,
+    .app-shell,
+    .glass-panel,
+    .floating-toolbar,
+    .glass-bar,
+    .glass-card,
+    .editor-container {
+      transition: none;
+    }
   }
 }
 
