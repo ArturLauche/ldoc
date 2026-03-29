@@ -546,7 +546,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             <TableIcon className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-4 bg-popover border border-border shadow-xl z-50">
+        <PopoverContent
+          className="w-80 max-w-[calc(100vw-2rem)] p-4 bg-popover border border-border shadow-xl z-50 max-h-[85vh] overflow-y-auto"
+          align="start"
+          side="bottom"
+          sideOffset={8}
+          alignOffset={-8}
+          collisionPadding={16}
+        >
           <div className="space-y-4">
             {/* Table Configuration Section */}
             <div className="space-y-3">
@@ -801,7 +808,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             <Workflow className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-96 p-4 bg-popover border border-border shadow-xl z-50">
+        <PopoverContent
+          className="w-96 max-w-[calc(100vw-2rem)] p-4 bg-popover border border-border shadow-xl z-50 max-h-[85vh] overflow-y-auto"
+          align="start"
+          side="bottom"
+          sideOffset={8}
+          alignOffset={-8}
+          collisionPadding={16}
+        >
           <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center gap-2">
@@ -821,27 +835,31 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
               />
             </div>
 
-            {/* Template Selection with Visual Cards */}
+            {/* Template Selection with Enhanced Visual Cards */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarDiagramTemplate')}</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {/* Process Template */}
                 <button
                   type="button"
                   onClick={() => setDiagramTemplate('process')}
                   className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    "flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all duration-200",
+                    "hover:border-primary/50 hover:bg-primary/5 hover:shadow-md hover:scale-[1.02]",
                     diagramTemplate === 'process'
-                      ? "border-primary bg-primary/10"
+                      ? "border-primary bg-primary/10 shadow-lg shadow-primary/20"
                       : "border-border bg-background"
                   )}
                 >
-                  <div className="flex items-center gap-1">
-                    <div className="w-6 h-6 rounded-md bg-primary/80 flex items-center justify-center text-[10px] font-bold text-white">1</div>
-                    <div className="text-muted-foreground">→</div>
-                    <div className="w-6 h-6 rounded-md bg-primary/80 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/90 to-primary/70 flex items-center justify-center text-[10px] font-bold text-white shadow-md">1</div>
+                    <div className="text-lg text-muted-foreground font-semibold">→</div>
+                    <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/90 to-primary/70 flex items-center justify-center text-[10px] font-bold text-white shadow-md">2</div>
+                    <div className="text-lg text-muted-foreground font-semibold">→</div>
+                    <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/90 to-primary/70 flex items-center justify-center text-[10px] font-bold text-white shadow-md">3</div>
                   </div>
-                  <span className="text-xs font-medium">{t(locale, 'toolbarProcess')}</span>
+                  <span className="text-xs font-semibold">{t(locale, 'toolbarProcess')}</span>
+                  <span className="text-[10px] text-muted-foreground">Linear flow →</span>
                 </button>
 
                 {/* Cycle Template */}
@@ -849,18 +867,21 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   type="button"
                   onClick={() => setDiagramTemplate('cycle')}
                   className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    "flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all duration-200",
+                    "hover:border-purple-500/50 hover:bg-purple-500/5 hover:shadow-md hover:scale-[1.02]",
                     diagramTemplate === 'cycle'
-                      ? "border-primary bg-primary/10"
+                      ? "border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20"
                       : "border-border bg-background"
                   )}
                 >
-                  <div className="flex items-center gap-1">
-                    <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-[10px] font-bold text-white">1</div>
-                    <div className="text-muted-foreground">↺</div>
-                    <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  <div className="relative flex items-center justify-center w-full h-12">
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-[9px] font-bold text-white shadow-md">1</div>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-[9px] font-bold text-white shadow-md">2</div>
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-[9px] font-bold text-white shadow-md">3</div>
+                    <div className="text-2xl text-purple-500/70 font-bold">↺</div>
                   </div>
-                  <span className="text-xs font-medium">{t(locale, 'toolbarCycle')}</span>
+                  <span className="text-xs font-semibold">{t(locale, 'toolbarCycle')}</span>
+                  <span className="text-[10px] text-muted-foreground">Circular flow ↺</span>
                 </button>
 
                 {/* Hierarchy Template */}
@@ -868,18 +889,22 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   type="button"
                   onClick={() => setDiagramTemplate('hierarchy')}
                   className={cn(
-                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    "flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all duration-200",
+                    "hover:border-blue-500/50 hover:bg-blue-500/5 hover:shadow-md hover:scale-[1.02]",
                     diagramTemplate === 'hierarchy'
-                      ? "border-primary bg-primary/10"
+                      ? "border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/20"
                       : "border-border bg-background"
                   )}
                 >
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div className="w-6 h-6 rounded-md bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">1</div>
-                    <div className="text-muted-foreground text-xs">↓</div>
-                    <div className="w-6 h-6 rounded-md bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-8 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shadow-md">1</div>
+                    <div className="text-lg text-blue-500/70 font-bold">↓</div>
+                    <div className="w-8 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shadow-md">2</div>
+                    <div className="text-lg text-blue-500/70 font-bold">↓</div>
+                    <div className="w-8 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shadow-md">3</div>
                   </div>
-                  <span className="text-xs font-medium">{t(locale, 'toolbarHierarchy')}</span>
+                  <span className="text-xs font-semibold">{t(locale, 'toolbarHierarchy')}</span>
+                  <span className="text-[10px] text-muted-foreground">Vertical flow ↓</span>
                 </button>
               </div>
             </div>

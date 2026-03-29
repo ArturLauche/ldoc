@@ -509,11 +509,24 @@ body {
   transition: box-shadow 260ms ease, transform 260ms ease;
 }
 
+@media (max-width: 768px) {
+  .editor-content .ProseMirror table {
+    margin: 1rem 0;
+    font-size: 0.875rem;
+  }
+}
+
 .editor-content .ProseMirror table:hover {
   box-shadow:
     0 22px 50px -32px hsl(var(--foreground) / 0.4),
     0 4px 12px -3px hsl(var(--foreground) / 0.12);
   transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .editor-content .ProseMirror table:hover {
+    transform: none;
+  }
 }
 
 .editor-content .ProseMirror th,
@@ -528,6 +541,13 @@ body {
     background-color 200ms ease,
     box-shadow 200ms ease,
     transform 180ms ease;
+}
+
+@media (max-width: 768px) {
+  .editor-content .ProseMirror th,
+  .editor-content .ProseMirror td {
+    padding: 0.6rem 0.75rem;
+  }
 }
 
 .editor-content .ProseMirror th:hover,
@@ -593,6 +613,13 @@ body {
     box-shadow 260ms ease,
     transform 260ms ease,
     border-color 260ms ease;
+}
+
+@media (max-width: 640px) {
+  .editor-content .ProseMirror .smart-diagram {
+    padding: 1rem;
+    margin: 1.25rem 0;
+  }
 }
 
 .editor-content .ProseMirror .smart-diagram:hover {
@@ -688,6 +715,15 @@ body {
     border-color 260ms ease,
     background 260ms ease;
   animation: diagramNodeFadeIn 0.5s ease-out backwards;
+}
+
+@media (max-width: 640px) {
+  .editor-content .ProseMirror .smart-diagram__node {
+    min-width: 100%;
+    flex: 1 1 100%;
+    font-size: 0.875rem;
+    padding: 0.8rem 0.9rem;
+  }
 }
 
 @keyframes diagramNodeFadeIn {
