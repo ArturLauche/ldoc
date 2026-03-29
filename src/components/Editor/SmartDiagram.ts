@@ -84,6 +84,8 @@ export const SmartDiagram = Node.create({
           'data-title': title,
           'data-items': items.join('|'),
           'data-item-count': String(items.length),
+          role: 'group',
+          'aria-label': `${title} (${template} diagram with ${items.length} steps)`,
           contenteditable: 'false',
           class: `smart-diagram smart-diagram--${template} smart-diagram--accent-${TEMPLATE_ACCENTS[template]}`,
         },
@@ -101,9 +103,14 @@ export const SmartDiagram = Node.create({
         ...items.flatMap((item, index) => {
           const nodes: DOMOutputSpec[] = [[
             'div',
-            { class: 'smart-diagram__node', 'data-step': String(index + 1) },
+            {
+              class: 'smart-diagram__node',
+              'data-step': String(index + 1),
+              role: 'listitem',
+              'aria-label': `${template} step ${index + 1}: ${item}`,
+            },
             ['span', { class: 'smart-diagram__node-index' }, String(index + 1)],
-            ['span', { class: 'smart-diagram__node-label' }, item],
+            ['span', { class: 'smart-diagram__node-label', title: item }, item],
           ]];
           if (index < items.length - 1) {
             nodes.push(['span', { class: 'smart-diagram__connector', 'aria-hidden': 'true' }]);

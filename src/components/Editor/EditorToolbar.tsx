@@ -560,6 +560,9 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   placeholder={t(locale, 'toolbarColumns')}
                 />
               </div>
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+                <span className="font-medium">{tableSummary}</span>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {tablePresets.map((preset) => (
                   <Button
