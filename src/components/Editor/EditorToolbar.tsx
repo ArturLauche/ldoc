@@ -29,6 +29,16 @@ import {
   Combine,
   Plus,
   Minus,
+  Grid3x3,
+  LayoutGrid,
+  CalendarDays,
+  Box,
+  ArrowDownFromLine,
+  ArrowUpFromLine,
+  ArrowLeftFromLine,
+  ArrowRightFromLine,
+  Trash2,
+  LayoutTemplate,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -174,10 +184,10 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   };
 
   const tablePresets = useMemo(() => ([
-    { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
-    { label: t(locale, 'toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
-    { label: t(locale, 'toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
-    { label: t(locale, 'toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
+    { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true, icon: Grid3x3 },
+    { label: t(locale, 'toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true, icon: LayoutGrid },
+    { label: t(locale, 'toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true, icon: CalendarDays },
+    { label: t(locale, 'toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false, icon: Box },
   ]), [locale]);
 
   const diagramItemList = useMemo(() => normalizeDiagramItems(diagramItems), [diagramItems]);
@@ -536,97 +546,247 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             <TableIcon className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-72 p-3 bg-popover border border-border shadow-lg z-50">
-          <div className="space-y-3">
-            <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarCreateTable')}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={tableRows}
-                  onChange={(e) => setTableRows(e.target.value)}
-                  aria-label={t(locale, 'toolbarRows')}
-                  placeholder={t(locale, 'toolbarRows')}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={tableCols}
-                  onChange={(e) => setTableCols(e.target.value)}
-                  aria-label={t(locale, 'toolbarColumns')}
-                  placeholder={t(locale, 'toolbarColumns')}
-                />
+        <PopoverContent className="w-80 p-4 bg-popover border border-border shadow-xl z-50">
+          <div className="space-y-4">
+            {/* Table Configuration Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <TableIcon className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold text-foreground">{t(locale, 'toolbarCreateTable')}</p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {tablePresets.map((preset) => (
-                  <Button
-                    key={preset.label}
-                    size="sm"
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      setTableRows(preset.rows);
-                      setTableCols(preset.cols);
-                      setTableWithHeader(preset.withHeader);
-                    }}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
+
+              {/* Visual Grid Preview */}
+              <div className="rounded-lg bg-muted/30 border border-border/60 p-3">
+                <div className="grid gap-1" style={{
+                  gridTemplateColumns: `repeat(${Math.min(Number(tableCols) || 3, 8)}, minmax(0, 1fr))`
+                }}>
+                  {Array.from({ length: Math.min(Number(tableRows) || 3, 12) }).map((_, rowIndex) =>
+                    Array.from({ length: Math.min(Number(tableCols) || 3, 8) }).map((_, colIndex) => (
+                      <div
+                        key={`${rowIndex}-${colIndex}`}
+                        className={cn(
+                          "aspect-square rounded-sm transition-all duration-200",
+                          tableWithHeader && rowIndex === 0
+                            ? "bg-primary/20 border border-primary/30"
+                            : "bg-background/80 border border-border/60"
+                        )}
+                      />
+                    ))
+                  )}
+                </div>
+                <div className="mt-2 text-center text-xs text-muted-foreground font-medium">
+                  {tableRows} × {tableCols} {tableWithHeader ? `(${t(locale, 'toolbarHeaderRowOn')})` : ''}
+                </div>
               </div>
+
+              {/* Row and Column Inputs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">{t(locale, 'toolbarRows')}</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={tableRows}
+                    onChange={(e) => setTableRows(e.target.value)}
+                    aria-label={t(locale, 'toolbarRows')}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">{t(locale, 'toolbarColumns')}</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={tableCols}
+                    onChange={(e) => setTableCols(e.target.value)}
+                    aria-label={t(locale, 'toolbarColumns')}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Header Toggle */}
               <Button
                 size="sm"
                 variant="outline"
-                className="w-full"
+                className="w-full justify-center"
                 onClick={() => setTableWithHeader((value) => !value)}
               >
+                <LayoutTemplate className="h-4 w-4 mr-2" />
                 {tableWithHeader ? t(locale, 'toolbarHeaderRowOn') : t(locale, 'toolbarHeaderRowOff')}
               </Button>
+
+              {/* Presets */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quick Templates</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {tablePresets.map((preset) => {
+                    const PresetIcon = preset.icon;
+                    return (
+                      <Button
+                        key={preset.label}
+                        size="sm"
+                        variant="secondary"
+                        className="justify-start h-auto py-2 flex-col items-start gap-1 hover:bg-primary/10 hover:border-primary/20 transition-all"
+                        onClick={() => {
+                          setTableRows(preset.rows);
+                          setTableCols(preset.cols);
+                          setTableWithHeader(preset.withHeader);
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5 w-full">
+                          <PresetIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="text-xs font-medium">{preset.label}</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{preset.rows}×{preset.cols}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Insert Button */}
               <Button size="sm" className="w-full" onClick={createTable}>
-                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')} ({tableSummary})
+                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')}
               </Button>
             </div>
 
             <Separator />
 
-            <div className="space-y-1">
+            {/* Table Tools Section */}
+            <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarTableTools')}</p>
-              <div className="grid grid-cols-2 gap-1">
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowBefore().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddRowBefore')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowAfter().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddRowAfter')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnBefore().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddColumnBefore')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnAfter().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddColumnAfter')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().mergeCells().run()} disabled={!isInTable}>
-                  <Combine className="h-4 w-4 mr-1" /> {t(locale, 'toolbarMergeCells')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().splitCell().run()} disabled={!isInTable}>
-                  <SplitSquareHorizontal className="h-4 w-4 mr-1" /> {t(locale, 'toolbarSplitCell')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderRow().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarToggleHeaderRow')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarToggleHeaderColumn')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteRow().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarDeleteRow')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteColumn().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarDeleteColumn')}
-                </Button>
+              <div className="space-y-1">
+                {/* Row Operations */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().addRowBefore().run()}
+                    disabled={!isInTable}
+                  >
+                    <ArrowUpFromLine className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarAddRowBefore')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().addRowAfter().run()}
+                    disabled={!isInTable}
+                  >
+                    <ArrowDownFromLine className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarAddRowAfter')}
+                  </Button>
+                </div>
+
+                {/* Column Operations */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().addColumnBefore().run()}
+                    disabled={!isInTable}
+                  >
+                    <ArrowLeftFromLine className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarAddColumnBefore')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().addColumnAfter().run()}
+                    disabled={!isInTable}
+                  >
+                    <ArrowRightFromLine className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarAddColumnAfter')}
+                  </Button>
+                </div>
+
+                {/* Cell Operations */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().mergeCells().run()}
+                    disabled={!isInTable}
+                  >
+                    <Combine className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarMergeCells')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().splitCell().run()}
+                    disabled={!isInTable}
+                  >
+                    <SplitSquareHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarSplitCell')}
+                  </Button>
+                </div>
+
+                {/* Header Toggle Operations */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+                    disabled={!isInTable}
+                  >
+                    {t(locale, 'toolbarToggleHeaderRow')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().toggleHeaderColumn().run()}
+                    disabled={!isInTable}
+                  >
+                    {t(locale, 'toolbarToggleHeaderColumn')}
+                  </Button>
+                </div>
+
+                {/* Delete Operations */}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().deleteRow().run()}
+                    disabled={!isInTable}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarDeleteRow')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start text-xs h-8"
+                    onClick={() => editor.chain().focus().deleteColumn().run()}
+                    disabled={!isInTable}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    {t(locale, 'toolbarDeleteColumn')}
+                  </Button>
+                </div>
               </div>
-              <Button size="sm" variant="destructive" className="w-full mt-2" onClick={() => editor.chain().focus().deleteTable().run()} disabled={!isInTable}>
+
+              {/* Delete Table Button */}
+              <Button
+                size="sm"
+                variant="destructive"
+                className="w-full"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                disabled={!isInTable}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
                 {t(locale, 'toolbarDeleteTable')}
               </Button>
             </div>
@@ -641,70 +801,168 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             <Workflow className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarDiagram')}</p>
-            <Input
-              value={diagramTitle}
-              onChange={(e) => setDiagramTitle(e.target.value)}
-              placeholder={t(locale, 'toolbarDiagramTitle')}
-              aria-label={t(locale, 'toolbarDiagramTitle')}
-            />
-            <Select
-              value={diagramTemplate}
-              onValueChange={(value) => setDiagramTemplate(value as 'process' | 'cycle' | 'hierarchy')}
-            >
-              <SelectTrigger aria-label={t(locale, 'toolbarDiagramTemplate')}>
-                <SelectValue placeholder={t(locale, 'toolbarDiagramTemplate')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="process">{t(locale, 'toolbarProcess')}</SelectItem>
-                <SelectItem value="cycle">{t(locale, 'toolbarCycle')}</SelectItem>
-                <SelectItem value="hierarchy">{t(locale, 'toolbarHierarchy')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Textarea
-              rows={5}
-              value={diagramItems}
-              onChange={(e) => setDiagramItems(e.target.value)}
-              placeholder={t(locale, 'toolbarDiagramItems')}
-              aria-label={t(locale, 'toolbarDiagramItems')}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="justify-start"
-                onClick={() =>
-                  setDiagramItems(
-                    (value) =>
-                      `${value.trim()}\n${t(locale, 'toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
-                  )
-                }
-                disabled={diagramLimitReached}
-              >
-                <Plus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramAddItem')}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="justify-start"
-                onClick={() => setDiagramItems(diagramItemList.slice(0, -1).join('\n'))}
-                disabled={diagramItemList.length <= 2}
-              >
-                <Minus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramRemoveItem')}
-              </Button>
+        <PopoverContent className="w-96 p-4 bg-popover border border-border shadow-xl z-50">
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <Workflow className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold text-foreground">{t(locale, 'toolbarDiagram')}</p>
             </div>
-            <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between gap-2">
-                <span>{t(locale, 'toolbarDiagramHint')}</span>
-                <span>{diagramItemList.length}/8</span>
+
+            {/* Title Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">{t(locale, 'toolbarDiagramTitle')}</label>
+              <Input
+                value={diagramTitle}
+                onChange={(e) => setDiagramTitle(e.target.value)}
+                placeholder={t(locale, 'toolbarDiagramTitle')}
+                aria-label={t(locale, 'toolbarDiagramTitle')}
+                className="h-9"
+              />
+            </div>
+
+            {/* Template Selection with Visual Cards */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarDiagramTemplate')}</label>
+              <div className="grid grid-cols-3 gap-2">
+                {/* Process Template */}
+                <button
+                  type="button"
+                  onClick={() => setDiagramTemplate('process')}
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    diagramTemplate === 'process'
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  )}
+                >
+                  <div className="flex items-center gap-1">
+                    <div className="w-6 h-6 rounded-md bg-primary/80 flex items-center justify-center text-[10px] font-bold text-white">1</div>
+                    <div className="text-muted-foreground">→</div>
+                    <div className="w-6 h-6 rounded-md bg-primary/80 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  </div>
+                  <span className="text-xs font-medium">{t(locale, 'toolbarProcess')}</span>
+                </button>
+
+                {/* Cycle Template */}
+                <button
+                  type="button"
+                  onClick={() => setDiagramTemplate('cycle')}
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    diagramTemplate === 'cycle'
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  )}
+                >
+                  <div className="flex items-center gap-1">
+                    <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-[10px] font-bold text-white">1</div>
+                    <div className="text-muted-foreground">↺</div>
+                    <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  </div>
+                  <span className="text-xs font-medium">{t(locale, 'toolbarCycle')}</span>
+                </button>
+
+                {/* Hierarchy Template */}
+                <button
+                  type="button"
+                  onClick={() => setDiagramTemplate('hierarchy')}
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
+                    diagramTemplate === 'hierarchy'
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  )}
+                >
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="w-6 h-6 rounded-md bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">1</div>
+                    <div className="text-muted-foreground text-xs">↓</div>
+                    <div className="w-6 h-6 rounded-md bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">2</div>
+                  </div>
+                  <span className="text-xs font-medium">{t(locale, 'toolbarHierarchy')}</span>
+                </button>
               </div>
-              {diagramLimitReached && <p className="mt-1">{t(locale, 'toolbarDiagramHintOverflow')}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" onClick={insertDiagram} disabled={!canInsertDiagram}>{t(locale, 'toolbarInsertDiagram')}</Button>
-              <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram || !canInsertDiagram}>
+
+            {/* Items Input */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">{t(locale, 'toolbarDiagramItems')}</label>
+              <Textarea
+                rows={5}
+                value={diagramItems}
+                onChange={(e) => setDiagramItems(e.target.value)}
+                placeholder={t(locale, 'toolbarDiagramItems')}
+                aria-label={t(locale, 'toolbarDiagramItems')}
+                className="text-sm"
+              />
+
+              {/* Item Management Buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="justify-center"
+                  onClick={() =>
+                    setDiagramItems(
+                      (value) =>
+                        `${value.trim()}\n${t(locale, 'toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
+                    )
+                  }
+                  disabled={diagramLimitReached}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramAddItem')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="justify-center"
+                  onClick={() => setDiagramItems(diagramItemList.slice(0, -1).join('\n'))}
+                  disabled={diagramItemList.length <= 2}
+                >
+                  <Minus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramRemoveItem')}
+                </Button>
+              </div>
+
+              {/* Item Counter */}
+              <div className={cn(
+                "rounded-lg border px-3 py-2 text-xs transition-all",
+                diagramLimitReached
+                  ? "border-orange-500/50 bg-orange-500/10 text-orange-700 dark:text-orange-300"
+                  : "border-border/60 bg-muted/30 text-muted-foreground"
+              )}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{t(locale, 'toolbarDiagramHint')}</span>
+                  <span className={cn(
+                    "font-bold px-2 py-0.5 rounded-full",
+                    diagramLimitReached
+                      ? "bg-orange-500/20"
+                      : "bg-primary/10 text-primary"
+                  )}>
+                    {diagramItemList.length}/8
+                  </span>
+                </div>
+                {diagramLimitReached && <p className="mt-1.5 text-[11px]">{t(locale, 'toolbarDiagramHintOverflow')}</p>}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <Button
+                size="sm"
+                onClick={insertDiagram}
+                disabled={!canInsertDiagram}
+                className="w-full"
+              >
+                <Workflow className="h-4 w-4 mr-2" />
+                {t(locale, 'toolbarInsertDiagram')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={updateDiagram}
+                disabled={!isInDiagram || !canInsertDiagram}
+                className="w-full"
+              >
                 {t(locale, 'toolbarUpdateDiagram')}
               </Button>
             </div>
