@@ -81,14 +81,21 @@ const editorFeatureDefaults = {
   openedDocumentToast: 'Opened {name}',
   exportedLibraryToast: 'Exported {count} documents',
   importedLibraryToast: 'Library import finished: {imported} imported, {skipped} skipped',
+  duplicateDocument: 'Duplicate',
+  deleteDocument: 'Delete',
+  exportDocumentBackup: 'Export',
+  documentDeletedToast: 'Deleted {name}',
+  documentDuplicatedToast: 'Duplicated {name}',
+  exportedDocumentToast: 'Exported {name}',
 } as const;
 
 export const translationMessages = {
   en: {
     placeholder: 'Start writing something amazing...',
     untitledDocument: 'Untitled Document',
-    saveSuccess: 'Document saved',
-    unsavedConfirm: 'You have unsaved changes. Create a new document anyway?',
+  saveSuccess: 'Document saved',
+  saveFailed: 'Document could not be saved locally. Export a backup before closing this tab.',
+  unsavedConfirm: 'You have unsaved changes. Create a new document anyway?',
     toggleTheme: 'Toggle dark mode',
     unsavedChanges: 'Unsaved changes',
     saved: 'Saved',

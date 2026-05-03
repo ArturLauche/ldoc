@@ -4,13 +4,13 @@ import { History, Clock, RotateCcw, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-
-interface Version {
-  id: string;
-  content: string;
-  timestamp: string;
-  name: string;
-}
+import {
+  deleteDocumentVersion,
+  getDocumentVersions,
+  saveDocumentVersion,
+  type StoredVersion,
+} from '@/lib/versionHistory';
+import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 
 interface VersionHistoryProps {
   isOpen: boolean;
@@ -18,10 +18,8 @@ interface VersionHistoryProps {
   onRestore: (content: string) => void;
   currentContent: string;
   documentName: string;
+  documentId: string;
 }
-
-const STORAGE_KEY = 'lwrite-versions';
-const LEGACY_STORAGE_KEY = 'floatwrite-versions';
 
 export const VersionHistory = ({
   isOpen,
@@ -29,53 +27,39 @@ export const VersionHistory = ({
   onRestore,
   currentContent,
   documentName,
+  documentId,
 }: VersionHistoryProps) => {
-  const [versions, setVersions] = useState<Version[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<Version | null>(null);
+  const [versions, setVersions] = useState<StoredVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(null);
+
+  const loadVersions = () => {
+    setVersions(getDocumentVersions(documentId));
+  };
 
   useEffect(() => {
     loadVersions();
-  }, [isOpen]);
-
-  const loadVersions = () => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (stored) {
-        setVersions(JSON.parse(stored));
-        if (!localStorage.getItem(STORAGE_KEY)) {
-          localStorage.setItem(STORAGE_KEY, stored);
-          localStorage.removeItem(LEGACY_STORAGE_KEY);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load versions:', error);
-    }
-  };
+    setSelectedVersion(null);
+  }, [documentId, isOpen]);
 
   const saveVersion = () => {
-    const newVersion: Version = {
-      id: Date.now().toString(),
-      content: currentContent,
-      timestamp: new Date().toISOString(),
+    saveDocumentVersion({
+      documentId,
       name: documentName,
-    };
-
-    const updatedVersions = [newVersion, ...versions].slice(0, 20); // Keep last 20 versions
-    setVersions(updatedVersions);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions));
+      content: currentContent,
+    });
+    loadVersions();
     toast.success('Version saved');
   };
 
-  const handleRestore = (version: Version) => {
+  const handleRestore = (version: StoredVersion) => {
     onRestore(version.content);
     toast.success(`Restored version from ${format(new Date(version.timestamp), 'MMM d, yyyy h:mm a')}`);
     onClose();
   };
 
   const handleDelete = (versionId: string) => {
-    const updatedVersions = versions.filter(v => v.id !== versionId);
-    setVersions(updatedVersions);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions));
+    deleteDocumentVersion(versionId);
+    loadVersions();
     if (selectedVersion?.id === versionId) {
       setSelectedVersion(null);
     }
@@ -175,7 +159,7 @@ export const VersionHistory = ({
                 <ScrollArea className="flex-1 p-4">
                   <div
                     className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: selectedVersion.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeDocumentHtml(selectedVersion.content) }}
                   />
                 </ScrollArea>
               </>

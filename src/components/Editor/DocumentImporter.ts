@@ -1,4 +1,5 @@
 import mammoth from 'mammoth';
+import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 
 export type SupportedFormat =
   | 'txt'
@@ -17,6 +18,7 @@ export interface ImportResult {
 }
 
 const SUPPORTED_FORMATS: SupportedFormat[] = ['txt', 'html', 'htm', 'rtf', 'docx', 'odt', 'ott', 'fodt'];
+const MAX_IMPORT_SIZE_MB = 20;
 
 function escapeHtml(value: string): string {
   return value
@@ -31,27 +33,6 @@ function textToParagraphHtml(text: string): string {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const normalized = lines.length ? lines : [''];
   return normalized.map((line) => `<p>${escapeHtml(line)}</p>`).join('');
-}
-
-function sanitizeImportedHtml(value: string): string {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(value, 'text/html');
-
-    doc.querySelectorAll('script, style, iframe, object, embed').forEach((el) => el.remove());
-    doc.querySelectorAll('*').forEach((el) => {
-      Array.from(el.attributes).forEach((attr) => {
-        if (attr.name.toLowerCase().startsWith('on')) {
-          el.removeAttribute(attr.name);
-        }
-      });
-    });
-
-    return doc.body.innerHTML || '<p></p>';
-  } catch (error) {
-    console.error('Failed to sanitize imported HTML:', error);
-    return value;
-  }
 }
 
 function detectFormat(file: File): SupportedFormat {
@@ -196,6 +177,10 @@ function importRtf(text: string): string {
 
 // Main import function
 export async function importDocument(file: File): Promise<ImportResult> {
+  if (file.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
+    throw new Error(`Document is too large. Please choose a file under ${MAX_IMPORT_SIZE_MB}MB.`);
+  }
+
   const fileName = file.name.replace(/\.[^/.]+$/, '').trim() || 'Untitled';
   const format = detectFormat(file);
   
@@ -210,7 +195,7 @@ export async function importDocument(file: File): Promise<ImportResult> {
       return importFodt(file);
     case 'html':
     case 'htm':
-      return sanitizeImportedHtml(await file.text());
+      return sanitizeDocumentHtml(await file.text());
     case 'rtf':
       return importRtf(await file.text());
     case 'txt':
@@ -220,7 +205,7 @@ export async function importDocument(file: File): Promise<ImportResult> {
   })();
   
   return {
-    content,
+    content: sanitizeDocumentHtml(content),
     fileName,
     format,
   };

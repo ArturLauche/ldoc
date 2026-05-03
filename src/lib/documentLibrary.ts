@@ -1,3 +1,5 @@
+import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
+
 export const STORAGE_KEY = 'lwrite-current-doc';
 export const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
 export const LIBRARY_STORAGE_KEY = 'lwrite-doc-library';
@@ -53,6 +55,10 @@ function setLibraryDocuments(documents: StoredDocument[]) {
   localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(documents));
 }
 
+export function getLibraryDocument(id: string): StoredDocument | null {
+  return getLibraryDocuments().find((doc) => doc.id === id) ?? null;
+}
+
 export function upsertLibraryDocument(data: {
   id?: string;
   name: string;
@@ -65,8 +71,8 @@ export function upsertLibraryDocument(data: {
 
   const document: StoredDocument = {
     id: existing?.id ?? data.id ?? createDocumentId(),
-    name: data.name,
-    content: data.content,
+    name: data.name.trim() || 'Untitled Document',
+    content: sanitizeDocumentHtml(data.content),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -77,6 +83,49 @@ export function upsertLibraryDocument(data: {
 
   setLibraryDocuments(next);
   return document;
+}
+
+export function renameLibraryDocument(id: string, name: string): StoredDocument {
+  const documents = getLibraryDocuments();
+  const existing = documents.find((doc) => doc.id === id);
+
+  if (!existing) {
+    throw new Error('Document not found');
+  }
+
+  const trimmedName = name.trim() || 'Untitled Document';
+  const renamed: StoredDocument = {
+    ...existing,
+    name: trimmedName,
+    updatedAt: new Date().toISOString(),
+  };
+
+  setLibraryDocuments(
+    documents
+      .map((doc) => (doc.id === id ? renamed : doc))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+  );
+
+  return renamed;
+}
+
+export function duplicateLibraryDocument(id: string): StoredDocument {
+  const existing = getLibraryDocument(id);
+
+  if (!existing) {
+    throw new Error('Document not found');
+  }
+
+  return upsertLibraryDocument({
+    id: createDocumentId(),
+    name: `${existing.name} Copy`,
+    content: existing.content,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export function deleteLibraryDocument(id: string): void {
+  setLibraryDocuments(getLibraryDocuments().filter((doc) => doc.id !== id));
 }
 
 export function migrateLegacyDocumentToLibrary() {
@@ -116,15 +165,19 @@ export function migrateLegacyDocumentToLibrary() {
   }
 }
 
-export function exportUnifiedLibraryFile(): string {
+export function exportLibraryDocumentsFile(documents: StoredDocument[]): string {
   const payload: UnifiedLibraryFile = {
     format: 'lwrite-library',
     version: 1,
     exportedAt: new Date().toISOString(),
-    documents: getLibraryDocuments(),
+    documents,
   };
 
   return JSON.stringify(payload, null, 2);
+}
+
+export function exportUnifiedLibraryFile(): string {
+  return exportLibraryDocumentsFile(getLibraryDocuments());
 }
 
 export function importUnifiedLibraryFile(rawText: string): { imported: number; skipped: number } {
@@ -151,7 +204,11 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
 
     const previous = byId.get(doc.id);
     if (!previous || previous.updatedAt < doc.updatedAt) {
-      byId.set(doc.id, doc);
+      byId.set(doc.id, {
+        ...doc,
+        name: doc.name.trim() || 'Untitled Document',
+        content: sanitizeDocumentHtml(doc.content),
+      });
       imported += 1;
     } else {
       skipped += 1;
