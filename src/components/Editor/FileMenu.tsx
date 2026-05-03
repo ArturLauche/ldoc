@@ -16,6 +16,8 @@ import {
   Search,
   Files,
   Upload,
+  Copy,
+  Trash2,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { Button } from '@/components/ui/button';
@@ -42,8 +44,13 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { importDocument, getSupportedFormats } from './DocumentImporter';
+import { downloadBlob } from '@/lib/download';
+import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import { t, type Locale } from '@/lib/translations';
 import {
+  deleteLibraryDocument,
+  duplicateLibraryDocument,
+  exportLibraryDocumentsFile,
   exportUnifiedLibraryFile,
   getLibraryDocuments,
   importUnifiedLibraryFile,
@@ -136,7 +143,6 @@ export const FileMenu = ({
           onCreateNewDocument();
           editor.commands.setContent(result.content);
           setDocumentName(result.fileName);
-          onSaveDocument();
           setRefreshKey((value) => value + 1);
           toast.success(formatMessage(t(locale, 'openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
@@ -197,6 +203,45 @@ export const FileMenu = ({
       }
     };
     input.click();
+  };
+
+  const handleExportLibraryDocument = (doc: StoredDocument) => {
+    try {
+      const payload = exportLibraryDocumentsFile([doc]);
+      const fileName = buildSafeExportFileName(doc.name, 'lwrite.json');
+      const blob = new Blob([payload], { type: 'application/json' });
+      downloadBlob(blob, fileName);
+      toast.success(formatMessage(t(locale, 'exportedDocumentToast'), { name: doc.name }));
+    } catch (error) {
+      console.error('Document export failed:', error);
+      toast.error('Failed to export this document');
+    }
+  };
+
+  const handleDuplicateLibraryDocument = (doc: StoredDocument) => {
+    try {
+      const duplicated = duplicateLibraryDocument(doc.id);
+      setRefreshKey((value) => value + 1);
+      toast.success(formatMessage(t(locale, 'documentDuplicatedToast'), { name: duplicated.name }));
+    } catch (error) {
+      console.error('Document duplicate failed:', error);
+      toast.error('Failed to duplicate this document');
+    }
+  };
+
+  const handleDeleteLibraryDocument = (doc: StoredDocument) => {
+    if (!confirm(`Delete "${doc.name}" from your local library?`)) {
+      return;
+    }
+
+    try {
+      deleteLibraryDocument(doc.id);
+      setRefreshKey((value) => value + 1);
+      toast.success(formatMessage(t(locale, 'documentDeletedToast'), { name: doc.name }));
+    } catch (error) {
+      console.error('Document delete failed:', error);
+      toast.error('Failed to delete this document');
+    }
   };
 
   const exportAs = async (format: 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf') => {
@@ -260,7 +305,7 @@ ${editorHtml}
           break;
         case 'docx': {
           const blob = await buildDocxBlob(blocks);
-          const fileName = buildExportFileName(documentName, 'docx');
+          const fileName = buildSafeExportFileName(documentName, 'docx');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
@@ -287,14 +332,14 @@ ${editorHtml}
             mimeType: 'application/vnd.oasis.opendocument.text',
           });
 
-          const fileName = buildExportFileName(documentName, 'odt');
+          const fileName = buildSafeExportFileName(documentName, 'odt');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
         }
         case 'pdf': {
           const blob = await buildPdfBlob(blocks);
-          const fileName = buildExportFileName(documentName, 'pdf');
+          const fileName = buildSafeExportFileName(documentName, 'pdf');
           downloadBlob(blob, fileName);
           toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
           return;
@@ -303,7 +348,7 @@ ${editorHtml}
           return;
       }
 
-      const fileName = buildExportFileName(documentName, extension);
+      const fileName = buildSafeExportFileName(documentName, extension);
       const blob = new Blob([content], { type: mimeType });
       downloadBlob(blob, fileName);
 
@@ -469,26 +514,60 @@ ${editorHtml}
                   <p className="text-sm text-muted-foreground p-2">{t(locale, 'noMatchingDocuments')}</p>
                 ) : (
                   filteredDocuments.map((doc) => (
-                    <button
+                    <div
                       key={doc.id}
-                      type="button"
-                      className={`w-full text-left p-3 rounded-md border transition hover:bg-accent ${
+                      className={`grid gap-2 rounded-md border p-3 transition hover:bg-accent ${
                         doc.id === documentId ? 'border-primary bg-primary/5' : 'border-border'
                       }`}
-                      onClick={() => {
-                        if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
-                          return;
-                        }
-                        onLoadDocument(doc);
-                        setLibraryOpen(false);
-                        toast.success(formatMessage(t(locale, 'openedDocumentToast'), { name: doc.name }));
-                      }}
                     >
-                      <div className="font-medium truncate">{doc.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Saved {new Date(doc.updatedAt).toLocaleString()}
+                      <button
+                        type="button"
+                        className="min-w-0 text-left"
+                        onClick={() => {
+                          if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
+                            return;
+                          }
+                          onLoadDocument(doc);
+                          setLibraryOpen(false);
+                          toast.success(formatMessage(t(locale, 'openedDocumentToast'), { name: doc.name }));
+                        }}
+                      >
+                        <div className="truncate font-medium">{doc.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Saved {new Date(doc.updatedAt).toLocaleString()}
+                        </div>
+                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExportLibraryDocument(doc)}
+                        >
+                          <Download className="mr-1 h-3.5 w-3.5" />
+                          {t(locale, 'exportDocumentBackup')}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDuplicateLibraryDocument(doc)}
+                        >
+                          <Copy className="mr-1 h-3.5 w-3.5" />
+                          {t(locale, 'duplicateDocument')}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteLibraryDocument(doc)}
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          {t(locale, 'deleteDocument')}
+                        </Button>
                       </div>
-                    </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -745,17 +824,6 @@ function resolveRtfFontSize(value: string | undefined, fallback: number): number
   const points = resolvePtFromCssSize(value);
   if (!points) return fallback;
   return Math.round(points * 2);
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 function escapeXml(value: string): string {
@@ -2428,33 +2496,6 @@ function encodePdfChunks(chunks: PdfChunk[]): Uint8Array {
   });
 
   return buffer;
-}
-
-function sanitizeBaseFileName(value: string): string {
-  const trimmed = value.trim();
-  const base = trimmed || 'Untitled Document';
-  const normalized = base
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '');
-
-  const withoutControlChars = Array.from(normalized)
-    .filter((character) => character.charCodeAt(0) >= 32)
-    .join('');
-
-  const cleaned = withoutControlChars
-    .replace(/[/?%*:|"<>]/g, '-')
-    .replace(/\.+$/g, '')
-    .replace(/^\.+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const fallback = cleaned || 'Untitled Document';
-  return fallback.slice(0, 180);
-}
-
-function buildExportFileName(value: string, extension: string): string {
-  const base = sanitizeBaseFileName(value).replace(/\.[^/.]+$/, '');
-  return `${base}.${extension}`;
 }
 
 function escapeHtmlText(value: string): string {

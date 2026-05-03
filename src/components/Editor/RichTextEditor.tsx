@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Cloud, FileText, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
+import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 import {
   LEGACY_STORAGE_KEY,
   STORAGE_KEY,
@@ -144,31 +145,37 @@ export const RichTextEditor = () => {
     (options?: { showToast?: boolean }) => {
       if (!editor) return;
 
-      const content = editor.getHTML();
-      const savedAt = new Date().toISOString();
-      const savedDoc = upsertLibraryDocument({
-        id: documentId,
-        name: documentName,
-        content,
-        updatedAt: savedAt,
-      });
+      try {
+        const content = editor.getHTML();
+        const savedAt = new Date().toISOString();
+        const savedDoc = upsertLibraryDocument({
+          id: documentId,
+          name: documentName,
+          content,
+          updatedAt: savedAt,
+        });
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          id: savedDoc.id,
-          name: savedDoc.name,
-          content: savedDoc.content,
-          savedAt,
-        }),
-      );
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            id: savedDoc.id,
+            name: savedDoc.name,
+            content: savedDoc.content,
+            savedAt,
+          }),
+        );
 
-      setDocumentId(savedDoc.id);
-      setLastSaved(new Date(savedAt));
-      setHasUnsavedChanges(false);
+        setDocumentId(savedDoc.id);
+        setLastSaved(new Date(savedAt));
+        setHasUnsavedChanges(false);
 
-      if (options?.showToast) {
-        toast.success(t(locale, 'saveSuccess'));
+        if (options?.showToast) {
+          toast.success(t(locale, 'saveSuccess'));
+        }
+      } catch (error) {
+        console.error('Failed to save document:', error);
+        setHasUnsavedChanges(true);
+        toast.error(t(locale, 'saveFailed'));
       }
     },
     [documentId, documentName, editor, locale],
@@ -187,7 +194,7 @@ export const RichTextEditor = () => {
           savedAt?: string;
         };
         if (doc.content && editor) {
-          editor.commands.setContent(doc.content);
+          editor.commands.setContent(sanitizeDocumentHtml(doc.content));
           setDocumentId(doc.id || createDocumentId());
           setDocumentName(doc.name || t(locale, 'untitledDocument'));
           setLastSaved(doc.savedAt ? new Date(doc.savedAt) : null);
@@ -257,7 +264,7 @@ export const RichTextEditor = () => {
   const handleLoadSavedDocument = useCallback(
     (doc: StoredDocument) => {
       if (!editor) return;
-      editor.commands.setContent(doc.content);
+      editor.commands.setContent(sanitizeDocumentHtml(doc.content));
       setDocumentId(doc.id);
       setDocumentName(doc.name);
       setLastSaved(new Date(doc.updatedAt));
@@ -279,9 +286,14 @@ export const RichTextEditor = () => {
     updateCounts();
   }, [editor, updateCounts, locale]);
 
+  const handleDocumentNameChange = useCallback((name: string) => {
+    setDocumentName(name);
+    setHasUnsavedChanges(true);
+  }, []);
+
   const handleRestoreVersion = useCallback((content: string) => {
     if (editor) {
-      editor.commands.setContent(content);
+      editor.commands.setContent(sanitizeDocumentHtml(content));
       setHasUnsavedChanges(true);
     }
   }, [editor]);
@@ -305,7 +317,7 @@ export const RichTextEditor = () => {
                 locale={locale}
                 documentId={documentId}
                 documentName={documentName}
-                setDocumentName={setDocumentName}
+                setDocumentName={handleDocumentNameChange}
                 onSaveDocument={() => saveDocument({ showToast: true })}
                 onLoadDocument={handleLoadSavedDocument}
                 onCreateNewDocument={handleCreateNewDocument}
@@ -352,7 +364,7 @@ export const RichTextEditor = () => {
             <input
               type="text"
               value={documentName}
-              onChange={(e) => setDocumentName(e.target.value)}
+              onChange={(e) => handleDocumentNameChange(e.target.value)}
               className="text-xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground/50"
               placeholder={t(locale, 'untitledDocument')}
               aria-label={t(locale, 'documentName')}
@@ -396,6 +408,7 @@ export const RichTextEditor = () => {
         onRestore={handleRestoreVersion}
         currentContent={editor?.getHTML() || ''}
         documentName={documentName}
+        documentId={documentId}
       />
     </div>
   );
