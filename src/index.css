@@ -287,6 +287,8 @@ body {
   min-height: 500px;
   padding: 3rem 4rem;
   outline: none;
+  color: hsl(var(--foreground));
+  transition: color 260ms ease;
 }
 
 .editor-content .ProseMirror p.is-editor-empty:first-child::before {
