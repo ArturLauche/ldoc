@@ -1,4 +1,6 @@
-import { Node, mergeAttributes, type DOMOutputSpec } from '@tiptap/core';
+import { Node, mergeAttributes } from '@tiptap/core';
+
+type DOMOutputSpec = any;
 
 export type SmartDiagramTemplate = 'process' | 'cycle' | 'hierarchy';
 
