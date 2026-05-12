@@ -305,6 +305,8 @@ body {
   line-height: 1.2;
   margin-top: 2rem;
   margin-bottom: 1rem;
+  color: hsl(var(--foreground));
+  transition: color 260ms ease;
 }
 
 .editor-content .ProseMirror h2 {
@@ -313,6 +315,8 @@ body {
   line-height: 1.3;
   margin-top: 1.75rem;
   margin-bottom: 0.75rem;
+  color: hsl(var(--foreground));
+  transition: color 260ms ease;
 }
 
 .editor-content .ProseMirror h3 {
@@ -321,6 +325,8 @@ body {
   line-height: 1.4;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
+  color: hsl(var(--foreground));
+  transition: color 260ms ease;
 }
 
 .editor-content .ProseMirror p {

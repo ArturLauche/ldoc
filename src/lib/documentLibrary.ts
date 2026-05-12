@@ -1,4 +1,11 @@
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
+import {
+  readStorageItem,
+  readStorageJson,
+  removeStorageItem,
+  throwIfStorageFailed,
+  writeStorageJson,
+} from './storage';
 
 export const STORAGE_KEY = 'lwrite-current-doc';
 export const LEGACY_STORAGE_KEY = 'floatwrite-current-doc';
@@ -17,6 +24,13 @@ interface UnifiedLibraryFile {
   version: 1;
   exportedAt: string;
   documents: StoredDocument[];
+}
+
+interface CurrentDocumentRecord {
+  id?: string;
+  name?: string;
+  content: string;
+  savedAt?: string;
 }
 
 function isStoredDocument(value: unknown): value is StoredDocument {
@@ -38,21 +52,22 @@ export function createDocumentId(): string {
 }
 
 export function getLibraryDocuments(): StoredDocument[] {
-  try {
-    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isStoredDocument).sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt),
-    );
-  } catch {
+  const result = readStorageJson<unknown[]>(
+    LIBRARY_STORAGE_KEY,
+    (value): value is unknown[] => Array.isArray(value),
+  );
+
+  if (!result.ok || !result.value) {
     return [];
   }
+
+  return result.value.filter(isStoredDocument).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
 }
 
 function setLibraryDocuments(documents: StoredDocument[]) {
-  localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(documents));
+  throwIfStorageFailed(writeStorageJson(LIBRARY_STORAGE_KEY, documents));
 }
 
 export function getLibraryDocument(id: string): StoredDocument | null {
@@ -129,17 +144,14 @@ export function deleteLibraryDocument(id: string): void {
 }
 
 export function migrateLegacyDocumentToLibrary() {
+  const currentRaw = readStorageItem(STORAGE_KEY);
+  const legacyRaw = readStorageItem(LEGACY_STORAGE_KEY);
+  const raw = currentRaw.ok && currentRaw.value ? currentRaw.value : legacyRaw.ok ? legacyRaw.value : null;
+
+  if (!raw) return;
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw) as {
-      id?: string;
-      name?: string;
-      content?: string;
-      savedAt?: string;
-    };
-
+    const parsed = JSON.parse(raw) as Partial<CurrentDocumentRecord>;
     if (typeof parsed.content !== 'string') return;
 
     const migrated = upsertLibraryDocument({
@@ -149,17 +161,17 @@ export function migrateLegacyDocumentToLibrary() {
       updatedAt: parsed.savedAt,
     });
 
-    localStorage.setItem(
+    throwIfStorageFailed(writeStorageJson(
       STORAGE_KEY,
-      JSON.stringify({
+      {
         id: migrated.id,
         name: migrated.name,
         content: migrated.content,
         savedAt: migrated.updatedAt,
-      }),
-    );
+      },
+    ));
 
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    removeStorageItem(LEGACY_STORAGE_KEY);
   } catch {
     // ignore invalid local data
   }
@@ -219,4 +231,28 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
   setLibraryDocuments(merged);
 
   return { imported, skipped };
+}
+
+export function importSingleLibraryDocument(rawText: string): StoredDocument {
+  const parsed = JSON.parse(rawText) as UnifiedLibraryFile;
+  if (
+    parsed.format !== 'lwrite-library' ||
+    parsed.version !== 1 ||
+    !Array.isArray(parsed.documents) ||
+    parsed.documents.length === 0
+  ) {
+    throw new Error('Invalid or empty document file');
+  }
+
+  const doc = parsed.documents[0];
+  if (!isStoredDocument(doc)) {
+    throw new Error('Invalid document data');
+  }
+
+  return upsertLibraryDocument({
+    id: createDocumentId(),
+    name: doc.name.trim() || 'Untitled Document',
+    content: sanitizeDocumentHtml(doc.content),
+    updatedAt: new Date().toISOString(),
+  });
 }

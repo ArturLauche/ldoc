@@ -87,6 +87,8 @@ const editorFeatureDefaults = {
   documentDeletedToast: 'Deleted {name}',
   documentDuplicatedToast: 'Duplicated {name}',
   exportedDocumentToast: 'Exported {name}',
+  importSingleDoc: 'Import Single File (.json)',
+  importedSingleDocToast: 'Imported document into your library',
 } as const;
 
 export const translationMessages = {
@@ -344,6 +346,8 @@ export const translationMessages = {
 } as const;
 
 export type TranslationKey = keyof typeof translationMessages.en;
+const translationCatalog: Record<Locale, Partial<Record<TranslationKey, string>>> =
+  translationMessages;
 
 const normalizeToSupportedLocale = (languageTag: string): Locale | null => {
   const normalized = languageTag.toLowerCase();
@@ -377,5 +381,5 @@ export const getBrowserLocale = (): Locale => {
 };
 
 export const t = (locale: Locale, key: TranslationKey): string => {
-  return translationMessages[locale]?.[key] ?? translationMessages[defaultLocale][key];
+  return translationCatalog[locale]?.[key] ?? translationCatalog[defaultLocale]?.[key] ?? key;
 };

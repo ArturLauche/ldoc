@@ -1,6 +1,5 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-
-type DOMOutputSpec = any;
+import type { DOMOutputSpec } from '@tiptap/pm/model';
 
 export type SmartDiagramTemplate = 'process' | 'cycle' | 'hierarchy';
 
