@@ -56,7 +56,10 @@ const EnhancedTextStyle = TextStyle.extend({
         parseHTML: (element) => element.style.fontSize || null,
         renderHTML: (attributes) => {
           if (!attributes.fontSize) return {};
-          return { style: `font-size: ${attributes.fontSize}` };
+          return {
+            'data-lwrite-theme-text': 'true',
+            style: `font-size: ${attributes.fontSize}`,
+          };
         },
       },
       lineHeight: {
@@ -64,7 +67,10 @@ const EnhancedTextStyle = TextStyle.extend({
         parseHTML: (element) => element.style.lineHeight || null,
         renderHTML: (attributes) => {
           if (!attributes.lineHeight) return {};
-          return { style: `line-height: ${attributes.lineHeight}` };
+          return {
+            'data-lwrite-theme-text': 'true',
+            style: `line-height: ${attributes.lineHeight}`,
+          };
         },
       },
     };

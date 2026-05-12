@@ -284,10 +284,34 @@ body {
 }
 
 .editor-content .ProseMirror {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-lead: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+  --tw-prose-counters: hsl(var(--muted-foreground));
+  --tw-prose-bullets: hsl(var(--muted-foreground));
+  --tw-prose-hr: hsl(var(--border));
+  --tw-prose-quotes: hsl(var(--foreground));
+  --tw-prose-quote-borders: hsl(var(--border));
+  --tw-prose-captions: hsl(var(--muted-foreground));
+  --tw-prose-code: hsl(var(--foreground));
+  --tw-prose-pre-code: hsl(var(--foreground));
+  --tw-prose-pre-bg: hsl(var(--muted) / 0.24);
+  --tw-prose-th-borders: hsl(var(--border));
+  --tw-prose-td-borders: hsl(var(--border));
   min-height: 500px;
   padding: 3rem 4rem;
   outline: none;
   color: hsl(var(--foreground));
+  transition: color 260ms ease;
+}
+
+.editor-content .ProseMirror [data-lwrite-theme-text="true"],
+.editor-content .ProseMirror span[style*="font-size" i],
+.editor-content .ProseMirror span[style*="line-height" i],
+.editor-content .ProseMirror span[style*="font-family" i] {
+  color: inherit;
   transition: color 260ms ease;
 }
 
