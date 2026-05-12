@@ -11,6 +11,7 @@ export function sanitizeBaseFileName(value: string): string {
     .replace(/[/?%*:|"<>]/g, '-')
     .replace(/\.+$/g, '')
     .replace(/^\.+/g, '')
+    .replace(/^-+/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 

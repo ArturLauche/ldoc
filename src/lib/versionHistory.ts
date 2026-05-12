@@ -1,4 +1,13 @@
 import { createDocumentId } from './documentLibrary';
+import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
+import {
+  readStorageItem,
+  readStorageJson,
+  removeStorageItem,
+  throwIfStorageFailed,
+  writeStorageItem,
+  writeStorageJson,
+} from './storage';
 
 export interface StoredVersion {
   id: string;
@@ -27,36 +36,44 @@ function isStoredVersion(value: unknown): value is StoredVersion {
 }
 
 function readVersions(): StoredVersion[] {
-  try {
-    const raw = localStorage.getItem(VERSION_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isStoredVersion);
-  } catch {
+  const result = readStorageJson<unknown[]>(
+    VERSION_STORAGE_KEY,
+    (value): value is unknown[] => Array.isArray(value),
+  );
+
+  if (!result.ok || !result.value) {
     return [];
   }
+
+  return result.value.filter(isStoredVersion).map((version) => ({
+    ...version,
+    content: sanitizeDocumentHtml(version.content),
+  }));
 }
 
 function writeVersions(versions: StoredVersion[]) {
-  localStorage.setItem(VERSION_STORAGE_KEY, JSON.stringify(versions));
+  throwIfStorageFailed(writeStorageJson(VERSION_STORAGE_KEY, versions));
 }
 
 export function migrateLegacyVersionsToDocument(documentId: string) {
-  if (localStorage.getItem(MIGRATION_KEY)) {
+  const migrationFlag = readStorageItem(MIGRATION_KEY);
+  if (migrationFlag.ok && migrationFlag.value) {
     return;
   }
 
-  const legacyRaw = LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
+  const legacyRaw = LEGACY_STORAGE_KEYS
+    .map((key) => readStorageItem(key))
+    .find((result) => result.ok && !!result.value);
+
   if (!legacyRaw) {
-    localStorage.setItem(MIGRATION_KEY, 'true');
+    writeStorageItem(MIGRATION_KEY, 'true');
     return;
   }
 
   try {
-    const parsed = JSON.parse(legacyRaw);
+    const parsed = JSON.parse(legacyRaw.ok ? legacyRaw.value ?? '[]' : '[]');
     if (!Array.isArray(parsed)) {
-      localStorage.setItem(MIGRATION_KEY, 'true');
+      writeStorageItem(MIGRATION_KEY, 'true');
       return;
     }
 
@@ -75,7 +92,7 @@ export function migrateLegacyVersionsToDocument(documentId: string) {
         return {
           id: typeof legacy.id === 'string' ? legacy.id : createDocumentId(),
           documentId,
-          content: legacy.content,
+          content: sanitizeDocumentHtml(legacy.content),
           timestamp: legacy.timestamp,
           name: legacy.name,
         };
@@ -83,11 +100,11 @@ export function migrateLegacyVersionsToDocument(documentId: string) {
       .filter(isStoredVersion);
 
     writeVersions([...migrated, ...readVersions()]);
-    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    LEGACY_STORAGE_KEYS.forEach((key) => removeStorageItem(key));
   } catch {
     // Leave invalid legacy data alone; the editor should keep working.
   } finally {
-    localStorage.setItem(MIGRATION_KEY, 'true');
+    writeStorageItem(MIGRATION_KEY, 'true');
   }
 }
 
@@ -106,7 +123,7 @@ export function saveDocumentVersion(data: {
   const version: StoredVersion = {
     id: createDocumentId(),
     documentId: data.documentId,
-    content: data.content,
+    content: sanitizeDocumentHtml(data.content),
     name: data.name,
     timestamp: new Date().toISOString(),
   };

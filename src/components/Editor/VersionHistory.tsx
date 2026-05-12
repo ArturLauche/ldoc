@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { History, Clock, RotateCcw, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,14 +32,14 @@ export const VersionHistory = ({
   const [versions, setVersions] = useState<StoredVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(null);
 
-  const loadVersions = () => {
+  const loadVersions = useCallback(() => {
     setVersions(getDocumentVersions(documentId));
-  };
+  }, [documentId]);
 
   useEffect(() => {
     loadVersions();
     setSelectedVersion(null);
-  }, [documentId, isOpen]);
+  }, [documentId, isOpen, loadVersions]);
 
   const saveVersion = () => {
     saveDocumentVersion({
@@ -52,6 +52,11 @@ export const VersionHistory = ({
   };
 
   const handleRestore = (version: StoredVersion) => {
+    saveDocumentVersion({
+      documentId,
+      name: `${documentName} (before restore)`,
+      content: currentContent,
+    });
     onRestore(version.content);
     toast.success(`Restored version from ${format(new Date(version.timestamp), 'MMM d, yyyy h:mm a')}`);
     onClose();
