@@ -28,5 +28,44 @@ describe('exportDocument', () => {
     expect(html).not.toContain('<script>');
     expect(result.fileName).toBe('Page.html');
   });
+
+  it('handles special WinAnsi characters in PDF export', async () => {
+    const result = await exportDocument({
+      html: '<p>Euro: € and Smart Quotes: “”</p>',
+      name: 'Special',
+      locale: 'en',
+      format: 'pdf',
+    });
+
+    expect(result.blob.type).toBe('application/pdf');
+    expect(result.fileName).toBe('Special.pdf');
+    // Note: We can't easily inspect PDF binary content for exact octal strings here without a PDF parser,
+    // but we verify the export completes successfully.
+  });
+
+  it('handles long lines in PDF export with improved wrapping', async () => {
+    const longText = 'This is a very long line that should be wrapped multiple times to ensure the new wrapping logic works correctly and avoids overflowing the page boundaries. '.repeat(5);
+    const result = await exportDocument({
+      html: `<p>${longText}</p>`,
+      name: 'Wrapping',
+      locale: 'en',
+      format: 'pdf',
+    });
+
+    expect(result.blob.type).toBe('application/pdf');
+    expect(result.fileName).toBe('Wrapping.pdf');
+  });
+
+  it('gracefully handles missing images in PDF export', async () => {
+    const result = await exportDocument({
+      html: '<p>Image follow:</p><img src="nonexistent.jpg" alt="Failed Image">',
+      name: 'ImageFail',
+      locale: 'en',
+      format: 'pdf',
+    });
+
+    expect(result.blob.type).toBe('application/pdf');
+    expect(result.fileName).toBe('ImageFail.pdf');
+  });
 });
 

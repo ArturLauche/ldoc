@@ -589,10 +589,9 @@ async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 72;
-  const maxCharsPerLine = 90;
 
   const preparedBlocks = await preparePdfBlocks(blocks);
-  const lines = buildPdfLinesFromBlocks(preparedBlocks, maxCharsPerLine, pageWidth, margin);
+  const lines = buildPdfLinesFromBlocks(preparedBlocks, pageWidth, margin);
   const pages = paginatePdfLines(lines, pageHeight, margin);
 
   const objects: PdfChunk[][] = [];
@@ -1351,7 +1350,6 @@ function buildOdtBlock(block: HtmlBlock, index: number): string {
 
 function buildPdfLinesFromBlocks(
   blocks: PreparedHtmlBlock[],
-  maxChars: number,
   pageWidth: number,
   margin: number,
 ): PdfLine[] {
@@ -1419,7 +1417,7 @@ function buildPdfLinesFromBlocks(
         ? [{ text: prefix, style: {} }, ...baseSegments]
         : baseSegments;
       const fontSize = block.type === 'heading' ? 18 - ((block.level ?? 1) - 1) * 2 : 12;
-      wrapPdfSegments(segments, maxChars).forEach((lineSegments) => {
+      wrapPdfSegments(segments, maxWidth, fontSize).forEach((lineSegments) => {
         lines.push({
           type: 'text',
           segments: lineSegments,
@@ -1440,16 +1438,45 @@ function buildPdfLinesFromBlocks(
     : [{ type: 'text', segments: [{ text: '', style: {} }], fontSize: 12, baseFontSize: 12 }];
 }
 
-function wrapPdfSegments(segments: InlineSegment[], maxChars: number): PdfTextSegment[][] {
+function getPdfCharWidth(char: string, style: InlineStyle): number {
+  // Very rough approximation of Helvetica widths
+  // Average width for Helvetica is ~0.5 of font size
+  let width = 0.5;
+
+  const lowerChar = char.toLowerCase();
+  if ('i1lj|.,;:!'.includes(lowerChar)) width = 0.25;
+  else if ('mw@'.includes(lowerChar)) width = 0.75;
+  else if ('ABCDEFGHJKLNOPQRSTUVXYZ'.includes(char)) width = 0.6;
+
+  if (style.bold) width *= 1.1;
+  if (style.italic) width *= 1.05;
+
+  return width;
+}
+
+function getPdfSegmentWidth(text: string, style: InlineStyle, baseFontSize: number): number {
+  const fontSize = resolvePdfFontSize(baseFontSize, style.fontSize);
+  let totalWidth = 0;
+  for (const char of text) {
+    totalWidth += getPdfCharWidth(char, style) * fontSize;
+  }
+  return totalWidth;
+}
+
+function wrapPdfSegments(
+  segments: InlineSegment[],
+  maxWidth: number,
+  baseFontSize: number,
+): PdfTextSegment[][] {
   const lines: PdfTextSegment[][] = [];
   let currentLine: PdfTextSegment[] = [];
-  let currentLength = 0;
+  let currentWidth = 0;
 
   const pushLine = () => {
     if (currentLine.length) {
       lines.push(currentLine);
       currentLine = [];
-      currentLength = 0;
+      currentWidth = 0;
     } else {
       lines.push([]);
     }
@@ -1460,12 +1487,12 @@ function wrapPdfSegments(segments: InlineSegment[], maxChars: number): PdfTextSe
     parts.forEach((part, index) => {
       const tokens = part.split(/(\s+)/).filter((token) => token.length);
       tokens.forEach((token) => {
-        const nextLength = currentLength + token.length;
-        if (nextLength > maxChars && currentLine.length) {
+        const tokenWidth = getPdfSegmentWidth(token, segment.style, baseFontSize);
+        if (currentWidth + tokenWidth > maxWidth && currentLine.length) {
           pushLine();
         }
         currentLine.push({ text: token, style: segment.style });
-        currentLength += token.length;
+        currentWidth += tokenWidth;
       });
       if (index < parts.length - 1) {
         pushLine();
@@ -1605,30 +1632,49 @@ async function preparePdfBlocks(blocks: HtmlBlock[]): Promise<PreparedHtmlBlock[
 function loadPdfImage(src: string): Promise<PreparedPdfImage | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Only use crossOrigin for non-data URLs to avoid security errors
+    if (!src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+    }
+
+    const timeoutId = setTimeout(() => {
+      img.src = '';
+      resolve(null);
+    }, 5000); // 5 second timeout for image loading
+
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || img.width;
-      canvas.height = img.naturalHeight || img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
+      clearTimeout(timeoutId);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 1);
+        const base64 = dataUrl.split(',')[1];
+        if (!base64) {
+          resolve(null);
+          return;
+        }
+        resolve({
+          bytes: base64ToUint8Array(base64),
+          width: canvas.width,
+          height: canvas.height,
+        });
+      } catch (error) {
+        console.error('Failed to process image for PDF:', error);
         resolve(null);
-        return;
       }
-      ctx.drawImage(img, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 1);
-      const base64 = dataUrl.split(',')[1];
-      if (!base64) {
-        resolve(null);
-        return;
-      }
-      resolve({
-        bytes: base64ToUint8Array(base64),
-        width: canvas.width,
-        height: canvas.height,
-      });
     };
-    img.onerror = () => resolve(null);
+    img.onerror = (error) => {
+      clearTimeout(timeoutId);
+      console.error('Failed to load image for PDF:', error);
+      resolve(null);
+    };
     img.src = src;
   });
 }
@@ -1698,13 +1744,46 @@ function resolvePdfFontName(style: InlineStyle): string {
   return 'Helvetica';
 }
 
+const WIN_ANSI_MAP: Record<number, number> = {
+  0x20ac: 128, // €
+  0x201a: 130, // ‚
+  0x0192: 131, // ƒ
+  0x201e: 132, // „
+  0x2026: 133, // …
+  0x2020: 134, // †
+  0x2021: 135, // ‡
+  0x02c6: 136, // ˆ
+  0x2030: 137, // ‰
+  0x0160: 138, // Š
+  0x2039: 139, // ‹
+  0x0152: 140, // Œ
+  0x017d: 142, // Ž
+  0x2018: 145, // ‘
+  0x2019: 146, // ’
+  0x201c: 147, // “
+  0x201d: 148, // ”
+  0x2022: 149, // •
+  0x2013: 150, // –
+  0x2014: 151, // —
+  0x02dc: 152, // ˜
+  0x2122: 153, // ™
+  0x0161: 154, // š
+  0x203a: 155, // ›
+  0x0153: 156, // œ
+  0x017e: 158, // ž
+  0x0178: 159, // Ÿ
+};
+
 function escapePdfText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/\(/g, '\\(')
     .replace(/\)/g, '\\)')
     .replace(/[^\x20-\x7E]/g, (char) => {
-      const code = char.charCodeAt(0);
+      let code = char.charCodeAt(0);
+      if (code > 255) {
+        code = WIN_ANSI_MAP[code] ?? 63; // 63 is '?'
+      }
       if (code > 255) {
         return '?';
       }
