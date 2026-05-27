@@ -45,7 +45,7 @@ import { toast } from 'sonner';
 import { importDocument, getSupportedFormats } from './DocumentImporter';
 import { downloadBlob } from '@/lib/download';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
-import type { ExportFormat } from '@/lib/export/documentExport';
+import type { ExportFormat } from '@/lib/export/types';
 import { t, type Locale } from '@/lib/translations';
 import {
   deleteLibraryDocument,
@@ -64,6 +64,12 @@ function formatMessage(template: string, values: Record<string, string | number>
       message.split(`{${key}}`).join(String(value)),
     template,
   );
+}
+
+function formatExportWarningSummary(count: number, firstMessage: string): string {
+  return count === 1
+    ? `Export completed with a warning: ${firstMessage}`
+    : `Export completed with ${count} warnings: ${firstMessage}`;
 }
 
 interface FileMenuProps {
@@ -276,7 +282,7 @@ export const FileMenu = ({
     setIsExporting(true);
     try {
       const { exportDocument } = await import('@/lib/export/documentExport');
-      const { blob, fileName } = await exportDocument({
+      const { blob, fileName, warnings } = await exportDocument({
         html: editor.getHTML(),
         name: documentName,
         locale,
@@ -284,6 +290,9 @@ export const FileMenu = ({
       });
       downloadBlob(blob, fileName);
       toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
+      if (warnings.length) {
+        toast.warning(formatExportWarningSummary(warnings.length, warnings[0].message));
+      }
     } catch (error) {
       console.error('Export failed:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
