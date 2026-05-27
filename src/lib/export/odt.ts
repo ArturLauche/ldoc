@@ -16,6 +16,7 @@ import {
   normalizeFontFamilyValue,
   normalizeRuns,
   resolvePtFromCssSize,
+  walkBlocks,
   walkRuns,
 } from './shared';
 import type { WarningCollector } from './warnings';
@@ -166,7 +167,7 @@ function buildAutomaticStyles(blocks: ExportBlock[]): string {
     const name = textStyleName(run.marks);
     if (name) styles.set(name, run.marks);
   });
-  blocks.forEach((block) => {
+  walkBlocks(blocks, (block) => {
     if ((block.type === 'paragraph' || block.type === 'heading' || block.type === 'blockquote') && block.align) {
       alignments.add(block.align);
     }

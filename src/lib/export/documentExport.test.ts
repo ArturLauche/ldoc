@@ -143,6 +143,28 @@ describe('exportDocument', () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it('declares ODT paragraph styles used only by nested list and table blocks', async () => {
+    const result = await exportDocument({
+      html: `
+        <ul><li><p style="text-align: right">Nested right</p></li></ul>
+        <table><tr><td><h2 style="text-align: center">Nested center</h2></td></tr></table>
+      `,
+      name: 'Nested Alignments',
+      locale: 'en',
+      format: 'odt',
+    });
+
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    const contentXml = await zip.file('content.xml')?.async('string');
+
+    expect(contentXml).toContain('text:style-name="P-right"');
+    expect(contentXml).toContain('style:name="P-right"');
+    expect(contentXml).toContain('fo:text-align="right"');
+    expect(contentXml).toContain('text:style-name="P-center"');
+    expect(contentXml).toContain('style:name="P-center"');
+    expect(contentXml).toContain('fo:text-align="center"');
+  });
+
   it('exports parseable PDF blobs and reports font fallback when bundled fonts are unavailable in tests', async () => {
     const result = await exportDocument({
       html: `<h1>Title</h1><p>Body with a <a href="https://example.com">link</a>.</p><table><tr><td>A</td><td>B</td></tr></table><img src="${TINY_PNG}" alt="Dot">`,
