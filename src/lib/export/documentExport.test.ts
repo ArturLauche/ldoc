@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFPage } from 'pdf-lib';
 import { exportDocument } from './documentExport';
 import { extractExportDocumentFromHtml } from './model';
 
@@ -155,5 +155,29 @@ describe('exportDocument', () => {
     expect(loaded.getPageCount()).toBeGreaterThan(0);
     expect(result.fileName).toBe('Pdf.pdf');
     expect(result.warnings.map((warning) => warning.code)).toContain('table-layout-simplified');
+  });
+
+  it('draws PDF headings and table cells with their layout base font sizes', async () => {
+    const drawTextSpy = vi.spyOn(PDFPage.prototype, 'drawText');
+
+    try {
+      await exportDocument({
+        html: '<h1>Large Heading</h1><table><tr><td>Table Cell</td></tr></table>',
+        name: 'Pdf Sizes',
+        locale: 'en',
+        format: 'pdf',
+      });
+
+      expect(drawTextSpy.mock.calls).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining(['Large']),
+          expect.arrayContaining(['Table']),
+        ]),
+      );
+      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Large')?.[1]).toMatchObject({ size: 22 });
+      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Table')?.[1]).toMatchObject({ size: 10 });
+    } finally {
+      drawTextSpy.mockRestore();
+    }
   });
 });

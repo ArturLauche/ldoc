@@ -46,6 +46,7 @@ interface PdfLine {
   chunks: PdfChunk[];
   width: number;
   height: number;
+  baseSize: number;
 }
 
 export async function renderPdf(documentModel: ExportDocumentModel, warnings: WarningCollector): Promise<Blob> {
@@ -80,7 +81,12 @@ export function layoutPdfRuns(
   let currentHeight = baseSize * 1.35;
 
   const flush = () => {
-    lines.push({ chunks: current.length ? current : [{ text: '', marks: {} }], width: currentWidth, height: currentHeight });
+    lines.push({
+      chunks: current.length ? current : [{ text: '', marks: {} }],
+      width: currentWidth,
+      height: currentHeight,
+      baseSize,
+    });
     current = [];
     currentWidth = 0;
     currentHeight = baseSize * 1.35;
@@ -224,7 +230,7 @@ function drawParagraph(
 function drawLine(state: PdfState, line: PdfLine, x: number, y: number): void {
   let cursor = x;
   line.chunks.forEach((chunk) => {
-    const size = resolvePdfSize(chunk.marks, 12);
+    const size = resolvePdfSize(chunk.marks, line.baseSize);
     const font = selectFont(state.fonts, chunk.marks);
     const text = sanitizePdfText(chunk.text, state.fonts, state.warnings);
     const width = textWidth(text, chunk.marks, state.fonts, state.warnings, size);
@@ -331,7 +337,7 @@ function drawTable(state: PdfState, table: Extract<ExportBlock, { type: 'table' 
       let y = state.y - 16;
       lines.forEach((line) => {
         drawLine(state, line, x + 4, y);
-        y -= 13;
+        y -= line.height;
       });
       x += cellWidth * cell.colSpan;
     });
