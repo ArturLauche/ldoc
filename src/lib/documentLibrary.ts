@@ -45,6 +45,23 @@ function isStoredDocument(value: unknown): value is StoredDocument {
   );
 }
 
+function isValidDateString(value: string): boolean {
+  return Number.isFinite(Date.parse(value));
+}
+
+function normalizeStoredDocument(value: unknown): StoredDocument | null {
+  if (!isStoredDocument(value)) return null;
+  if (!isValidDateString(value.createdAt) || !isValidDateString(value.updatedAt)) return null;
+
+  return {
+    id: value.id,
+    name: value.name.trim() || 'Untitled Document',
+    content: sanitizeDocumentHtml(value.content),
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
 export function createDocumentId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -61,13 +78,17 @@ export function getLibraryDocuments(): StoredDocument[] {
     return [];
   }
 
-  return result.value.filter(isStoredDocument).sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt),
-  );
+  return result.value
+    .map(normalizeStoredDocument)
+    .filter((document): document is StoredDocument => document !== null)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function setLibraryDocuments(documents: StoredDocument[]) {
-  throwIfStorageFailed(writeStorageJson(LIBRARY_STORAGE_KEY, documents));
+  const normalized = documents
+    .map(normalizeStoredDocument)
+    .filter((document): document is StoredDocument => document !== null);
+  throwIfStorageFailed(writeStorageJson(LIBRARY_STORAGE_KEY, normalized));
 }
 
 export function getLibraryDocument(id: string): StoredDocument | null {
@@ -80,7 +101,7 @@ export function upsertLibraryDocument(data: {
   content: string;
   updatedAt?: string;
 }): StoredDocument {
-  const now = data.updatedAt ?? new Date().toISOString();
+  const now = data.updatedAt && isValidDateString(data.updatedAt) ? data.updatedAt : new Date().toISOString();
   const documents = getLibraryDocuments();
   const existing = data.id ? documents.find((doc) => doc.id === data.id) : undefined;
 
@@ -178,11 +199,14 @@ export function migrateLegacyDocumentToLibrary() {
 }
 
 export function exportLibraryDocumentsFile(documents: StoredDocument[]): string {
+  const safeDocuments = documents
+    .map(normalizeStoredDocument)
+    .filter((document): document is StoredDocument => document !== null);
   const payload: UnifiedLibraryFile = {
     format: 'lwrite-library',
     version: 1,
     exportedAt: new Date().toISOString(),
-    documents,
+    documents: safeDocuments,
   };
 
   return JSON.stringify(payload, null, 2);
@@ -209,18 +233,15 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
   let skipped = 0;
 
   parsed.documents.forEach((doc) => {
-    if (!isStoredDocument(doc)) {
+    const normalized = normalizeStoredDocument(doc);
+    if (!normalized) {
       skipped += 1;
       return;
     }
 
-    const previous = byId.get(doc.id);
-    if (!previous || previous.updatedAt < doc.updatedAt) {
-      byId.set(doc.id, {
-        ...doc,
-        name: doc.name.trim() || 'Untitled Document',
-        content: sanitizeDocumentHtml(doc.content),
-      });
+    const previous = byId.get(normalized.id);
+    if (!previous || previous.updatedAt < normalized.updatedAt) {
+      byId.set(normalized.id, normalized);
       imported += 1;
     } else {
       skipped += 1;
@@ -245,14 +266,15 @@ export function importSingleLibraryDocument(rawText: string): StoredDocument {
   }
 
   const doc = parsed.documents[0];
-  if (!isStoredDocument(doc)) {
+  const normalized = normalizeStoredDocument(doc);
+  if (!normalized) {
     throw new Error('Invalid document data');
   }
 
   return upsertLibraryDocument({
     id: createDocumentId(),
-    name: doc.name.trim() || 'Untitled Document',
-    content: sanitizeDocumentHtml(doc.content),
+    name: normalized.name,
+    content: normalized.content,
     updatedAt: new Date().toISOString(),
   });
 }

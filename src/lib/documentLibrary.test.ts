@@ -79,5 +79,43 @@ describe('documentLibrary', () => {
     localStorage.setItem(LIBRARY_STORAGE_KEY, '{"not":"an array"}');
     expect(getLibraryDocuments()).toEqual([]);
   });
-});
 
+  it('sanitizes raw persisted documents when reading and exporting backups', () => {
+    localStorage.setItem(
+      LIBRARY_STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: 'raw',
+          name: 'Raw',
+          content: '<p onclick="alert(1)">Safe</p><script>alert(1)</script>',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        },
+        {
+          id: 'invalid-date',
+          name: 'Invalid',
+          content: '<p>Invalid</p>',
+          createdAt: 'not a date',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        },
+      ]),
+    );
+
+    const documents = getLibraryDocuments();
+    expect(documents).toHaveLength(1);
+    expect(documents[0].content).toBe('<p>Safe</p>');
+
+    const exported = exportLibraryDocumentsFile([
+      {
+        id: 'unsafe',
+        name: 'Unsafe',
+        content: '<img src="javascript:alert(1)" onerror="alert(1)">',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+    ]);
+
+    expect(exported).not.toContain('javascript:');
+    expect(exported).not.toContain('onerror');
+  });
+});
