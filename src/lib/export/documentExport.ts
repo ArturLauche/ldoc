@@ -592,7 +592,7 @@ async function buildPdfBlob(blocks: HtmlBlock[]): Promise<Blob> {
   const maxCharsPerLine = 90;
 
   const preparedBlocks = await preparePdfBlocks(blocks);
-  const lines = buildPdfLinesFromBlocks(preparedBlocks, maxCharsPerLine, pageWidth, margin);
+  const lines = buildPdfLinesFromBlocks(preparedBlocks, maxCharsPerLine, pageWidth, pageHeight, margin);
   const pages = paginatePdfLines(lines, pageHeight, margin);
 
   const objects: PdfChunk[][] = [];
@@ -1353,6 +1353,7 @@ function buildPdfLinesFromBlocks(
   blocks: PreparedHtmlBlock[],
   maxChars: number,
   pageWidth: number,
+  pageHeight: number,
   margin: number,
 ): PdfLine[] {
   const lines: PdfLine[] = [];
@@ -1391,9 +1392,15 @@ function buildPdfLinesFromBlocks(
       });
     } else if (block.type === 'image' && block.image) {
       const widthTarget = block.widthPct ? (maxWidth * block.widthPct) / 100 : maxWidth;
-      const width = Math.min(block.image.width, widthTarget);
-      const scale = width / block.image.width;
-      const height = block.image.height * scale;
+      const maxHeight = pageHeight - margin * 2;
+      let width = Math.min(block.image.width, widthTarget);
+      let scale = width / block.image.width;
+      let height = block.image.height * scale;
+      if (height > maxHeight) {
+        height = maxHeight;
+        scale = height / block.image.height;
+        width = block.image.width * scale;
+      }
       lines.push({
         type: 'image',
         image: block.image,
