@@ -42,7 +42,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { importDocument, getSupportedFormats } from './DocumentImporter';
 import { downloadBlob } from '@/lib/download';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
@@ -65,6 +64,8 @@ function formatMessage(template: string, values: Record<string, string | number>
     template,
   );
 }
+
+const SUPPORTED_IMPORT_FORMATS = '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
 
 function formatExportWarningSummary(count: number, firstMessage: string): string {
   return count === 1
@@ -140,7 +141,7 @@ export const FileMenu = ({
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = getSupportedFormats();
+      input.accept = SUPPORTED_IMPORT_FORMATS;
 
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
@@ -150,6 +151,7 @@ export const FileMenu = ({
         toast.loading(t(locale, 'importInProgress'), { id: 'import' });
 
         try {
+          const { importDocument } = await import('./DocumentImporter');
           const result = await importDocument(file);
           onCreateNewDocument();
           editor.commands.setContent(result.content);

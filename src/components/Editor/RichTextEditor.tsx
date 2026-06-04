@@ -1,14 +1,17 @@
 import { useEditor, EditorContent } from '@tiptap/react';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { getBrowserLocale, t, type Locale } from '@/lib/translations';
 import { EditorToolbar } from './EditorToolbar';
 import { FileMenu } from './FileMenu';
-import { VersionHistory } from './VersionHistory';
 import { Cloud, FileText, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { createEditorExtensions } from './editorExtensions';
 import { useDocumentSession } from './useDocumentSession';
+
+const VersionHistory = lazy(() =>
+  import('./VersionHistory').then((module) => ({ default: module.VersionHistory })),
+);
 
 export const RichTextEditor = () => {
   const [locale] = useState<Locale>(() => getBrowserLocale());
@@ -143,15 +146,18 @@ export const RichTextEditor = () => {
         </div>
       </footer>
 
-      {/* Version History Modal */}
-      <VersionHistory
-        isOpen={showVersionHistory}
-        onClose={() => setShowVersionHistory(false)}
-        onRestore={restoreVersion}
-        currentContent={editor?.getHTML() || ''}
-        documentName={documentName}
-        documentId={documentId}
-      />
+      {showVersionHistory ? (
+        <Suspense fallback={null}>
+          <VersionHistory
+            isOpen={showVersionHistory}
+            onClose={() => setShowVersionHistory(false)}
+            onRestore={restoreVersion}
+            currentContent={editor?.getHTML() || ''}
+            documentName={documentName}
+            documentId={documentId}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 };

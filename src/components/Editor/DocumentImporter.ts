@@ -1,4 +1,3 @@
-import mammoth from 'mammoth';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 
 export type SupportedFormat =
@@ -56,6 +55,7 @@ function detectFormat(file: File): SupportedFormat {
 
 // Import DOCX using mammoth
 async function importDocx(file: File): Promise<string> {
+  const mammoth = await import('mammoth').then((module) => module.default);
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.convertToHtml({ arrayBuffer }, {
     convertImage: mammoth.images.imgElement((image) => {

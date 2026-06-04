@@ -401,7 +401,7 @@ body {
 }
 
 .editor-content .ProseMirror li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.125rem;
 }
 
 .editor-content .ProseMirror mark {
