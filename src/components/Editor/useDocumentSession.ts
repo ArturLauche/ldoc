@@ -5,7 +5,6 @@ import {
   LEGACY_STORAGE_KEY,
   STORAGE_KEY,
   createDocumentId,
-  migrateLegacyDocumentToLibrary,
   upsertLibraryDocument,
   type StoredDocument,
 } from '@/lib/documentLibrary';
@@ -26,6 +25,14 @@ type CurrentDocumentRecord = {
   content?: string;
   name?: string;
   savedAt?: string;
+};
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (
+    callback: IdleRequestCallback,
+    options?: IdleRequestOptions,
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
 };
 
 function parseCurrentDocument(raw: string): CurrentDocumentRecord | null {
@@ -49,6 +56,18 @@ function writeCurrentDocumentStorage(doc: {
   savedAt: string;
 }) {
   throwIfStorageFailed(writeStorageJson(STORAGE_KEY, doc));
+}
+
+function scheduleIdleTask(callback: () => void): () => void {
+  const idleWindow = window as IdleWindow;
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const handle = idleWindow.requestIdleCallback(callback, { timeout: 1500 });
+    return () => idleWindow.cancelIdleCallback?.(handle);
+  }
+
+  const timeout = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(timeout);
 }
 
 export function useDocumentSession(editor: Editor | null, locale: Locale) {
@@ -138,38 +157,76 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
   useEffect(() => {
     if (!editor) return;
 
-    migrateLegacyDocumentToLibrary();
-
     const current = readStorageItem(STORAGE_KEY);
     const legacy = readStorageItem(LEGACY_STORAGE_KEY);
-    const raw = current.ok && current.value ? current.value : legacy.ok ? legacy.value : null;
+    let source: 'current' | 'legacy' | null = null;
+    let raw: string | null = null;
+
+    if (current.ok && current.value) {
+      source = 'current';
+      raw = current.value;
+    } else if (legacy.ok && legacy.value) {
+      source = 'legacy';
+      raw = legacy.value;
+    }
+
     const doc = raw ? parseCurrentDocument(raw) : null;
 
     if (!doc?.content) {
-      updateCounts();
-      return;
+      return scheduleIdleTask(updateCounts);
     }
 
-    editor.commands.setContent(sanitizeDocumentHtml(doc.content));
-    setDocumentId(doc.id || createDocumentId());
-    setDocumentName(doc.name || t(locale, 'untitledDocument'));
+    const sanitizedContent = sanitizeDocumentHtml(doc.content);
+    const nextDocumentId = doc.id || createDocumentId();
+    const nextDocumentName = doc.name || t(locale, 'untitledDocument');
+    const nextSavedAt = doc.savedAt || new Date().toISOString();
+    const shouldMigrateCurrentDocument = source === 'legacy' || !doc.id;
+    const shouldNormalizeCurrentStorage = source === 'current' && sanitizedContent !== doc.content;
+
+    editor.commands.setContent(sanitizedContent, { emitUpdate: false });
+    setDocumentId(nextDocumentId);
+    setDocumentName(nextDocumentName);
     setLastSaved(doc.savedAt ? new Date(doc.savedAt) : null);
     setHasUnsavedChanges(false);
-    updateCounts();
 
-    if (!current.ok || !current.value) {
+    const cancelCountRefresh = scheduleIdleTask(updateCounts);
+    let cancelLibraryMigration: (() => void) | undefined;
+
+    if (shouldMigrateCurrentDocument || shouldNormalizeCurrentStorage) {
       try {
         writeCurrentDocumentStorage({
-          id: doc.id || createDocumentId(),
-          name: doc.name || t(locale, 'untitledDocument'),
-          content: sanitizeDocumentHtml(doc.content),
-          savedAt: doc.savedAt || new Date().toISOString(),
+          id: nextDocumentId,
+          name: nextDocumentName,
+          content: sanitizedContent,
+          savedAt: nextSavedAt,
         });
-        removeStorageItem(LEGACY_STORAGE_KEY);
+        if (source === 'legacy') {
+          removeStorageItem(LEGACY_STORAGE_KEY);
+        }
       } catch (error) {
         console.warn('Failed to migrate current document storage:', error);
       }
     }
+
+    if (shouldMigrateCurrentDocument) {
+      cancelLibraryMigration = scheduleIdleTask(() => {
+        try {
+          upsertLibraryDocument({
+            id: nextDocumentId,
+            name: nextDocumentName,
+            content: sanitizedContent,
+            updatedAt: nextSavedAt,
+          });
+        } catch (error) {
+          console.warn('Failed to seed migrated document library:', error);
+        }
+      });
+    }
+
+    return () => {
+      cancelCountRefresh();
+      cancelLibraryMigration?.();
+    };
   }, [editor, locale, updateCounts]);
 
   useEffect(() => {

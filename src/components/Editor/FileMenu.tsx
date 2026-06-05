@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
@@ -50,7 +50,6 @@ import {
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
-  exportUnifiedLibraryFile,
   getLibraryDocuments,
   importSingleLibraryDocument,
   importUnifiedLibraryFile,
@@ -107,9 +106,15 @@ export const FileMenu = ({
   const [refreshKey, setRefreshKey] = useState(0);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
 
-  useEffect(() => {
+  const refreshLibraryDocuments = useCallback(() => {
     setLibraryDocuments(getLibraryDocuments());
-  }, [refreshKey, libraryOpen]);
+  }, []);
+
+  useEffect(() => {
+    if (!libraryOpen) return;
+    refreshLibraryDocuments();
+  }, [refreshKey, libraryOpen, refreshLibraryDocuments]);
+
   const filteredDocuments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return libraryDocuments;
@@ -179,12 +184,13 @@ export const FileMenu = ({
 
   const handleExportLibrary = () => {
     try {
-      const payload = exportUnifiedLibraryFile();
+      const documents = getLibraryDocuments();
+      const payload = exportLibraryDocumentsFile(documents);
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
       toast.success(
-        formatMessage(t(locale, 'exportedLibraryToast'), { count: libraryDocuments.length }),
+        formatMessage(t(locale, 'exportedLibraryToast'), { count: documents.length }),
       );
     } catch (error) {
       console.error('Library export failed:', error);

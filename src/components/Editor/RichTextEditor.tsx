@@ -1,16 +1,30 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { getBrowserLocale, t, type Locale } from '@/lib/translations';
-import { EditorToolbar } from './EditorToolbar';
-import { FileMenu } from './FileMenu';
 import { Cloud, FileText, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { createEditorExtensions } from './editorExtensions';
 import { useDocumentSession } from './useDocumentSession';
 
+const FileMenu = lazy(() =>
+  import('./FileMenu').then((module) => ({ default: module.FileMenu })),
+);
+
+const EditorToolbar = lazy(() =>
+  import('./EditorToolbar').then((module) => ({ default: module.EditorToolbar })),
+);
+
 const VersionHistory = lazy(() =>
   import('./VersionHistory').then((module) => ({ default: module.VersionHistory })),
+);
+
+const FileMenuFallback = () => (
+  <div aria-hidden="true" className="h-9 w-[5.75rem] flex-shrink-0 rounded-md bg-transparent" />
+);
+
+const ToolbarFallback = () => (
+  <div aria-hidden="true" className="floating-toolbar h-12 p-2" />
 );
 
 export const RichTextEditor = () => {
@@ -57,18 +71,20 @@ export const RichTextEditor = () => {
                 <span className="font-semibold text-sm tracking-tight">LWrite</span>
               </div>
               
-              <FileMenu
-                editor={editor}
-                locale={locale}
-                documentId={documentId}
-                documentName={documentName}
-                setDocumentName={renameDocument}
-                onSaveDocument={() => saveDocument({ showToast: true })}
-                onLoadDocument={loadDocument}
-                onCreateNewDocument={createNewDocument}
-                onShowVersionHistory={() => setShowVersionHistory(true)}
-                hasUnsavedChanges={hasUnsavedChanges}
-              />
+              <Suspense fallback={<FileMenuFallback />}>
+                <FileMenu
+                  editor={editor}
+                  locale={locale}
+                  documentId={documentId}
+                  documentName={documentName}
+                  setDocumentName={renameDocument}
+                  onSaveDocument={() => saveDocument({ showToast: true })}
+                  onLoadDocument={loadDocument}
+                  onCreateNewDocument={createNewDocument}
+                  onShowVersionHistory={() => setShowVersionHistory(true)}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                />
+              </Suspense>
 
               <div className="h-5 w-px bg-border/40 flex-shrink-0 hidden sm:block" />
 
@@ -119,7 +135,9 @@ export const RichTextEditor = () => {
 
         {/* Toolbar */}
         <div className="px-4 py-2 glass-bar glass-bar--toolbar">
-          <EditorToolbar editor={editor} locale={locale} />
+          <Suspense fallback={<ToolbarFallback />}>
+            <EditorToolbar editor={editor} locale={locale} />
+          </Suspense>
         </div>
       </div>
 
