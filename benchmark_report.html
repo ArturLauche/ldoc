@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #21252f;
+    --accent: #6366f1;
+    --accent2: #22d3ee;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --line: #2d3340;
+  }
+
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 11mm 15mm 9mm 15mm;
+    background:
+      radial-gradient(900px 500px at 85% -5%, rgba(99,102,241,0.18), transparent 60%),
+      radial-gradient(700px 400px at 0% 100%, rgba(34,211,238,0.10), transparent 55%),
+      var(--bg);
+  }
+
+  /* ---------- Header ---------- */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 11px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
+  .title-block h1 {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #a5b4fc;
+  }
+  .title-block .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+  }
+  .badge {
+    text-align: right;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .badge .env {
+    display: inline-block;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.4);
+    color: #a5b4fc;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  /* ---------- Section ---------- */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent2);
+    margin: 0 0 9px 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label::before {
+    content: '';
+    width: 4px;
+    height: 13px;
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+  }
+
+  /* ---------- Spec grid ---------- */
+  .spec-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 9px;
+    margin-bottom: 13px;
+  }
+  .spec {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 13px;
+  }
+  .spec .k {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .spec .v {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .spec .v small { font-size: 10px; color: var(--muted); font-weight: 500; }
+
+  /* ---------- Hero network cards ---------- */
+  .net-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 11px;
+  }
+  .ncard {
+    background: linear-gradient(160deg, var(--card2), var(--card));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ncard::after {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    opacity: 0.18;
+  }
+  .ncard.dl::after { background: var(--green); }
+  .ncard.ul::after { background: var(--amber); }
+  .ncard.lat::after { background: var(--accent2); }
+  .ncard .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .ncard .big {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .ncard.dl .big { color: var(--green); }
+  .ncard.ul .big { color: var(--amber); }
+  .ncard.lat .big { color: var(--accent2); }
+  .ncard .unit { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .ncard .note { font-size: 9.5px; color: var(--muted); margin-top: 7px; }
+
+  /* ---------- Tables ---------- */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 4px 0;
+    margin-bottom: 12px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    padding: 11px 16px 9px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 700;
+  }
+  th.r, td.r { text-align: right; }
+  td {
+    font-size: 12px;
+    padding: 6.5px 16px;
+    border-bottom: 1px solid rgba(45,51,64,0.5);
+  }
+  tr:last-child td { border-bottom: none; }
+  td.name { color: var(--text); font-weight: 600; }
+  td.val { font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  td.mbit { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sub2 { color: var(--muted); font-size: 10px; font-weight: 400; }
+
+  /* mini bar */
+  .barwrap { display: flex; align-items: center; gap: 8px; }
+  .bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .bar.g > i { background: linear-gradient(90deg, #059669, var(--green)); }
+
+  /* two-column row */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* status pills */
+  .pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 12px;
+    font-size: 9.5px;
+    font-weight: 700;
+  }
+  .pill.ok { background: rgba(52,211,153,0.15); color: var(--green); border:1px solid rgba(52,211,153,0.3);}
+  .pill.no { background: rgba(248,113,113,0.13); color: var(--red); border:1px solid rgba(248,113,113,0.3);}
+
+  /* footer */
+  .footer {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--muted);
+  }
+  .note-box {
+    background: rgba(251,191,36,0.07);
+    border: 1px solid rgba(251,191,36,0.25);
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 10px;
+    color: #fcd9a0;
+    margin-bottom: 9px;
+    line-height: 1.45;
+  }
+  .note-box b { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="title-block">
+      <h1>Environment Benchmark Report</h1>
+      <div class="sub">Remote execution container &middot; YABS v2026-05-11 + HTTP throughput suite</div>
+    </div>
+    <div class="badge">
+      <div class="env">GOOGLE CLOUD &middot; us-central1</div><br>
+      <div>Council Bluffs, Iowa, US</div>
+      <div>Generated 2026-06-11</div>
+    </div>
+  </div>
+
+  <!-- SYSTEM -->
+  <div class="section-label">System Specifications</div>
+  <div class="spec-grid">
+    <div class="spec"><div class="k">Processor</div><div class="v">Xeon <small>@ 2.80 GHz</small></div></div>
+    <div class="spec"><div class="k">CPU Cores</div><div class="v">4 <small>vCPU</small></div></div>
+    <div class="spec"><div class="k">Memory</div><div class="v">15.7 <small>GiB</small></div></div>
+    <div class="spec"><div class="k">Disk</div><div class="v">252 <small>GiB</small></div></div>
+    <div class="spec"><div class="k">OS</div><div class="v">Ubuntu <small>24.04.4 LTS</small></div></div>
+    <div class="spec"><div class="k">Kernel</div><div class="v">6.18.5</div></div>
+    <div class="spec"><div class="k">Virtualization</div><div class="v">Docker</div></div>
+    <div class="spec"><div class="k">AES-NI</div><div class="v" style="color:#34d399">Enabled</div></div>
+  </div>
+
+  <!-- NETWORK HERO -->
+  <div class="section-label">Network Performance</div>
+  <div class="net-hero">
+    <div class="ncard dl">
+      <div class="label">Download &middot; Peak</div>
+      <div class="big">1.54<span class="unit"> Gbit/s</span></div>
+      <div class="note">Sustained 1.1&ndash;1.5 Gbit/s across CDNs</div>
+    </div>
+    <div class="ncard ul">
+      <div class="label">Upload</div>
+      <div class="big">120<span class="unit"> Mbit/s</span></div>
+      <div class="note">50 MB HTTP POST &middot; egress throttled</div>
+    </div>
+    <div class="ncard lat">
+      <div class="label">TCP Latency</div>
+      <div class="big">3.2<span class="unit"> ms</span></div>
+      <div class="note">Connect time to Google backbone</div>
+    </div>
+  </div>
+
+  <!-- DOWNLOAD TABLE -->
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Download Source</th>
+          <th>Size</th>
+          <th class="r">Throughput</th>
+          <th class="r" style="width:130px">Speed (Gbit/s)</th>
+          <th style="width:90px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="name">Google Cloud Storage <span class="sub2">(TF datasets)</span></td>
+          <td class="sub2">11 MB</td>
+          <td class="val r">192 MB/s</td>
+          <td class="mbit r">1.54 <span class="sub2">Gbit/s</span></td>
+          <td><div class="barwrap"><div class="bar g"><i style="width:100%"></i></div></div></td>
+        </tr>
+        <tr>
+          <td class="name">PyTorch CDN <span class="sub2">(wheel)</span></td>
+          <td class="sub2">178 MB</td>
+          <td class="val r">183 MB/s</td>
+          <td class="mbit r">1.46 <span class="sub2">Gbit/s</span></td>
+          <td><div class="barwrap"><div class="bar g"><i style="width:95%"></i></div></div></td>
+        </tr>
+        <tr>
+          <td class="name">Anaconda <span class="sub2">(AWS CloudFront)</span></td>
+          <td class="sub2">998 MB</td>
+          <td class="val r">140 MB/s</td>
+          <td class="mbit r">1.12 <span class="sub2">Gbit/s</span></td>
+          <td><div class="barwrap"><div class="bar g"><i style="width:73%"></i></div></div></td>
+        </tr>
+        <tr>
+          <td class="name">Ubuntu archive <span class="sub2">(4 parallel streams)</span></td>
+          <td class="sub2">~85 MB</td>
+          <td class="val r">170 MB/s</td>
+          <td class="mbit r">1.36 <span class="sub2">Gbit/s</span></td>
+          <td><div class="barwrap"><div class="bar g"><i style="width:88%"></i></div></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cols">
+    <!-- UPLOAD + LATENCY -->
+    <div>
+      <div class="section-label">Upload &amp; Latency</div>
+      <div class="panel" style="margin-bottom:14px">
+        <table>
+          <thead><tr><th>Metric</th><th class="r">Result</th></tr></thead>
+          <tbody>
+            <tr><td class="name">Upload (50 MB POST)</td><td class="mbit r" style="color:#fbbf24">120 Mbit/s</td></tr>
+            <tr><td class="name">google.com</td><td class="val r">3.6 ms <span class="sub2">connect</span></td></tr>
+            <tr><td class="name">github.com</td><td class="val r">3.2 ms <span class="sub2">connect</span></td></tr>
+            <tr><td class="name">storage.googleapis.com</td><td class="val r">3.4 ms <span class="sub2">connect</span></td></tr>
+            <tr><td class="name">cloudflare.com</td><td class="val r">15 ms <span class="sub2">connect</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CONNECTIVITY -->
+    <div>
+      <div class="section-label">Connectivity</div>
+      <div class="panel" style="margin-bottom:14px">
+        <table>
+          <thead><tr><th>Port / Protocol</th><th class="r">Status</th></tr></thead>
+          <tbody>
+            <tr><td class="name">HTTP (80)</td><td class="r"><span class="pill ok">OPEN</span></td></tr>
+            <tr><td class="name">HTTPS (443)</td><td class="r"><span class="pill ok">OPEN</span></td></tr>
+            <tr><td class="name">iperf3 (5201)</td><td class="r"><span class="pill no">BLOCKED</span></td></tr>
+            <tr><td class="name">SSH (22)</td><td class="r"><span class="pill no">BLOCKED</span></td></tr>
+            <tr><td class="name">ICMP / ping</td><td class="r"><span class="pill no">BLOCKED</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISK -->
+  <div class="section-label">Disk I/O &middot; fio Mixed R/W 50/50</div>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Block Size</th>
+          <th class="r">Read</th>
+          <th class="r">Write</th>
+          <th class="r">Total</th>
+          <th class="r">IOPS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="name">4k</td><td class="val r">445 MB/s</td><td class="val r">446 MB/s</td><td class="val r">893 MB/s</td><td class="mbit r">223k</td></tr>
+        <tr><td class="name">64k</td><td class="val r">738 MB/s</td><td class="val r">742 MB/s</td><td class="val r">1.48 GB/s</td><td class="mbit r">23.1k</td></tr>
+        <tr><td class="name">512k</td><td class="val r">1.42 GB/s</td><td class="val r">1.49 GB/s</td><td class="val r">2.92 GB/s</td><td class="mbit r">5.7k</td></tr>
+        <tr><td class="name">1m</td><td class="val r">946 MB/s</td><td class="val r">1.00 GB/s</td><td class="val r">1.95 GB/s</td><td class="mbit r">1.9k</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note-box">
+    <b>Measurement note:</b> iperf3, ICMP and non-HTTP ports are blocked by the container network policy, and speedtest.net is firewalled &mdash; so the original YABS iperf3 panel returned "busy" for all endpoints. Network figures here were measured over HTTP/HTTPS (ports 80/443) via large-file <span style="color:#e5e7eb">curl</span>/<span style="color:#e5e7eb">wget</span> transfers. Speeds shown in <b>bit/s</b> (1 MB/s = 8 Mbit/s).
+  </div>
+
+  <div class="footer">
+    <div>YABS full Geekbench 6 &middot; browser.geekbench.com/v6/cpu/18318393</div>
+    <div>ISP: Google LLC &middot; AS396982 &middot; IPv4 only</div>
+  </div>
+
+</div>
+</body>
+</html>
