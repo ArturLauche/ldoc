@@ -25,6 +25,16 @@ describe('findReplaceExtension', () => {
     expect(search?.activeIndex).toBe(0);
   });
 
+  it('selects the first match as soon as the query is set', () => {
+    editor.commands.setSearchQuery('alpha');
+
+    const search = getSearchState(editor.state);
+    const firstMatch = search?.matches[0];
+    expect(firstMatch).toBeDefined();
+    expect(editor.state.selection.from).toBe(firstMatch?.from);
+    expect(editor.state.selection.to).toBe(firstMatch?.to);
+  });
+
   it('respects case sensitivity', () => {
     editor.commands.setSearchQuery('alpha', true);
 

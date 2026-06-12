@@ -152,9 +152,19 @@ export const FindReplace = Extension.create({
     return {
       setSearchQuery:
         (query, caseSensitive = false) =>
-        ({ tr, dispatch }) => {
+        ({ state, tr, dispatch }) => {
           if (dispatch) {
             tr.setMeta(searchPluginKey, { query, caseSensitive, activeIndex: 0 } satisfies SearchMeta);
+
+            // Bring the first match into view right away; otherwise "next"
+            // would skip it and the user could not navigate back to it
+            // without cycling through every other match.
+            if (query) {
+              const [firstMatch] = findDocumentMatches(state.doc, query, caseSensitive);
+              if (firstMatch) {
+                selectMatch(tr, firstMatch);
+              }
+            }
           }
           return true;
         },
