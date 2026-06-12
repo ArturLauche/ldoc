@@ -206,10 +206,6 @@ body {
     linear-gradient(180deg, hsl(210 80% 96% / 0.35) 0%, hsl(var(--background)) 48%, hsl(var(--background) / 0.88) 100%);
 }
 
-.app-header {
-  min-height: clamp(88px, 9vw, 96px);
-}
-
 /* iOS 26 Floating Design System */
 .glass-panel {
   background: hsl(var(--card) / 0.85);
@@ -420,61 +416,27 @@ body {
   opacity: 0.8;
 }
 
-/* PDF Export Styles */
-.pdf-export-container {
-  font-family: 'DM Sans', sans-serif;
-  line-height: 1.6;
-  color: black;
-  background: white;
+/* Find & replace highlights */
+.editor-content .ProseMirror .search-match {
+  background-color: hsl(48 96% 53% / 0.35);
+  border-radius: 0.2rem;
+  box-shadow: 0 0 0 1px hsl(48 96% 40% / 0.3);
 }
 
-.pdf-export-container h1 {
-  font-size: 28pt;
-  font-weight: bold;
-  margin-top: 20pt;
-  margin-bottom: 10pt;
+.editor-content .ProseMirror .search-match--active {
+  background-color: hsl(28 96% 54% / 0.55);
+  box-shadow: 0 0 0 1.5px hsl(28 96% 44% / 0.7);
 }
 
-.pdf-export-container h2 {
-  font-size: 22pt;
-  font-weight: bold;
-  margin-top: 18pt;
-  margin-bottom: 8pt;
+.dark .editor-content .ProseMirror .search-match {
+  background-color: hsl(48 90% 45% / 0.35);
+  box-shadow: 0 0 0 1px hsl(48 90% 55% / 0.35);
 }
 
-.pdf-export-container h3 {
-  font-size: 16pt;
-  font-weight: bold;
-  margin-top: 14pt;
-  margin-bottom: 6pt;
+.dark .editor-content .ProseMirror .search-match--active {
+  background-color: hsl(28 92% 50% / 0.55);
+  box-shadow: 0 0 0 1.5px hsl(28 92% 60% / 0.7);
 }
-
-.pdf-export-container p {
-  font-size: 12pt;
-  margin-bottom: 10pt;
-}
-
-.pdf-export-container ul, .pdf-export-container ol {
-  margin-left: 20pt;
-  margin-bottom: 10pt;
-}
-
-.pdf-export-container li {
-  margin-bottom: 4pt;
-}
-
-.pdf-export-container img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin: 10pt auto;
-}
-
-.pdf-export-container [style*="text-align: center"] { text-align: center; }
-.pdf-export-container [style*="text-align: right"] { text-align: right; }
-.pdf-export-container [style*="text-align: justify"] { text-align: justify; }
-.pdf-export-container [style*="color"] { color: inherit; } /* Allow inline colors */
-
 
 /* Dark mode adjustments */
 .dark .glass-panel {

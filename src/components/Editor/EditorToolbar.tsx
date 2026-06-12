@@ -51,13 +51,12 @@ import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { t, type Locale } from '@/lib/translations';
+import { formatMessage } from '@/lib/translations';
+import { useLocale } from '@/components/locale-provider';
 import type { SmartDiagramTemplate } from './SmartDiagram';
-
 
 interface EditorToolbarProps {
   editor: Editor | null;
-  locale: Locale;
 }
 
 const fontSizes = [
@@ -79,18 +78,12 @@ const textColors = [
   '#16A34A', '#0EA5E9', '#2563EB', '#7C3AED', '#DB2777', '#FFFFFF',
 ];
 
+const REMOVE_HIGHLIGHT = 'transparent';
+
 const highlightColors = [
   '#FEF08A', '#FDE68A', '#FECACA', '#D1FAE5', '#CFFAFE', '#DDD6FE',
-  '#FBCFE8', '#FED7AA', '#E0E7FF', '#CCE5FF', '#TRANSPARENT',
+  '#FBCFE8', '#FED7AA', '#E0E7FF', '#CCE5FF', REMOVE_HIGHLIGHT,
 ];
-
-const lineSpacings = [
-  { name: 'Single', value: '1' },
-  { name: '1.15', value: '1.15' },
-  { name: '1.5', value: '1.5' },
-  { name: 'Double', value: '2' },
-];
-
 
 const normalizeDiagramItems = (value: string) =>
   value
@@ -141,19 +134,20 @@ const ToolbarButton = ({
   </Tooltip>
 );
 
-export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
+export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
+  const { t } = useLocale();
   const [linkUrl, setLinkUrl] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableCols, setTableCols] = useState('3');
   const [tableWithHeader, setTableWithHeader] = useState(true);
-  const [diagramTitle, setDiagramTitle] = useState(() => t(locale, 'toolbarDefaultDiagramTitle'));
+  const [diagramTitle, setDiagramTitle] = useState(() => t('toolbarDefaultDiagramTitle'));
   const [diagramTemplate, setDiagramTemplate] = useState<SmartDiagramTemplate>('process');
-  const [diagramItems, setDiagramItems] = useState(() => t(locale, 'toolbarDefaultDiagramItems'));
+  const [diagramItems, setDiagramItems] = useState(() => t('toolbarDefaultDiagramItems'));
   const [activeFontSize, setActiveFontSize] = useState('16px');
 
   const setLink = useCallback(() => {
     if (!editor) return;
-    
+
     if (linkUrl === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
       return;
@@ -174,11 +168,18 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
   };
 
   const tablePresets = useMemo(() => ([
-    { label: t(locale, 'toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
-    { label: t(locale, 'toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
-    { label: t(locale, 'toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
-    { label: t(locale, 'toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
-  ]), [locale]);
+    { label: t('toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
+    { label: t('toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
+    { label: t('toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
+    { label: t('toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
+  ]), [t]);
+
+  const lineSpacings = useMemo(() => ([
+    { name: t('toolbarSpacingSingle'), value: '1' },
+    { name: '1.15', value: '1.15' },
+    { name: '1.5', value: '1.5' },
+    { name: t('toolbarSpacingDouble'), value: '2' },
+  ]), [t]);
 
   const diagramItemList = useMemo(() => normalizeDiagramItems(diagramItems), [diagramItems]);
   const diagramItemsValue = diagramItemList.join('|');
@@ -193,7 +194,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       if (!editor.isActive('smartDiagram')) return;
       const attrs = editor.getAttributes('smartDiagram');
       setDiagramTemplate((attrs.template as SmartDiagramTemplate) || 'process');
-      setDiagramTitle(attrs.title || t(locale, 'toolbarDefaultDiagramTitle'));
+      setDiagramTitle(attrs.title || t('toolbarDefaultDiagramTitle'));
       setDiagramItems(String(attrs.items || '').split('|').join('\n'));
     };
 
@@ -205,7 +206,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       editor.off('selectionUpdate', syncDiagramSelection);
       editor.off('transaction', syncDiagramSelection);
     };
-  }, [editor, locale]);
+  }, [editor, t]);
 
   useEffect(() => {
     if (!editor) return;
@@ -232,7 +233,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       .focus()
       .insertSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
+        title: diagramTitle.trim() || t('toolbarDefaultDiagramTitle'),
         items: diagramItemsValue,
       })
       .run();
@@ -245,7 +246,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       .focus()
       .updateSmartDiagram({
         template: diagramTemplate,
-        title: diagramTitle.trim() || t(locale, 'toolbarDefaultDiagramTitle'),
+        title: diagramTitle.trim() || t('toolbarDefaultDiagramTitle'),
         items: diagramItemsValue,
       })
       .run();
@@ -260,7 +261,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
-          tooltip="Undo"
+          tooltip={t('toolbarUndo')}
           shortcut="⌘Z"
         >
           <Undo className="h-4 w-4" />
@@ -268,7 +269,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
-          tooltip="Redo"
+          tooltip={t('toolbarRedo')}
           shortcut="⌘⇧Z"
         >
           <Redo className="h-4 w-4" />
@@ -296,7 +297,10 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
           editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
         }}
       >
-        <SelectTrigger className="w-16 h-8 text-xs font-medium bg-background/50 border-border/50" aria-label="Font size">
+        <SelectTrigger
+          className="w-16 h-8 text-xs font-medium bg-background/50 border-border/50"
+          aria-label={t('toolbarFontSize')}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -315,7 +319,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={editor.isActive('bold')}
-          tooltip="Bold"
+          tooltip={t('toolbarBold')}
           shortcut="⌘B"
         >
           <Bold className="h-4 w-4" />
@@ -323,7 +327,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={editor.isActive('italic')}
-          tooltip="Italic"
+          tooltip={t('toolbarItalic')}
           shortcut="⌘I"
         >
           <Italic className="h-4 w-4" />
@@ -331,7 +335,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           isActive={editor.isActive('underline')}
-          tooltip="Underline"
+          tooltip={t('toolbarUnderline')}
           shortcut="⌘U"
         >
           <Underline className="h-4 w-4" />
@@ -339,7 +343,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleStrike().run()}
           isActive={editor.isActive('strike')}
-          tooltip="Strikethrough"
+          tooltip={t('toolbarStrikethrough')}
         >
           <Strikethrough className="h-4 w-4" />
         </ToolbarButton>
@@ -352,14 +356,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleSuperscript().run()}
           isActive={editor.isActive('superscript')}
-          tooltip="Superscript"
+          tooltip={t('toolbarSuperscript')}
         >
           <Superscript className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleSubscript().run()}
           isActive={editor.isActive('subscript')}
-          tooltip="Subscript"
+          tooltip={t('toolbarSubscript')}
         >
           <Subscript className="h-4 w-4" />
         </ToolbarButton>
@@ -370,7 +374,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       {/* Text Color */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Text color">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarTextColor')}>
             <Palette className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -382,7 +386,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 onClick={() => editor.chain().focus().setColor(color).run()}
                 className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring"
                 style={{ backgroundColor: color }}
-                aria-label={`Set text color to ${color}`}
+                aria-label={formatMessage(t('toolbarSetTextColor'), { color })}
               />
             ))}
           </div>
@@ -392,17 +396,17 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       {/* Highlight */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Highlight color">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarHighlight')}>
             <Highlighter className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-3 bg-popover border border-border shadow-lg z-50">
           <div className="grid grid-cols-6 gap-1.5">
-            {highlightColors.map((color, index) => (
+            {highlightColors.map((color) => (
               <button
-                key={index}
+                key={color}
                 onClick={() => {
-                  if (color === '#TRANSPARENT') {
+                  if (color === REMOVE_HIGHLIGHT) {
                     editor.chain().focus().unsetHighlight().run();
                   } else {
                     editor.chain().focus().setHighlight({ color }).run();
@@ -410,10 +414,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 }}
                 className={cn(
                   "h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring",
-                  color === '#TRANSPARENT' && "bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
+                  color === REMOVE_HIGHLIGHT && "bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
                 )}
-                style={{ backgroundColor: color === '#TRANSPARENT' ? undefined : color }}
-                aria-label={color === '#TRANSPARENT' ? 'Remove highlight' : `Set highlight to ${color}`}
+                style={{ backgroundColor: color === REMOVE_HIGHLIGHT ? undefined : color }}
+                aria-label={
+                  color === REMOVE_HIGHLIGHT
+                    ? t('toolbarRemoveHighlight')
+                    : formatMessage(t('toolbarSetHighlight'), { color })
+                }
               />
             ))}
           </div>
@@ -423,7 +431,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       {/* Clear Formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-        tooltip="Clear formatting"
+        tooltip={t('toolbarClearFormatting')}
       >
         <RemoveFormatting className="h-4 w-4" />
       </ToolbarButton>
@@ -435,14 +443,14 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive('bulletList')}
-          tooltip="Bullet list"
+          tooltip={t('toolbarBulletList')}
         >
           <List className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           isActive={editor.isActive('orderedList')}
-          tooltip="Numbered list"
+          tooltip={t('toolbarOrderedList')}
         >
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
@@ -454,13 +462,13 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-          tooltip="Decrease indent"
+          tooltip={t('toolbarDecreaseIndent')}
         >
           <IndentDecrease className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-          tooltip="Increase indent"
+          tooltip={t('toolbarIncreaseIndent')}
         >
           <IndentIncrease className="h-4 w-4" />
         </ToolbarButton>
@@ -473,28 +481,28 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('left').run()}
           isActive={editor.isActive({ textAlign: 'left' })}
-          tooltip="Align left"
+          tooltip={t('toolbarAlignLeft')}
         >
           <AlignLeft className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('center').run()}
           isActive={editor.isActive({ textAlign: 'center' })}
-          tooltip="Align center"
+          tooltip={t('toolbarAlignCenter')}
         >
           <AlignCenter className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('right').run()}
           isActive={editor.isActive({ textAlign: 'right' })}
-          tooltip="Align right"
+          tooltip={t('toolbarAlignRight')}
         >
           <AlignRight className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('justify').run()}
           isActive={editor.isActive({ textAlign: 'justify' })}
-          tooltip="Justify"
+          tooltip={t('toolbarAlignJustify')}
         >
           <AlignJustify className="h-4 w-4" />
         </ToolbarButton>
@@ -505,7 +513,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       {/* Line Spacing */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Line spacing">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarLineSpacing')}>
             <ChevronsUpDown className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -526,20 +534,19 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
         </PopoverContent>
       </Popover>
 
-
       <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Tables */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert table">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarTable')}>
             <TableIcon className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-72 p-3 bg-popover border border-border shadow-lg z-50">
           <div className="space-y-3">
             <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarCreateTable')}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarCreateTable')}</p>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="number"
@@ -547,8 +554,8 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   max={12}
                   value={tableRows}
                   onChange={(e) => setTableRows(e.target.value)}
-                  aria-label={t(locale, 'toolbarRows')}
-                  placeholder={t(locale, 'toolbarRows')}
+                  aria-label={t('toolbarRows')}
+                  placeholder={t('toolbarRows')}
                 />
                 <Input
                   type="number"
@@ -556,8 +563,8 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   max={8}
                   value={tableCols}
                   onChange={(e) => setTableCols(e.target.value)}
-                  aria-label={t(locale, 'toolbarColumns')}
-                  placeholder={t(locale, 'toolbarColumns')}
+                  aria-label={t('toolbarColumns')}
+                  placeholder={t('toolbarColumns')}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -583,51 +590,51 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 className="w-full"
                 onClick={() => setTableWithHeader((value) => !value)}
               >
-                {tableWithHeader ? t(locale, 'toolbarHeaderRowOn') : t(locale, 'toolbarHeaderRowOff')}
+                {tableWithHeader ? t('toolbarHeaderRowOn') : t('toolbarHeaderRowOff')}
               </Button>
               <Button size="sm" className="w-full" onClick={createTable}>
-                <Rows3 className="h-4 w-4 mr-2" /> {t(locale, 'toolbarInsertTable')} ({tableSummary})
+                <Rows3 className="h-4 w-4 mr-2" /> {t('toolbarInsertTable')} ({tableSummary})
               </Button>
             </div>
 
             <Separator />
 
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarTableTools')}</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarTableTools')}</p>
               <div className="grid grid-cols-2 gap-1">
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowBefore().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddRowBefore')}
+                  {t('toolbarAddRowBefore')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowAfter().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddRowAfter')}
+                  {t('toolbarAddRowAfter')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnBefore().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddColumnBefore')}
+                  {t('toolbarAddColumnBefore')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnAfter().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarAddColumnAfter')}
+                  {t('toolbarAddColumnAfter')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().mergeCells().run()} disabled={!isInTable}>
-                  <Combine className="h-4 w-4 mr-1" /> {t(locale, 'toolbarMergeCells')}
+                  <Combine className="h-4 w-4 mr-1" /> {t('toolbarMergeCells')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().splitCell().run()} disabled={!isInTable}>
-                  <SplitSquareHorizontal className="h-4 w-4 mr-1" /> {t(locale, 'toolbarSplitCell')}
+                  <SplitSquareHorizontal className="h-4 w-4 mr-1" /> {t('toolbarSplitCell')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderRow().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarToggleHeaderRow')}
+                  {t('toolbarToggleHeaderRow')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarToggleHeaderColumn')}
+                  {t('toolbarToggleHeaderColumn')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteRow().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarDeleteRow')}
+                  {t('toolbarDeleteRow')}
                 </Button>
                 <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteColumn().run()} disabled={!isInTable}>
-                  {t(locale, 'toolbarDeleteColumn')}
+                  {t('toolbarDeleteColumn')}
                 </Button>
               </div>
               <Button size="sm" variant="destructive" className="w-full mt-2" onClick={() => editor.chain().focus().deleteTable().run()} disabled={!isInTable}>
-                {t(locale, 'toolbarDeleteTable')}
+                {t('toolbarDeleteTable')}
               </Button>
             </div>
           </div>
@@ -637,38 +644,38 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
       {/* Smart diagram */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Insert smart diagram">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarDiagram')}>
             <Workflow className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t(locale, 'toolbarDiagram')}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarDiagram')}</p>
             <Input
               value={diagramTitle}
               onChange={(e) => setDiagramTitle(e.target.value)}
-              placeholder={t(locale, 'toolbarDiagramTitle')}
-              aria-label={t(locale, 'toolbarDiagramTitle')}
+              placeholder={t('toolbarDiagramTitle')}
+              aria-label={t('toolbarDiagramTitle')}
             />
             <Select
               value={diagramTemplate}
-              onValueChange={(value) => setDiagramTemplate(value as 'process' | 'cycle' | 'hierarchy')}
+              onValueChange={(value) => setDiagramTemplate(value as SmartDiagramTemplate)}
             >
-              <SelectTrigger aria-label={t(locale, 'toolbarDiagramTemplate')}>
-                <SelectValue placeholder={t(locale, 'toolbarDiagramTemplate')} />
+              <SelectTrigger aria-label={t('toolbarDiagramTemplate')}>
+                <SelectValue placeholder={t('toolbarDiagramTemplate')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="process">{t(locale, 'toolbarProcess')}</SelectItem>
-                <SelectItem value="cycle">{t(locale, 'toolbarCycle')}</SelectItem>
-                <SelectItem value="hierarchy">{t(locale, 'toolbarHierarchy')}</SelectItem>
+                <SelectItem value="process">{t('toolbarProcess')}</SelectItem>
+                <SelectItem value="cycle">{t('toolbarCycle')}</SelectItem>
+                <SelectItem value="hierarchy">{t('toolbarHierarchy')}</SelectItem>
               </SelectContent>
             </Select>
             <Textarea
               rows={5}
               value={diagramItems}
               onChange={(e) => setDiagramItems(e.target.value)}
-              placeholder={t(locale, 'toolbarDiagramItems')}
-              aria-label={t(locale, 'toolbarDiagramItems')}
+              placeholder={t('toolbarDiagramItems')}
+              aria-label={t('toolbarDiagramItems')}
             />
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -678,12 +685,12 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 onClick={() =>
                   setDiagramItems(
                     (value) =>
-                      `${value.trim()}\n${t(locale, 'toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
+                      `${value.trim()}\n${t('toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
                   )
                 }
                 disabled={diagramLimitReached}
               >
-                <Plus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramAddItem')}
+                <Plus className="h-4 w-4 mr-2" /> {t('toolbarDiagramAddItem')}
               </Button>
               <Button
                 size="sm"
@@ -692,20 +699,20 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                 onClick={() => setDiagramItems(diagramItemList.slice(0, -1).join('\n'))}
                 disabled={diagramItemList.length <= 2}
               >
-                <Minus className="h-4 w-4 mr-2" /> {t(locale, 'toolbarDiagramRemoveItem')}
+                <Minus className="h-4 w-4 mr-2" /> {t('toolbarDiagramRemoveItem')}
               </Button>
             </div>
             <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-2">
-                <span>{t(locale, 'toolbarDiagramHint')}</span>
+                <span>{t('toolbarDiagramHint')}</span>
                 <span>{diagramItemList.length}/8</span>
               </div>
-              {diagramLimitReached && <p className="mt-1">{t(locale, 'toolbarDiagramHintOverflow')}</p>}
+              {diagramLimitReached && <p className="mt-1">{t('toolbarDiagramHintOverflow')}</p>}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" onClick={insertDiagram} disabled={!canInsertDiagram}>{t(locale, 'toolbarInsertDiagram')}</Button>
+              <Button size="sm" onClick={insertDiagram} disabled={!canInsertDiagram}>{t('toolbarInsertDiagram')}</Button>
               <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram || !canInsertDiagram}>
-                {t(locale, 'toolbarUpdateDiagram')}
+                {t('toolbarUpdateDiagram')}
               </Button>
             </div>
           </div>
@@ -719,19 +726,20 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             variant="ghost"
             size="sm"
             className={cn('h-8 w-8 p-0', editor.isActive('link') && 'bg-primary/10 text-primary')}
-            aria-label="Insert link"
+            aria-label={t('toolbarLink')}
           >
             <Link className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
           <div className="flex flex-col gap-2">
-            <input
+            <Input
               type="url"
-              placeholder="Enter URL..."
+              placeholder={t('toolbarLinkPlaceholder')}
+              aria-label={t('toolbarLinkPlaceholder')}
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-9"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -741,7 +749,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={setLink} className="flex-1">
-                Apply
+                {t('toolbarLinkApply')}
               </Button>
               {editor.isActive('link') && (
                 <Button
@@ -749,7 +757,7 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
                   variant="outline"
                   onClick={() => editor.chain().focus().unsetLink().run()}
                 >
-                  Remove
+                  {t('toolbarLinkRemove')}
                 </Button>
               )}
             </div>
@@ -761,8 +769,6 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
 
       {/* Image */}
       <ImageToolbar editor={editor} />
-
-
 
       {/* Styles (Headings) */}
       <Select
@@ -781,15 +787,18 @@ export const EditorToolbar = ({ editor, locale }: EditorToolbarProps) => {
           }
         }}
       >
-        <SelectTrigger className="w-28 h-8 text-xs font-medium bg-background/50 border-border/50" aria-label="Text style">
+        <SelectTrigger
+          className="w-28 h-8 text-xs font-medium bg-background/50 border-border/50"
+          aria-label={t('toolbarTextStyle')}
+        >
           <Type className="h-3.5 w-3.5 mr-1.5" />
-          <SelectValue placeholder="Style" />
+          <SelectValue placeholder={t('toolbarTextStyle')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="paragraph">Normal</SelectItem>
-          <SelectItem value="h1">Heading 1</SelectItem>
-          <SelectItem value="h2">Heading 2</SelectItem>
-          <SelectItem value="h3">Heading 3</SelectItem>
+          <SelectItem value="paragraph">{t('toolbarStyleNormal')}</SelectItem>
+          <SelectItem value="h1">{t('toolbarStyleH1')}</SelectItem>
+          <SelectItem value="h2">{t('toolbarStyleH2')}</SelectItem>
+          <SelectItem value="h3">{t('toolbarStyleH3')}</SelectItem>
         </SelectContent>
       </Select>
     </div>

@@ -2,10 +2,12 @@ import { Editor } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 
+const getPlaceholder = () => 'Start writing...';
+
 describe('editorExtensions', () => {
   it('marks font-sized text as theme-inheriting without adding a fixed color', () => {
     const editor = new Editor({
-      extensions: createEditorExtensions('en'),
+      extensions: createEditorExtensions(getPlaceholder),
       content: '<p><span style="font-size: 24px">Large text</span></p>',
     });
 
@@ -21,7 +23,7 @@ describe('editorExtensions', () => {
 
   it('marks custom line-height text as theme-inheriting without adding a fixed color', () => {
     const editor = new Editor({
-      extensions: createEditorExtensions('en'),
+      extensions: createEditorExtensions(getPlaceholder),
       content: '<p><span style="line-height: 1.5">Spaced text</span></p>',
     });
 

@@ -45,7 +45,9 @@ import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/download';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
-import { t, type Locale } from '@/lib/translations';
+import { formatMessage } from '@/lib/translations';
+import { useLocale } from '@/components/locale-provider';
+import { useConfirm } from '@/components/confirm-provider';
 import {
   deleteLibraryDocument,
   duplicateLibraryDocument,
@@ -56,25 +58,10 @@ import {
   type StoredDocument,
 } from '@/lib/documentLibrary';
 
-function formatMessage(template: string, values: Record<string, string | number>): string {
-  return Object.entries(values).reduce(
-    (message, [key, value]) =>
-      message.split(`{${key}}`).join(String(value)),
-    template,
-  );
-}
-
 const SUPPORTED_IMPORT_FORMATS = '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
-
-function formatExportWarningSummary(count: number, firstMessage: string): string {
-  return count === 1
-    ? `Export completed with a warning: ${firstMessage}`
-    : `Export completed with ${count} warnings: ${firstMessage}`;
-}
 
 interface FileMenuProps {
   editor: Editor | null;
-  locale: Locale;
   documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
@@ -87,7 +74,6 @@ interface FileMenuProps {
 
 export const FileMenu = ({
   editor,
-  locale,
   documentId,
   documentName,
   setDocumentName,
@@ -97,6 +83,8 @@ export const FileMenu = ({
   onShowVersionHistory,
   hasUnsavedChanges,
 }: FileMenuProps) => {
+  const { t, locale } = useLocale();
+  const confirm = useConfirm();
   const [renameOpen, setRenameOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [newName, setNewName] = useState(documentName);
@@ -124,22 +112,34 @@ export const FileMenu = ({
     );
   }, [libraryDocuments, searchQuery]);
 
-  const handleNewDocument = () => {
+  const confirmDiscardUnsavedChanges = useCallback(
+    () =>
+      confirm({
+        title: t('unsavedConfirmTitle'),
+        description: t('discardUnsavedChanges'),
+        destructive: true,
+      }),
+    [confirm, t],
+  );
+
+  const handleNewDocument = async () => {
     if (!editor) return;
 
     if (hasUnsavedChanges) {
-      if (!confirm(t(locale, 'unsavedConfirm'))) {
-        return;
-      }
+      const confirmed = await confirm({
+        title: t('unsavedConfirmTitle'),
+        description: t('unsavedConfirm'),
+      });
+      if (!confirmed) return;
     }
 
     onCreateNewDocument();
-    toast.success(t(locale, 'newDocumentCreated'));
+    toast.success(t('newDocumentCreated'));
   };
 
   const handleOpenFile = async () => {
     if (!editor) return;
-    if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
+    if (hasUnsavedChanges && !(await confirmDiscardUnsavedChanges())) {
       return;
     }
 
@@ -153,7 +153,7 @@ export const FileMenu = ({
         if (!file) return;
 
         setIsImporting(true);
-        toast.loading(t(locale, 'importInProgress'), { id: 'import' });
+        toast.loading(t('importInProgress'), { id: 'import' });
 
         try {
           const { importDocument } = await import('./DocumentImporter');
@@ -162,10 +162,10 @@ export const FileMenu = ({
           editor.commands.setContent(result.content);
           setDocumentName(result.fileName);
           setRefreshKey((value) => value + 1);
-          toast.success(formatMessage(t(locale, 'openedFileToast'), { name: file.name }), { id: 'import' });
+          toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
           console.error('Import error:', error);
-          toast.error(t(locale, 'importFailed'), { id: 'import' });
+          toast.error(t('importFailed'), { id: 'import' });
         } finally {
           setIsImporting(false);
         }
@@ -173,7 +173,8 @@ export const FileMenu = ({
 
       input.click();
     } catch (error) {
-      toast.error(t(locale, 'openFailed'));
+      console.error('Open failed:', error);
+      toast.error(t('openFailed'));
     }
   };
 
@@ -190,11 +191,11 @@ export const FileMenu = ({
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
       toast.success(
-        formatMessage(t(locale, 'exportedLibraryToast'), { count: documents.length }),
+        formatMessage(t('exportedLibraryToast'), { count: documents.length }),
       );
     } catch (error) {
       console.error('Library export failed:', error);
-      toast.error('Failed to export your document library');
+      toast.error(t('exportLibraryFailed'));
     }
   };
 
@@ -211,14 +212,14 @@ export const FileMenu = ({
         const result = importUnifiedLibraryFile(raw);
         setRefreshKey((value) => value + 1);
         toast.success(
-          formatMessage(t(locale, 'importedLibraryToast'), {
+          formatMessage(t('importedLibraryToast'), {
             imported: result.imported,
             skipped: result.skipped,
           }),
         );
       } catch (error) {
         console.error('Library import failed:', error);
-        toast.error(t(locale, 'invalidLibraryFile'));
+        toast.error(t('invalidLibraryFile'));
       }
     };
     input.click();
@@ -236,10 +237,10 @@ export const FileMenu = ({
         const raw = await file.text();
         const doc = importSingleLibraryDocument(raw);
         setRefreshKey((value) => value + 1);
-        toast.success(`${t(locale, 'importedSingleDocToast')}: ${doc.name}`);
+        toast.success(`${t('importedSingleDocToast')}: ${doc.name}`);
       } catch (error) {
         console.error('Single document import failed:', error);
-        toast.error(t(locale, 'invalidLibraryFile'));
+        toast.error(t('invalidLibraryFile'));
       }
     };
     input.click();
@@ -251,10 +252,10 @@ export const FileMenu = ({
       const fileName = buildSafeExportFileName(doc.name, 'lwrite.json');
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
-      toast.success(formatMessage(t(locale, 'exportedDocumentToast'), { name: doc.name }));
+      toast.success(formatMessage(t('exportedDocumentToast'), { name: doc.name }));
     } catch (error) {
       console.error('Document export failed:', error);
-      toast.error('Failed to export this document');
+      toast.error(t('exportDocumentFailed'));
     }
   };
 
@@ -262,26 +263,39 @@ export const FileMenu = ({
     try {
       const duplicated = duplicateLibraryDocument(doc.id);
       setRefreshKey((value) => value + 1);
-      toast.success(formatMessage(t(locale, 'documentDuplicatedToast'), { name: duplicated.name }));
+      toast.success(formatMessage(t('documentDuplicatedToast'), { name: duplicated.name }));
     } catch (error) {
       console.error('Document duplicate failed:', error);
-      toast.error('Failed to duplicate this document');
+      toast.error(t('duplicateDocumentFailed'));
     }
   };
 
-  const handleDeleteLibraryDocument = (doc: StoredDocument) => {
-    if (!confirm(`Delete "${doc.name}" from your local library?`)) {
-      return;
-    }
+  const handleDeleteLibraryDocument = async (doc: StoredDocument) => {
+    const confirmed = await confirm({
+      title: t('confirmDeleteDocumentTitle'),
+      description: formatMessage(t('confirmDeleteDocumentBody'), { name: doc.name }),
+      confirmLabel: t('delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     try {
       deleteLibraryDocument(doc.id);
       setRefreshKey((value) => value + 1);
-      toast.success(formatMessage(t(locale, 'documentDeletedToast'), { name: doc.name }));
+      toast.success(formatMessage(t('documentDeletedToast'), { name: doc.name }));
     } catch (error) {
       console.error('Document delete failed:', error);
-      toast.error('Failed to delete this document');
+      toast.error(t('deleteDocumentFailed'));
     }
+  };
+
+  const handleOpenLibraryDocument = async (doc: StoredDocument) => {
+    if (hasUnsavedChanges && !(await confirmDiscardUnsavedChanges())) {
+      return;
+    }
+    onLoadDocument(doc);
+    setLibraryOpen(false);
+    toast.success(formatMessage(t('openedDocumentToast'), { name: doc.name }));
   };
 
   const exportAs = async (format: ExportFormat) => {
@@ -297,14 +311,21 @@ export const FileMenu = ({
         format,
       });
       downloadBlob(blob, fileName);
-      toast.success(`${t(locale, 'exportSuccess')} ${fileName}`);
+      toast.success(`${t('exportSuccess')} ${fileName}`);
       if (warnings.length) {
-        toast.warning(formatExportWarningSummary(warnings.length, warnings[0].message));
+        const summary =
+          warnings.length === 1
+            ? formatMessage(t('exportWarningSingle'), { message: warnings[0].message })
+            : formatMessage(t('exportWarningMany'), {
+                count: warnings.length,
+                message: warnings[0].message,
+              });
+        toast.warning(summary);
       }
     } catch (error) {
       console.error('Export failed:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Export failed: ${message}`);
+      toast.error(formatMessage(t('exportFailedToast'), { message }));
     } finally {
       setIsExporting(false);
     }
@@ -314,7 +335,7 @@ export const FileMenu = ({
     if (newName.trim()) {
       setDocumentName(newName.trim());
       setRenameOpen(false);
-      toast.success(t(locale, 'documentRenamed'));
+      toast.success(t('documentRenamed'));
     }
   };
 
@@ -324,81 +345,81 @@ export const FileMenu = ({
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-9 px-3 gap-2 font-medium">
             <FileText className="h-4 w-4" />
-            {t(locale, 'fileMenuLabel')}
+            {t('fileMenuLabel')}
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56 bg-popover border border-border shadow-lg z-50" align="start">
-          <DropdownMenuItem onClick={handleNewDocument}>
+          <DropdownMenuItem onClick={() => void handleNewDocument()}>
             <FilePlus className="h-4 w-4 mr-2" />
-            {t(locale, 'fileMenuNewDocument')}
+            {t('fileMenuNewDocument')}
             <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleOpenFile} disabled={isImporting}>
+          <DropdownMenuItem onClick={() => void handleOpenFile()} disabled={isImporting}>
             <FolderOpen className="h-4 w-4 mr-2" />
-            {isImporting ? t(locale, 'importInProgress') : t(locale, 'fileMenuOpen')}
+            {isImporting ? t('importInProgress') : t('fileMenuOpen')}
             <span className="ml-auto text-xs text-muted-foreground">⌘O</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSave}>
             <Save className="h-4 w-4 mr-2" />
-            {t(locale, 'fileMenuSave')}
+            {t('fileMenuSave')}
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
             <Search className="h-4 w-4 mr-2" />
-            {t(locale, 'searchDocuments')}
+            {t('searchDocuments')}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Files className="h-4 w-4 mr-2" />
-              {t(locale, 'libraryTransfer')}
+              {t('libraryTransfer')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={handleExportLibrary}>
                 <Download className="h-4 w-4 mr-2" />
-                {t(locale, 'exportAllDocs')}
+                {t('exportAllDocs')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleImportLibrary}>
                 <Upload className="h-4 w-4 mr-2" />
-                {t(locale, 'importAllDocs')}
+                {t('importAllDocs')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleImportSingleDocument}>
                 <Upload className="h-4 w-4 mr-2" />
-                {t(locale, 'importSingleDoc')}
+                {t('importSingleDoc')}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Download className="h-4 w-4 mr-2" />
-              {t(locale, 'fileMenuExportAs')}
+              {t('fileMenuExportAs')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
               <DropdownMenuItem onClick={() => void exportAs('txt')} disabled={isExporting}>
                 <FileType className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatTxt')}
+                {t('fileMenuFormatTxt')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void exportAs('html')} disabled={isExporting}>
                 <FileText className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatHtml')}
+                {t('fileMenuFormatHtml')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void exportAs('rtf')} disabled={isExporting}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatRtf')}
+                {t('fileMenuFormatRtf')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void exportAs('docx')} disabled={isExporting}>
                 <FileBadge2 className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatDocx')}
+                {t('fileMenuFormatDocx')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void exportAs('odt')} disabled={isExporting}>
                 <FileArchive className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatOdt')}
+                {t('fileMenuFormatOdt')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void exportAs('pdf')} disabled={isExporting}>
                 <FileOutput className="h-4 w-4 mr-2" />
-                {t(locale, 'fileMenuFormatPdf')}
+                {t('fileMenuFormatPdf')}
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
@@ -409,11 +430,11 @@ export const FileMenu = ({
               setRenameOpen(true);
             }}
           >
-            {t(locale, 'fileMenuRename')}
+            {t('fileMenuRename')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onShowVersionHistory}>
             <History className="h-4 w-4 mr-2" />
-            {t(locale, 'fileMenuVersionHistory')}
+            {t('fileMenuVersionHistory')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -421,12 +442,12 @@ export const FileMenu = ({
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t(locale, 'renameDocument')}</DialogTitle>
-            <DialogDescription>{t(locale, 'renameDocumentDescription')}</DialogDescription>
+            <DialogTitle>{t('renameDocument')}</DialogTitle>
+            <DialogDescription>{t('renameDocumentDescription')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">{t(locale, 'renameDocumentNameLabel')}</Label>
+              <Label htmlFor="name">{t('renameDocumentNameLabel')}</Label>
               <Input
                 id="name"
                 value={newName}
@@ -440,9 +461,9 @@ export const FileMenu = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              {t(locale, 'cancel')}
+              {t('cancel')}
             </Button>
-            <Button onClick={handleRename}>Save</Button>
+            <Button onClick={handleRename}>{t('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -450,22 +471,22 @@ export const FileMenu = ({
       <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t(locale, 'documentLibrary')}</DialogTitle>
+            <DialogTitle>{t('documentLibrary')}</DialogTitle>
             <DialogDescription>
-              {t(locale, 'documentLibraryDescription')}
+              {t('documentLibraryDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Input
-              placeholder={t(locale, 'searchByTitleOrContent')}
+              placeholder={t('searchByTitleOrContent')}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label="Search saved documents"
+              aria-label={t('searchSavedDocumentsAria')}
             />
             <ScrollArea className="h-[320px] border rounded-md">
               <div className="p-2 space-y-2">
                 {filteredDocuments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">{t(locale, 'noMatchingDocuments')}</p>
+                  <p className="text-sm text-muted-foreground p-2">{t('noMatchingDocuments')}</p>
                 ) : (
                   filteredDocuments.map((doc) => (
                     <div
@@ -477,18 +498,13 @@ export const FileMenu = ({
                       <button
                         type="button"
                         className="min-w-0 text-left"
-                        onClick={() => {
-                          if (hasUnsavedChanges && !confirm(t(locale, 'discardUnsavedChanges'))) {
-                            return;
-                          }
-                          onLoadDocument(doc);
-                          setLibraryOpen(false);
-                          toast.success(formatMessage(t(locale, 'openedDocumentToast'), { name: doc.name }));
-                        }}
+                        onClick={() => void handleOpenLibraryDocument(doc)}
                       >
                         <div className="truncate font-medium">{doc.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          Saved {new Date(doc.updatedAt).toLocaleString()}
+                          {formatMessage(t('librarySavedAt'), {
+                            date: new Date(doc.updatedAt).toLocaleString(locale),
+                          })}
                         </div>
                       </button>
                       <div className="flex flex-wrap items-center gap-2">
@@ -499,7 +515,7 @@ export const FileMenu = ({
                           onClick={() => handleExportLibraryDocument(doc)}
                         >
                           <Download className="mr-1 h-3.5 w-3.5" />
-                          {t(locale, 'exportDocumentBackup')}
+                          {t('exportDocumentBackup')}
                         </Button>
                         <Button
                           type="button"
@@ -508,17 +524,17 @@ export const FileMenu = ({
                           onClick={() => handleDuplicateLibraryDocument(doc)}
                         >
                           <Copy className="mr-1 h-3.5 w-3.5" />
-                          {t(locale, 'duplicateDocument')}
+                          {t('duplicateDocument')}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteLibraryDocument(doc)}
+                          onClick={() => void handleDeleteLibraryDocument(doc)}
                         >
                           <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          {t(locale, 'deleteDocument')}
+                          {t('deleteDocument')}
                         </Button>
                       </div>
                     </div>
@@ -529,7 +545,7 @@ export const FileMenu = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLibraryOpen(false)}>
-              {t(locale, 'close')}
+              {t('close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -537,4 +553,3 @@ export const FileMenu = ({
     </>
   );
 };
-

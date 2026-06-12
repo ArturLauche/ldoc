@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
+import { LocaleProvider } from '@/components/locale-provider';
+import { ConfirmProvider } from '@/components/confirm-provider';
 import {
   LEGACY_STORAGE_KEY,
   LIBRARY_STORAGE_KEY,
@@ -13,9 +15,13 @@ import { RichTextEditor } from './RichTextEditor';
 function renderEditor() {
   return render(
     <ThemeProvider attribute="class" defaultTheme="light">
-      <TooltipProvider>
-        <RichTextEditor />
-      </TooltipProvider>
+      <LocaleProvider>
+        <ConfirmProvider>
+          <TooltipProvider>
+            <RichTextEditor />
+          </TooltipProvider>
+        </ConfirmProvider>
+      </LocaleProvider>
     </ThemeProvider>,
   );
 }

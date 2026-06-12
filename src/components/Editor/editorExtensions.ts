@@ -15,8 +15,8 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
-import { t, type Locale } from '@/lib/translations';
 import { SmartDiagram } from './SmartDiagram';
+import { FindReplace } from './findReplaceExtension';
 
 const EnhancedImage = Image.extend({
   addAttributes() {
@@ -77,7 +77,11 @@ const EnhancedTextStyle = TextStyle.extend({
   },
 });
 
-export function createEditorExtensions(locale: Locale): Extensions {
+/**
+ * Builds the TipTap extension set. The placeholder is provided as a callback
+ * so the active locale can change without recreating the editor.
+ */
+export function createEditorExtensions(getPlaceholder: () => string): Extensions {
   return [
     StarterKit.configure({
       heading: {
@@ -105,7 +109,7 @@ export function createEditorExtensions(locale: Locale): Extensions {
     Subscript,
     FontFamily,
     Placeholder.configure({
-      placeholder: t(locale, 'placeholder'),
+      placeholder: () => getPlaceholder(),
     }),
     EnhancedImage.configure({
       inline: false,
@@ -121,5 +125,6 @@ export function createEditorExtensions(locale: Locale): Extensions {
     TableHeader,
     TableCell,
     SmartDiagram,
+    FindReplace,
   ];
 }
