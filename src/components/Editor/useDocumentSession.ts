@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 import {
@@ -9,7 +9,6 @@ import {
   type StoredDocument,
 } from '@/lib/documentLibrary';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
-import { t, type Locale } from '@/lib/translations';
 import { saveDocumentVersion } from '@/lib/versionHistory';
 import {
   readStorageItem,
@@ -17,6 +16,8 @@ import {
   throwIfStorageFailed,
   writeStorageJson,
 } from '@/lib/storage';
+import { useLocale } from '@/components/locale-provider';
+import { useConfirm } from '@/components/confirm-provider';
 
 const AUTOSAVE_DELAY = 3000;
 
@@ -70,13 +71,22 @@ function scheduleIdleTask(callback: () => void): () => void {
   return () => window.clearTimeout(timeout);
 }
 
-export function useDocumentSession(editor: Editor | null, locale: Locale) {
+export function useDocumentSession(editor: Editor | null) {
+  const { t } = useLocale();
+  const confirm = useConfirm();
   const [documentId, setDocumentId] = useState(() => createDocumentId());
-  const [documentName, setDocumentName] = useState(() => t(locale, 'untitledDocument'));
+  const [documentName, setDocumentName] = useState(() => t('untitledDocument'));
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+
+  // The startup-load effect must not re-run when the locale changes (it would
+  // clobber unsaved edits), so it reads translations through a ref.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   const updateCounts = useCallback(() => {
     if (!editor) return;
@@ -129,15 +139,15 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
         setHasUnsavedChanges(false);
 
         if (options?.showToast) {
-          toast.success(t(locale, 'saveSuccess'));
+          toast.success(t('saveSuccess'));
         }
       } catch (error) {
         console.error('Failed to save document:', error);
         setHasUnsavedChanges(true);
-        toast.error(t(locale, 'saveFailed'));
+        toast.error(t('saveFailed'));
       }
     },
-    [documentId, documentName, editor, locale],
+    [documentId, documentName, editor, t],
   );
 
   useEffect(() => {
@@ -178,7 +188,7 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
 
     const sanitizedContent = sanitizeDocumentHtml(doc.content);
     const nextDocumentId = doc.id || createDocumentId();
-    const nextDocumentName = doc.name || t(locale, 'untitledDocument');
+    const nextDocumentName = doc.name || tRef.current('untitledDocument');
     const nextSavedAt = doc.savedAt || new Date().toISOString();
     const shouldMigrateCurrentDocument = source === 'legacy' || !doc.id;
     const shouldNormalizeCurrentStorage = source === 'current' && sanitizedContent !== doc.content;
@@ -227,7 +237,7 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
       cancelCountRefresh();
       cancelLibraryMigration?.();
     };
-  }, [editor, locale, updateCounts]);
+  }, [editor, updateCounts]);
 
   useEffect(() => {
     if (!editor || !hasUnsavedChanges) return;
@@ -248,15 +258,15 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
   const createNewDocument = useCallback(() => {
     if (!editor) return;
 
-    saveSafetyVersion('(before new document)');
+    saveSafetyVersion(t('versionBeforeNewDocumentSuffix'));
     editor.commands.setContent('<p></p>');
     setDocumentId(createDocumentId());
-    setDocumentName(t(locale, 'untitledDocument'));
+    setDocumentName(t('untitledDocument'));
     setLastSaved(null);
     setHasUnsavedChanges(false);
     clearCurrentDocumentStorage();
     updateCounts();
-  }, [editor, locale, saveSafetyVersion, updateCounts]);
+  }, [editor, saveSafetyVersion, t, updateCounts]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -267,22 +277,28 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
 
       if ((event.metaKey || event.ctrlKey) && event.key === 'n') {
         event.preventDefault();
-        if (hasUnsavedChanges && !confirm(t(locale, 'unsavedConfirm'))) {
-          return;
-        }
-        createNewDocument();
+        void (async () => {
+          if (hasUnsavedChanges) {
+            const confirmed = await confirm({
+              title: t('unsavedConfirmTitle'),
+              description: t('unsavedConfirm'),
+            });
+            if (!confirmed) return;
+          }
+          createNewDocument();
+        })();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [createNewDocument, hasUnsavedChanges, locale, saveDocument]);
+  }, [confirm, createNewDocument, hasUnsavedChanges, saveDocument, t]);
 
   const loadDocument = useCallback(
     (doc: StoredDocument) => {
       if (!editor) return;
 
-      saveSafetyVersion('(before opening document)');
+      saveSafetyVersion(t('versionBeforeOpenSuffix'));
       const sanitizedContent = sanitizeDocumentHtml(doc.content);
       editor.commands.setContent(sanitizedContent);
       setDocumentId(doc.id);
@@ -301,7 +317,7 @@ export function useDocumentSession(editor: Editor | null, locale: Locale) {
       }
       updateCounts();
     },
-    [editor, saveSafetyVersion, updateCounts],
+    [editor, saveSafetyVersion, t, updateCounts],
   );
 
   const renameDocument = useCallback((name: string) => {

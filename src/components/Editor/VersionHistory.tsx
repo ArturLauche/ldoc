@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { format } from 'date-fns';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { History, Clock, RotateCcw, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,6 +10,9 @@ import {
   type StoredVersion,
 } from '@/lib/versionHistory';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
+import { formatMessage } from '@/lib/translations';
+import { useLocale } from '@/components/locale-provider';
+import { useConfirm } from '@/components/confirm-provider';
 
 interface VersionHistoryProps {
   isOpen: boolean;
@@ -29,8 +31,23 @@ export const VersionHistory = ({
   documentName,
   documentId,
 }: VersionHistoryProps) => {
+  const { t, locale } = useLocale();
+  const confirm = useConfirm();
   const [versions, setVersions] = useState<StoredVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(null);
+
+  const dateFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }),
+    [locale],
+  );
+  const timeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { timeStyle: 'short' }),
+    [locale],
+  );
+  const dateTimeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
+    [locale],
+  );
 
   const loadVersions = useCallback(() => {
     setVersions(getDocumentVersions(documentId));
@@ -48,27 +65,41 @@ export const VersionHistory = ({
       content: currentContent,
     });
     loadVersions();
-    toast.success('Version saved');
+    toast.success(t('versionSavedToast'));
   };
 
   const handleRestore = (version: StoredVersion) => {
     saveDocumentVersion({
       documentId,
-      name: `${documentName} (before restore)`,
+      name: `${documentName} ${t('versionBeforeRestoreSuffix')}`,
       content: currentContent,
     });
     onRestore(version.content);
-    toast.success(`Restored version from ${format(new Date(version.timestamp), 'MMM d, yyyy h:mm a')}`);
+    toast.success(
+      formatMessage(t('versionRestoredToast'), {
+        date: dateTimeFormat.format(new Date(version.timestamp)),
+      }),
+    );
     onClose();
   };
 
-  const handleDelete = (versionId: string) => {
-    deleteDocumentVersion(versionId);
+  const handleDelete = async (version: StoredVersion) => {
+    const confirmed = await confirm({
+      title: t('versionDeleteConfirmTitle'),
+      description: formatMessage(t('versionDeleteConfirmBody'), {
+        date: dateTimeFormat.format(new Date(version.timestamp)),
+      }),
+      confirmLabel: t('delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    deleteDocumentVersion(version.id);
     loadVersions();
-    if (selectedVersion?.id === versionId) {
+    if (selectedVersion?.id === version.id) {
       setSelectedVersion(null);
     }
-    toast.success('Version deleted');
+    toast.success(t('versionDeletedToast'));
   };
 
   if (!isOpen) return null;
@@ -83,15 +114,17 @@ export const VersionHistory = ({
               <History className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Version History</h2>
-              <p className="text-sm text-muted-foreground">{versions.length} saved versions</p>
+              <h2 className="text-lg font-semibold">{t('versionHistoryTitle')}</h2>
+              <p className="text-sm text-muted-foreground">
+                {formatMessage(t('versionHistorySavedCount'), { count: versions.length })}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={saveVersion} size="sm">
-              Save Current Version
+              {t('versionHistorySaveCurrent')}
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close version history">
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('versionHistoryCloseAria')}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -106,8 +139,8 @@ export const VersionHistory = ({
                 {versions.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     <Clock className="h-8 w-8 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">No saved versions yet</p>
-                    <p className="text-xs mt-1">Click "Save Current Version" to create a snapshot</p>
+                    <p className="text-sm">{t('versionHistoryEmptyTitle')}</p>
+                    <p className="text-xs mt-1">{t('versionHistoryEmptyHint')}</p>
                   </div>
                 ) : (
                   versions.map((version) => (
@@ -122,10 +155,10 @@ export const VersionHistory = ({
                     >
                       <div className="font-medium text-sm truncate">{version.name}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(version.timestamp), 'MMM d, yyyy')}
+                        {dateFormat.format(new Date(version.timestamp))}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {format(new Date(version.timestamp), 'h:mm a')}
+                        {timeFormat.format(new Date(version.timestamp))}
                       </div>
                     </button>
                   ))
@@ -142,22 +175,22 @@ export const VersionHistory = ({
                   <div>
                     <h3 className="font-medium">{selectedVersion.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(selectedVersion.timestamp), 'MMMM d, yyyy \'at\' h:mm a')}
+                      {dateTimeFormat.format(new Date(selectedVersion.timestamp))}
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(selectedVersion.id)}
+                      onClick={() => void handleDelete(selectedVersion)}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
+                      {t('delete')}
                     </Button>
                     <Button size="sm" onClick={() => handleRestore(selectedVersion)}>
                       <RotateCcw className="h-4 w-4 mr-1" />
-                      Restore
+                      {t('restore')}
                     </Button>
                   </div>
                 </div>
@@ -172,7 +205,7 @@ export const VersionHistory = ({
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
                   <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Select a version to preview</p>
+                  <p>{t('versionHistorySelectPrompt')}</p>
                 </div>
               </div>
             )}

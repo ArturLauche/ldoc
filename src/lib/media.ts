@@ -3,10 +3,13 @@ const IMAGE_WIDTH_OPTIONS = ['25', '50', '75', '100'] as const;
 
 export const DEFAULT_IMAGE_ALIGNMENT = 'center';
 export const DEFAULT_IMAGE_WIDTH = '100';
-const MAX_IMAGE_SIZE_MB = 10;
+export const MAX_IMAGE_SIZE_MB = 10;
 
 export type ImageAlignment = (typeof IMAGE_ALIGNMENT_OPTIONS)[number];
 export type ImageWidth = (typeof IMAGE_WIDTH_OPTIONS)[number];
+
+export type ImageFileError = 'not-image' | 'too-large';
+export type ImageUrlError = 'empty' | 'invalid-protocol' | 'invalid-url';
 
 export const normalizeImageAlignment = (value?: string | null): ImageAlignment => {
   if (value && IMAGE_ALIGNMENT_OPTIONS.includes(value as ImageAlignment)) {
@@ -25,17 +28,16 @@ export const normalizeImageWidth = (value?: string | null): ImageWidth => {
 export const sanitizeAltText = (value?: string | null): string =>
   value?.trim() ?? '';
 
-export const validateImageFile = (file: File): { ok: true } | { ok: false; message: string } => {
+export const validateImageFile = (
+  file: File,
+): { ok: true } | { ok: false; code: ImageFileError } => {
   if (!file.type.startsWith('image/')) {
-    return { ok: false, message: 'Please select an image file' };
+    return { ok: false, code: 'not-image' };
   }
 
   const maxSizeBytes = MAX_IMAGE_SIZE_MB * 1024 * 1024;
   if (file.size > maxSizeBytes) {
-    return {
-      ok: false,
-      message: `Image is too large. Please choose a file under ${MAX_IMAGE_SIZE_MB}MB`,
-    };
+    return { ok: false, code: 'too-large' };
   }
 
   return { ok: true };
@@ -67,10 +69,10 @@ export const readFileAsDataUrl = (file: File): Promise<string> =>
 
 export const normalizeImageUrl = (
   value: string
-): { ok: true; url: string } | { ok: false; message: string } => {
+): { ok: true; url: string } | { ok: false; code: ImageUrlError } => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return { ok: false, message: 'Please enter an image URL' };
+    return { ok: false, code: 'empty' };
   }
 
   if (trimmed.startsWith('data:image/')) {
@@ -80,34 +82,11 @@ export const normalizeImageUrl = (
   try {
     const parsed = new URL(trimmed);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return { ok: false, message: 'Please enter a valid HTTP or HTTPS URL' };
+      return { ok: false, code: 'invalid-protocol' };
     }
 
     return { ok: true, url: parsed.toString() };
   } catch {
-    return { ok: false, message: 'Please enter a valid URL' };
-  }
-};
-
-const encodeSvgToBase64 = (svg: string): string => {
-  if (typeof TextEncoder === 'undefined') {
-    return btoa(unescape(encodeURIComponent(svg)));
-  }
-
-  const bytes = new TextEncoder().encode(svg);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-};
-
-export const createSvgDataUrl = (svg: string): string | null => {
-  try {
-    const base64 = encodeSvgToBase64(svg);
-    return `data:image/svg+xml;base64,${base64}`;
-  } catch (error) {
-    console.error('Failed to encode SVG:', error);
-    return null;
+    return { ok: false, code: 'invalid-url' };
   }
 };
