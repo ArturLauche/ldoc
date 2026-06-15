@@ -271,6 +271,8 @@ const en = {
   privacyPolicy: 'Privacy',
   termsOfUse: 'Terms of Use',
   legalBackToEditor: 'Back to the editor',
+  revealEmail: 'Show email address',
+  revealEmailHint: 'Shown on click to reduce spam',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -655,6 +657,8 @@ const de: TranslationCatalog = {
   privacyPolicy: 'Datenschutz',
   termsOfUse: 'Nutzung',
   legalBackToEditor: 'Zurück zum Editor',
+  revealEmail: 'E-Mail-Adresse anzeigen',
+  revealEmailHint: 'Wird beim Klick angezeigt, um Spam zu reduzieren',
 };
 
 const it: TranslationCatalog = {

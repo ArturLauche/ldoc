@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { useLocale } from '@/components/locale-provider';
+import { ObfuscatedEmail } from '@/components/ObfuscatedEmail';
 import { siteConfig, hasControllerContact } from '@/lib/siteConfig';
 import type { LegalCopy } from '@/lib/legalContent';
 
@@ -63,9 +64,7 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
                 {siteConfig.contactEmail && (
                   <li>
                     <span className="text-muted-foreground">{copy.contactEmailLabel}:</span>{' '}
-                    <a className="underline" href={`mailto:${siteConfig.contactEmail}`}>
-                      {siteConfig.contactEmail}
-                    </a>
+                    <ObfuscatedEmail email={siteConfig.contactEmail} />
                   </li>
                 )}
                 {siteConfig.contactUrl && (
