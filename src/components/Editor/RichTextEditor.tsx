@@ -2,6 +2,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Cloud, FileText, Languages, Moon, Search, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -244,14 +245,24 @@ export const RichTextEditor = () => {
 
       {/* Footer */}
       <footer className="px-4 py-3 glass-bar glass-bar--footer">
-        <div className="max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <div className="flex items-center gap-4">
             <span>{wordCount} {t('words')}</span>
             <span>{characterCount} {t('characters')}</span>
           </div>
-          {lastSaved && (
-            <span>{t('lastSaved')}: {lastSaved.toLocaleTimeString(locale)}</span>
-          )}
+          <div className="flex items-center gap-4">
+            {lastSaved && (
+              <span>{t('lastSaved')}: {lastSaved.toLocaleTimeString(locale)}</span>
+            )}
+            <nav className="flex items-center gap-3">
+              <Link to="/privacy" className="hover:text-foreground transition-colors">
+                {t('privacyPolicy')}
+              </Link>
+              <Link to="/terms" className="hover:text-foreground transition-colors">
+                {t('termsOfUse')}
+              </Link>
+            </nav>
+          </div>
         </div>
       </footer>
 

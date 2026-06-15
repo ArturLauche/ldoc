@@ -262,6 +262,9 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
                   placeholder="https://example.com/image.jpg"
                   className="mt-1.5"
                 />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {t('imageUrlPrivacyHint')}
+                </p>
               </div>
 
               <div>
