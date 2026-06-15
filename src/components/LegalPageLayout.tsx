@@ -47,8 +47,9 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
 
           {/* Controller / contact card.
               Values come from build-time VITE_LEGAL_* env vars (see
-              src/lib/siteConfig.ts). Production deployments MUST configure them;
-              otherwise a neutral development placeholder is shown. */}
+              src/lib/siteConfig.ts). A single contact email is enough.
+              Production deployments MUST configure at least one contact;
+              otherwise a neutral placeholder (plus a dev-only hint) is shown. */}
           <section className="not-prose my-6 rounded-xl border border-border bg-card p-4 text-card-foreground">
             <h2 className="text-base font-semibold mb-2">{copy.contactHeading}</h2>
             {hasControllerContact ? (
@@ -80,14 +81,24 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
                     </a>
                   </li>
                 )}
-                <li>
-                  <span className="text-muted-foreground">{copy.jurisdictionLabel}:</span>{' '}
-                  {siteConfig.jurisdiction}
-                </li>
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">{copy.contactPlaceholder}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">{copy.contactPlaceholder}</p>
+                {/* Dev-only: nudges the operator to configure a contact email.
+                    Never rendered in production builds. */}
+                {import.meta.env.DEV && (
+                  <p className="rounded-md border border-dashed border-border bg-muted/30 px-2 py-1 text-xs italic text-muted-foreground">
+                    {copy.contactDevHint}
+                  </p>
+                )}
+              </div>
             )}
+            {/* Jurisdiction is always shown, with or without a configured contact. */}
+            <p className="mt-3 text-sm">
+              <span className="text-muted-foreground">{copy.jurisdictionLabel}:</span>{' '}
+              {siteConfig.jurisdiction}
+            </p>
           </section>
 
           {copy.blocks.map((block) => (
