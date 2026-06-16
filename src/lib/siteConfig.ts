@@ -65,7 +65,7 @@ export const siteConfig = {
   /** Governing jurisdiction for the project. */
   jurisdiction: withFallback(env.VITE_LEGAL_JURISDICTION, 'Germany / EU'),
   /** Last review date shown on the legal pages (YYYY-MM-DD). */
-  lastUpdated: withFallback(env.VITE_LEGAL_LAST_UPDATED, '2026-06-15'),
+  lastUpdated: withFallback(env.VITE_LEGAL_LAST_UPDATED, '2026-06-16'),
 } as const;
 
 /**

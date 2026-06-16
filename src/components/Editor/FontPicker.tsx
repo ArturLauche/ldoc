@@ -15,7 +15,9 @@ interface FontPickerProps {
   onChange: (font: string) => void;
 }
 
-// Google Fonts - curated list of popular fonts
+// Curated font list. These originate from Google Fonts, but LWrite self-hosts
+// them under public/fonts and serves them from its own origin (see
+// scripts/fetch-fonts.mjs), so picking a font makes no third-party request.
 const GOOGLE_FONTS = [
   // Sans-serif
   { name: 'Inter', category: 'sans-serif' },
@@ -66,16 +68,33 @@ const GOOGLE_FONTS = [
   { name: 'Courier New', category: 'system' },
 ];
 
-// Track loaded fonts
+// Fonts that need no stylesheet injection: OS system fonts, plus the interface
+// fonts already loaded globally in index.html.
+const PRELOADED_FONTS = new Set([
+  'Arial',
+  'Times New Roman',
+  'Georgia',
+  'Verdana',
+  'Courier New',
+  'DM Sans',
+]);
+
+// Families whose self-hosted stylesheet has already been injected this session.
 const loadedFonts = new Set<string>();
 
-function loadGoogleFont(fontName: string) {
-  if (loadedFonts.has(fontName) || ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'].includes(fontName)) {
+function fontSlug(fontName: string) {
+  return fontName.toLowerCase().replace(/\s+/g, '-');
+}
+
+// Load a font from LWrite's own origin (see public/fonts). No request is made to
+// a third party such as Google Fonts.
+function loadFont(fontName: string) {
+  if (loadedFonts.has(fontName) || PRELOADED_FONTS.has(fontName)) {
     return;
   }
-  
+
   const link = document.createElement('link');
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;700&display=swap`;
+  link.href = `/fonts/${fontSlug(fontName)}.css`;
   link.rel = 'stylesheet';
   document.head.appendChild(link);
   loadedFonts.add(fontName);
@@ -89,7 +108,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
   useEffect(() => {
     if (value) {
       const fontName = value.split(',')[0].replace(/['"]/g, '').trim();
-      loadGoogleFont(fontName);
+      loadFont(fontName);
     }
   }, [value]);
   
@@ -118,7 +137,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
   const currentFontName = value ? value.split(',')[0].replace(/['"]/g, '').trim() : 'Default';
   
   const handleSelectFont = (fontName: string) => {
-    loadGoogleFont(fontName);
+    loadFont(fontName);
     
     // Get the font category for fallback
     const font = GOOGLE_FONTS.find(f => f.name === fontName);
@@ -187,7 +206,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
                 </div>
                 {fonts.map((font) => {
                   // Preload font on hover
-                  const handleMouseEnter = () => loadGoogleFont(font.name);
+                  const handleMouseEnter = () => loadFont(font.name);
                   
                   return (
                     <button
