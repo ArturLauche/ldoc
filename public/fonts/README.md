@@ -17,18 +17,23 @@ node scripts/fetch-fonts.mjs
   at the local `files/` binaries. `index.html` links the interface fonts
   (`dm-sans.css`, `crimson-pro.css`); the editor font picker
   (`src/components/Editor/FontPicker.tsx`) loads the rest on demand.
+- `licenses/<family>.txt` — the upstream open-source license (with its
+  copyright notice) for each family. See [`licenses/README.md`](./licenses/README.md).
 
-Only the `latin` and `latin-ext` subsets are kept to bound the repository size.
-The original `unicode-range` values are preserved, so characters outside those
-subsets fall back to system fonts — the same behaviour as when a browser blocks
-external fonts.
-
-Do not edit the generated files by hand; re-run the script instead.
+The script cleans and rewrites `files/`, `licenses/`, and the per-family `.css`
+files; this README is hand-maintained and left untouched. Only the `latin` and
+`latin-ext` subsets are kept to bound the repository size. The original
+`unicode-range` values are preserved, so characters outside those subsets fall
+back to system fonts — the same behaviour as when a browser blocks external
+fonts. Do not edit the generated files by hand; re-run the script instead.
 
 ## Origin and licensing
 
 The fonts originate from [Google Fonts](https://fonts.google.com) and remain
-under their respective upstream open-source licenses (the SIL Open Font License
-1.1, the Apache License 2.0, or the Ubuntu Font License, depending on the
-family). Self-hosting is permitted by those licenses. Refer to each family's
-page on Google Fonts for the authoritative license text.
+under their respective upstream open-source licenses — the SIL Open Font
+License 1.1, the Apache License 2.0, or the Ubuntu Font License 1.0, depending
+on the family. Self-hosting is permitted by those licenses, which require their
+terms and copyright notices to accompany redistribution of the font files. To
+satisfy that, each family's full license text is committed under `licenses/`
+and ships with the build alongside the binaries; `licenses/README.md` maps every
+family to its license.

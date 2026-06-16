@@ -6,21 +6,25 @@
 //
 //   node scripts/fetch-fonts.mjs
 //
-// It needs network access to fonts.googleapis.com / fonts.gstatic.com, writes
-// woff2 files to `public/fonts/files/`, and emits one CSS file per family
+// It needs network access to fonts.googleapis.com / fonts.gstatic.com (for the
+// fonts) and raw.githubusercontent.com/google/fonts (for the licenses). It
+// writes woff2 files to `public/fonts/files/`, emits one CSS file per family
 // (`public/fonts/<slug>.css`) with @font-face rules pointing at the local
-// files. The generated output is committed; the build itself never touches the
+// files, and saves each family's upstream license (with its copyright notice)
+// to `public/fonts/licenses/<slug>.txt` so the notices ship with the binaries.
+// The generated output is committed; the build itself never touches the
 // network. Only the `latin` and `latin-ext` subsets are kept to bound the
 // repository size — characters outside them fall back to system fonts via the
 // preserved `unicode-range`, exactly as when a browser blocks external fonts.
 
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'public', 'fonts');
 const FILES_DIR = path.join(OUT_DIR, 'files');
+const LICENSE_DIR = path.join(OUT_DIR, 'licenses');
 
 // A modern desktop Chrome UA so the css2 endpoint returns woff2 sources.
 const USER_AGENT =
@@ -28,6 +32,16 @@ const USER_AGENT =
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const KEEP_SUBSETS = new Set(['latin', 'latin-ext']);
+
+// Where the upstream open-source licenses live. OFL, Apache and the Ubuntu Font
+// License all require their notice/terms to accompany any redistribution of the
+// font binaries, so we bundle each family's license file next to the woff2s.
+const GF_RAW = 'https://raw.githubusercontent.com/google/fonts/main';
+const LICENSE_FOLDERS = [
+  { folder: 'ofl', file: 'OFL.txt', label: 'SIL Open Font License 1.1' },
+  { folder: 'ufl', file: 'UFL.txt', label: 'Ubuntu Font License 1.0' },
+  { folder: 'apache', file: 'LICENSE.txt', label: 'Apache License 2.0' },
+];
 
 // UI fonts loaded on every page (index.html) — keep all weights index.html used.
 // Picker fonts mirror the Google entries in src/components/Editor/FontPicker.tsx
@@ -95,6 +109,41 @@ async function fetchBinary(url) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+// Returns the body, or null on 404 (so callers can probe several locations).
+async function fetchTextOrNull(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+  return res.text();
+}
+
+// The family's directory name in the google/fonts repo (lowercase, alnum only).
+const gfDir = (family) => family.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Download a family's upstream license file. OFL/UFL files already embed the
+// copyright notice; for the generic Apache license we prepend the per-font
+// copyright from METADATA.pb so attribution travels with the text.
+async function fetchLicense(family) {
+  const dir = gfDir(family);
+  for (const { folder, file, label } of LICENSE_FOLDERS) {
+    const text = await fetchTextOrNull(`${GF_RAW}/${folder}/${dir}/${file}`);
+    if (text == null) continue;
+
+    let body = text;
+    if (folder === 'apache') {
+      const meta = await fetchTextOrNull(`${GF_RAW}/${folder}/${dir}/METADATA.pb`);
+      const copyrights = meta
+        ? [...new Set([...meta.matchAll(/copyright:\s*"([^"]+)"/g)].map((m) => m[1]))]
+        : [];
+      if (copyrights.length > 0) {
+        body = `${copyrights.join('\n')}\n\n${text}`;
+      }
+    }
+    return { label, body };
+  }
+  throw new Error(`No license found in google/fonts for "${family}" (dir "${dir}")`);
+}
+
 // Parse the css2 response into { subset, family, style, weight, unicodeRange, src }.
 function parseFaces(css) {
   const faces = [];
@@ -121,10 +170,19 @@ function parseFaces(css) {
 }
 
 async function run() {
-  await rm(OUT_DIR, { recursive: true, force: true });
+  // Clean only the generated artifacts so the hand-written README.md survives.
+  await rm(FILES_DIR, { recursive: true, force: true });
+  await rm(LICENSE_DIR, { recursive: true, force: true });
+  for (const entry of await readdir(OUT_DIR).catch(() => [])) {
+    if (entry.endsWith('.css')) {
+      await rm(path.join(OUT_DIR, entry), { force: true });
+    }
+  }
   await mkdir(FILES_DIR, { recursive: true });
+  await mkdir(LICENSE_DIR, { recursive: true });
 
   let totalFiles = 0;
+  const licenseIndex = [];
 
   for (const { family, weights } of FONTS) {
     const familyParam = family.replace(/ /g, '+');
@@ -166,10 +224,33 @@ async function run() {
       path.join(OUT_DIR, `${slug}.css`),
       `${header}${cssBlocks.join('\n')}\n`,
     );
-    console.log(`${family}: ${faces.length} face(s)`);
+
+    const license = await fetchLicense(family);
+    await writeFile(path.join(LICENSE_DIR, `${slug}.txt`), license.body);
+    licenseIndex.push({ family, slug, label: license.label });
+
+    console.log(`${family}: ${faces.length} face(s) — ${license.label}`);
   }
 
-  console.log(`\nDone. ${FONTS.length} families, ${totalFiles} woff2 files.`);
+  licenseIndex.sort((a, b) => a.family.localeCompare(b.family));
+  const indexBody =
+    `# Font licenses\n\n` +
+    `Each file in this directory is the upstream open-source license (including\n` +
+    `the copyright notice) for the matching self-hosted family in \`../files\`.\n` +
+    `These licenses require their terms and notices to accompany any\n` +
+    `redistribution of the font binaries, so they are committed and shipped with\n` +
+    `the build. Generated by \`scripts/fetch-fonts.mjs\` — do not edit by hand.\n\n` +
+    `| Font | License | File |\n| --- | --- | --- |\n` +
+    licenseIndex
+      .map((e) => `| ${e.family} | ${e.label} | [\`${e.slug}.txt\`](./${e.slug}.txt) |`)
+      .join('\n') +
+    '\n';
+  await writeFile(path.join(LICENSE_DIR, 'README.md'), indexBody);
+
+  console.log(
+    `\nDone. ${FONTS.length} families, ${totalFiles} woff2 files, ` +
+      `${licenseIndex.length} license files.`,
+  );
 }
 
 run().catch((err) => {
