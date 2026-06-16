@@ -220,6 +220,8 @@ const en = {
   imageAltLabel: 'Alt text (optional)',
   imageAltPlaceholder: 'Describe the image...',
   imageUrlLabel: 'Image URL',
+  imageUrlPrivacyHint:
+    'Loading a remote image makes your browser contact that third-party server, which may see your IP address and request details. Uploaded images stay in your browser.',
   imageInsertAction: 'Insert Image',
   imageAlignmentLabel: 'Alignment',
   imageSizeLabel: 'Size',
@@ -264,6 +266,13 @@ const en = {
   findNoMatches: 'No matches',
   findCloseAria: 'Close find and replace',
   replacedAllToast: 'Replaced {count} matches',
+
+  // Legal / footer
+  privacyPolicy: 'Privacy',
+  termsOfUse: 'Terms of Use',
+  legalBackToEditor: 'Back to the editor',
+  revealEmail: 'Show email address',
+  revealEmailHint: 'Shown on click to reduce spam',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -596,6 +605,8 @@ const de: TranslationCatalog = {
   imageAltLabel: 'Alternativtext (optional)',
   imageAltPlaceholder: 'Beschreibe das Bild...',
   imageUrlLabel: 'Bild-URL',
+  imageUrlPrivacyHint:
+    'Beim Laden eines externen Bildes kontaktiert dein Browser den fremden Server, der dabei deine IP-Adresse und Anfragedetails sehen kann. Hochgeladene Bilder bleiben in deinem Browser.',
   imageInsertAction: 'Bild einfügen',
   imageAlignmentLabel: 'Ausrichtung',
   imageSizeLabel: 'Größe',
@@ -643,6 +654,11 @@ const de: TranslationCatalog = {
   fileMenuFormatDocx: 'Word-Dokument (.docx)',
   fileMenuFormatOdt: 'OpenDocument-Text (.odt)',
   fileMenuFormatPdf: 'PDF-Dokument (.pdf)',
+  privacyPolicy: 'Datenschutz',
+  termsOfUse: 'Nutzung',
+  legalBackToEditor: 'Zurück zum Editor',
+  revealEmail: 'E-Mail-Adresse anzeigen',
+  revealEmailHint: 'Wird beim Klick angezeigt, um Spam zu reduzieren',
 };
 
 const it: TranslationCatalog = {

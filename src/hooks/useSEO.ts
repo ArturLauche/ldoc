@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { siteConfig } from "@/lib/siteConfig";
 
 type SeoConfig = {
   title: string;
@@ -9,8 +10,10 @@ type SeoConfig = {
   structuredData?: Record<string, unknown>;
 };
 
-const SITE_NAME = "LWrite";
+const SITE_NAME = siteConfig.siteName;
 const DEFAULT_IMAGE = "https://storage.googleapis.com/gpt-engineer-file-uploads/qvvrk4xtK7bKOCDAmKZqQKASV1H3/social-images/social-1767914053483-LWrite-Logo.png";
+
+const STRUCTURED_DATA_ID = "ldoc-structured-data";
 
 const upsertMeta = (selector: string, attributes: Record<string, string>) => {
   const head = document.head;
@@ -63,7 +66,11 @@ export const useSEO = ({
   structuredData,
 }: SeoConfig) => {
   useEffect(() => {
-    const canonicalUrl = new URL(canonicalPath, window.location.origin).toString();
+    // Resolve against the configured public site URL so the canonical/og:url
+    // reflect the documented domain even on preview or alternate-origin
+    // deployments. `siteConfig.siteUrl` falls back to the current origin when
+    // unconfigured, preserving previous behaviour for the default deployment.
+    const canonicalUrl = new URL(canonicalPath, siteConfig.siteUrl).toString();
 
     document.title = title;
 
@@ -88,7 +95,12 @@ export const useSEO = ({
     upsertLink('link[rel="canonical"]', { rel: "canonical", href: canonicalUrl });
 
     if (structuredData) {
-      upsertJsonLd("ldoc-structured-data", structuredData);
+      upsertJsonLd(STRUCTURED_DATA_ID, structuredData);
+    } else {
+      // Pages without their own structured data (e.g. the legal pages) must not
+      // inherit a previous route's JSON-LD during SPA navigation, or they would
+      // be indexed with stale, page-specific structured data.
+      document.head.querySelector(`script#${STRUCTURED_DATA_ID}`)?.remove();
     }
   }, [canonicalPath, description, noIndex, ogType, structuredData, title]);
 };

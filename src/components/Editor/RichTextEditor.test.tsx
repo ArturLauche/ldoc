@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LocaleProvider } from '@/components/locale-provider';
@@ -14,15 +15,17 @@ import { RichTextEditor } from './RichTextEditor';
 
 function renderEditor() {
   return render(
-    <ThemeProvider attribute="class" defaultTheme="light">
-      <LocaleProvider>
-        <ConfirmProvider>
-          <TooltipProvider>
-            <RichTextEditor />
-          </TooltipProvider>
-        </ConfirmProvider>
-      </LocaleProvider>
-    </ThemeProvider>,
+    <MemoryRouter>
+      <ThemeProvider attribute="class" defaultTheme="light">
+        <LocaleProvider>
+          <ConfirmProvider>
+            <TooltipProvider>
+              <RichTextEditor />
+            </TooltipProvider>
+          </ConfirmProvider>
+        </LocaleProvider>
+      </ThemeProvider>
+    </MemoryRouter>,
   );
 }
 

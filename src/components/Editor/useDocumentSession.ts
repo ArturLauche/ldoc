@@ -249,6 +249,19 @@ export function useDocumentSession(editor: Editor | null) {
     return () => window.clearTimeout(timer);
   }, [editor, hasUnsavedChanges, saveDocument]);
 
+  // Flush a pending autosave when the editor unmounts — for example when the
+  // user clicks a footer link to a legal page within the autosave debounce
+  // window. Without this, the cleanup above clears the timer and the recent
+  // edits would be lost on the next load. A ref keeps the latest closure so the
+  // unmount-only effect always sees current state.
+  const flushPendingSaveRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    flushPendingSaveRef.current = () => {
+      if (hasUnsavedChanges) saveDocument();
+    };
+  }, [hasUnsavedChanges, saveDocument]);
+  useEffect(() => () => flushPendingSaveRef.current(), []);
+
   useEffect(() => {
     if (editor) {
       updateCounts();
