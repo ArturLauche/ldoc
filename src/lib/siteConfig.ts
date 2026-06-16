@@ -36,6 +36,20 @@ const runtimeOrigin = (): string => {
   return 'http://localhost:8080';
 };
 
+// Only accept http(s) URLs so a misconfigured (or malicious) value such as
+// `javascript:alert(1)` can never be rendered as a clickable href. Anything
+// that is not an absolute http(s) URL is dropped to an empty string.
+const safeHttpUrl = (value: string | undefined): string => {
+  const trimmed = cleaned(value);
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : '';
+  } catch {
+    return '';
+  }
+};
+
 export const siteConfig = {
   /** Public project name. */
   siteName: withFallback(env.VITE_SITE_NAME, 'LWrite'),
@@ -45,8 +59,9 @@ export const siteConfig = {
   controllerName: cleaned(env.VITE_LEGAL_CONTROLLER_NAME),
   /** Public contact email the operator intentionally exposes. Empty until configured. */
   contactEmail: cleaned(env.VITE_LEGAL_CONTACT_EMAIL),
-  /** Public contact URL/form the operator intentionally exposes. Empty until configured. */
-  contactUrl: cleaned(env.VITE_LEGAL_CONTACT_URL),
+  /** Public contact URL/form the operator intentionally exposes. Only safe
+   *  http(s) values are kept; anything else is dropped. Empty until configured. */
+  contactUrl: safeHttpUrl(env.VITE_LEGAL_CONTACT_URL),
   /** Governing jurisdiction for the project. */
   jurisdiction: withFallback(env.VITE_LEGAL_JURISDICTION, 'Germany / EU'),
   /** Last review date shown on the legal pages (YYYY-MM-DD). */
@@ -54,11 +69,23 @@ export const siteConfig = {
 } as const;
 
 /**
- * True when the operator has configured at least one real way to reach the
- * data controller. When false, the legal pages must show the neutral
- * development placeholder and (in production) this signals missing config.
+ * True only when the operator has configured a way to actually *reach* the
+ * controller — an email or a contact URL. A controller name on its own gives a
+ * visitor no contact channel, so it does not count: in that case the legal
+ * pages still show the neutral placeholder rather than pretending a contact
+ * exists.
  */
 export const hasControllerContact =
-  siteConfig.controllerName.length > 0 ||
-  siteConfig.contactEmail.length > 0 ||
-  siteConfig.contactUrl.length > 0;
+  siteConfig.contactEmail.length > 0 || siteConfig.contactUrl.length > 0;
+
+// Non-fatal signal for production deployments that forgot to configure a
+// reachable contact. We deliberately do not fail the build (an existing
+// deployment may not have set these yet), but we surface it in the console so
+// the misconfiguration is visible; the pages fall back to the placeholder.
+if (import.meta.env.PROD && !hasControllerContact) {
+  console.warn(
+    '[siteConfig] No reachable legal contact is configured. Set VITE_LEGAL_CONTACT_EMAIL ' +
+      '(or VITE_LEGAL_CONTACT_URL) so the privacy/terms pages show a real contact instead ' +
+      'of a placeholder.',
+  );
+}

@@ -35,8 +35,10 @@ const v = {
 };
 
 // NOTE ON WEB FONTS: `index.html` loads the "DM Sans" and "Crimson Pro" web
-// fonts from Google Fonts (fonts.googleapis.com / fonts.gstatic.com). That is a
-// real third-party request that exposes the visitor's IP to Google, so it is
+// fonts from Google Fonts (fonts.googleapis.com / fonts.gstatic.com) on every
+// page load, and `FontPicker.tsx` loads further Google Fonts on demand when a
+// user selects a font in the editor or opens content that uses one. Both are
+// real third-party requests that expose the visitor's IP to Google, so they are
 // disclosed below. If an operator self-hosts these fonts instead, update the
 // "Web fonts" section and the Google Fonts recipient bullet accordingly.
 
@@ -71,7 +73,7 @@ const privacyEn: LegalCopy = {
       heading: 'What data is processed',
       bullets: [
         'Server access data: when your browser loads the site, the hosting/CDN provider may process technically necessary access data such as IP address, date and time, the requested URL, the user agent and — where the browser sends it — the referrer, plus error, security and hosting/CDN logs.',
-        'Web fonts: the page loads display fonts from Google Fonts. When the page opens, your browser requests these fonts from Google servers, which can process your IP address and request metadata (see "Web fonts" below).',
+        'Web fonts: the interface loads display fonts from Google Fonts when a page opens, and the editor loads additional Google Fonts on demand when you choose a font in the font picker or open a document that uses one. In each case your browser requests the font from Google servers, which can process your IP address and request metadata (see "Web fonts" below).',
         'Content you enter into the editor: text, formatting, imported documents and uploaded images are processed locally in your browser and saved to local storage on your device. They are not sent to a server operated by this project.',
         'Technically necessary local storage: the app stores documents, version history and small UI preferences in your browser. It does not set tracking cookies.',
         'Preferences: your selected theme (light/dark) and language are stored locally so the app remembers them.',
@@ -90,7 +92,7 @@ const privacyEn: LegalCopy = {
     {
       heading: 'Web fonts',
       paragraphs: [
-        'The interface uses the "DM Sans" and "Crimson Pro" fonts, which are loaded from the Google Fonts service (provided by Google Ireland Limited / Google LLC). When you open a page, your browser connects to Google servers to download these fonts, and Google can thereby process your IP address. No font-related cookies are set by this project, and the fonts are used only to display the interface consistently. If you want to avoid this third-party request, you can block external fonts in your browser; the app stays fully usable with fallback system fonts.',
+        'The interface uses the "DM Sans" and "Crimson Pro" fonts, which are loaded from the Google Fonts service (provided by Google Ireland Limited / Google LLC) when you open a page. In addition, the editor offers a font picker: when you select one of those fonts for your text, or open a document that already uses one, the app loads that font from Google Fonts on demand, which causes further requests to Google. In every case your browser connects to Google servers and Google can thereby process your IP address. No font-related cookies are set by this project, and the fonts are used only to display text. If you want to avoid these third-party requests, you can block external fonts in your browser; the app stays fully usable with fallback system fonts.',
       ],
     },
     {
@@ -104,7 +106,7 @@ const privacyEn: LegalCopy = {
       heading: 'Recipients / providers',
       bullets: [
         'Hosting / CDN provider: the static site is delivered by a hosting and CDN/security provider (for the official deployment this is Cloudflare Pages; self-hosted copies may use a different provider depending on deployment configuration).',
-        'Google Fonts (Google Ireland Limited / Google LLC): web fonts are loaded from Google’s servers when you open the site.',
+        'Google Fonts (Google Ireland Limited / Google LLC): web fonts are loaded from Google’s servers when you open the site and when you choose fonts in the editor.',
         'Image hosts you choose: only when you insert an image by URL, your browser contacts that third-party server.',
         'No analytics, advertising, tracking, session recording, external database, authentication provider or email-delivery service is used by this project.',
       ],
@@ -189,7 +191,7 @@ const privacyDe: LegalCopy = {
       heading: 'Welche Daten verarbeitet werden',
       bullets: [
         'Server-Zugriffsdaten: Wenn dein Browser die Seite lädt, verarbeitet der Hosting-/CDN-Anbieter technisch notwendige Zugriffsdaten wie IP-Adresse, Datum und Uhrzeit, die angeforderte URL, den User-Agent und – sofern der Browser ihn sendet – den Referrer sowie Fehler-, Sicherheits- und Hosting-/CDN-Logs.',
-        'Web-Schriftarten: Die Seite lädt Anzeige-Schriftarten von Google Fonts. Beim Öffnen der Seite fordert dein Browser diese Schriftarten von Google-Servern an, die dabei deine IP-Adresse und Anfrage-Metadaten verarbeiten können (siehe „Web-Schriftarten" unten).',
+        'Web-Schriftarten: Die Oberfläche lädt beim Öffnen einer Seite Anzeige-Schriftarten von Google Fonts; zusätzlich lädt der Editor bei Bedarf weitere Google Fonts, wenn du im Schriftartenwähler eine Schriftart auswählst oder ein Dokument öffnest, das eine solche verwendet. In jedem Fall fordert dein Browser die Schriftart von Google-Servern an, die dabei deine IP-Adresse und Anfrage-Metadaten verarbeiten können (siehe „Web-Schriftarten" unten).',
         'Von dir eingegebene Inhalte: Texte, Formatierungen, importierte Dokumente und hochgeladene Bilder werden lokal in deinem Browser verarbeitet und auf deinem Gerät gespeichert. Sie werden nicht an einen Server dieses Projekts gesendet.',
         'Technisch notwendiger lokaler Speicher: Die App speichert Dokumente, Versionsverlauf und kleine UI-Einstellungen in deinem Browser. Es werden keine Tracking-Cookies gesetzt.',
         'Einstellungen: Dein gewähltes Theme (hell/dunkel) und deine Sprache werden lokal gespeichert, damit die App sie sich merkt.',
@@ -208,7 +210,7 @@ const privacyDe: LegalCopy = {
     {
       heading: 'Web-Schriftarten',
       paragraphs: [
-        'Die Oberfläche verwendet die Schriftarten „DM Sans" und „Crimson Pro", die über den Dienst Google Fonts (bereitgestellt von Google Ireland Limited / Google LLC) geladen werden. Beim Öffnen einer Seite verbindet sich dein Browser mit Google-Servern, um diese Schriftarten herunterzuladen; dabei kann Google deine IP-Adresse verarbeiten. Es werden keine schriftartbezogenen Cookies durch dieses Projekt gesetzt, und die Schriftarten dienen ausschließlich der einheitlichen Darstellung der Oberfläche. Wenn du diese Anfrage an Dritte vermeiden möchtest, kannst du externe Schriftarten in deinem Browser blockieren; die App bleibt mit System-Ersatzschriftarten voll nutzbar.',
+        'Die Oberfläche verwendet die Schriftarten „DM Sans" und „Crimson Pro", die beim Öffnen einer Seite über den Dienst Google Fonts (bereitgestellt von Google Ireland Limited / Google LLC) geladen werden. Außerdem bietet der Editor einen Schriftartenwähler: Wenn du eine dieser Schriftarten für deinen Text auswählst oder ein Dokument öffnest, das bereits eine solche verwendet, lädt die App diese Schriftart bei Bedarf von Google Fonts, was weitere Anfragen an Google auslöst. In jedem Fall verbindet sich dein Browser mit Google-Servern, und Google kann dabei deine IP-Adresse verarbeiten. Es werden keine schriftartbezogenen Cookies durch dieses Projekt gesetzt, und die Schriftarten dienen ausschließlich der Darstellung von Text. Wenn du diese Anfragen an Dritte vermeiden möchtest, kannst du externe Schriftarten in deinem Browser blockieren; die App bleibt mit System-Ersatzschriftarten voll nutzbar.',
       ],
     },
     {
@@ -222,7 +224,7 @@ const privacyDe: LegalCopy = {
       heading: 'Empfänger / Anbieter',
       bullets: [
         'Hosting-/CDN-Anbieter: Die statische Seite wird über einen Hosting- und CDN-/Sicherheitsanbieter ausgeliefert (für die offizielle Bereitstellung ist dies Cloudflare Pages; selbst gehostete Kopien können je nach Konfiguration einen anderen Anbieter nutzen).',
-        'Google Fonts (Google Ireland Limited / Google LLC): Web-Schriftarten werden beim Öffnen der Seite von Google-Servern geladen.',
+        'Google Fonts (Google Ireland Limited / Google LLC): Web-Schriftarten werden beim Öffnen der Seite und bei der Schriftartenauswahl im Editor von Google-Servern geladen.',
         'Von dir gewählte Bild-Hosts: Nur wenn du ein Bild per URL einfügst, kontaktiert dein Browser den Server des Dritten.',
         'Es werden keine Analyse-, Werbe-, Tracking- oder Sitzungsaufzeichnungs-Tools, keine externe Datenbank, kein Authentifizierungsanbieter und kein E-Mail-Versanddienst verwendet.',
       ],

@@ -30,9 +30,10 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
           </Link>
           <Link
             to="/"
+            aria-label={t('legalBackToEditor')}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('legalBackToEditor')}</span>
           </Link>
         </div>
