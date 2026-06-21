@@ -120,9 +120,10 @@ async function fetchTextOrNull(url) {
 // The family's directory name in the google/fonts repo (lowercase, alnum only).
 const gfDir = (family) => family.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-// Download a family's upstream license file. OFL/UFL files already embed the
-// copyright notice; for the generic Apache license we prepend the per-font
-// copyright from METADATA.pb so attribution travels with the text.
+// Download a family's upstream license file. OFL files embed their copyright
+// notice; the generic Apache text and the Ubuntu Font License do not, so for
+// those we prepend the per-font copyright from METADATA.pb so the required
+// notice travels with the license text.
 async function fetchLicense(family) {
   const dir = gfDir(family);
   for (const { folder, file, label } of LICENSE_FOLDERS) {
@@ -130,7 +131,7 @@ async function fetchLicense(family) {
     if (text == null) continue;
 
     let body = text;
-    if (folder === 'apache') {
+    if (folder === 'apache' || folder === 'ufl') {
       const meta = await fetchTextOrNull(`${GF_RAW}/${folder}/${dir}/METADATA.pb`);
       const copyrights = meta
         ? [...new Set([...meta.matchAll(/copyright:\s*"([^"]+)"/g)].map((m) => m[1]))]

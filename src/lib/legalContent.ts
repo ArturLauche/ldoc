@@ -66,7 +66,7 @@ const privacyEn: LegalCopy = {
           '{name} is a free, non-commercial hobby project. It is a browser-only ("local-first") rich text editor: there is no user account, no server-side database, and no cloud sync. The documents you write, your version history, and your theme and language preferences are stored only in your own browser (in localStorage) and are not transmitted to us.',
           v,
         ),
-        'This means that, for the core editing features, your content never leaves your device. The sections below explain the few cases where data is nevertheless processed — mainly technical server logs at the hosting provider and web fonts loaded from a third party.',
+        'This means that, for the core editing features, your content never leaves your device. The sections below explain the few cases where data is nevertheless processed — mainly technical server logs at the hosting provider, which also serves the site’s self-hosted fonts.',
       ],
     },
     {
@@ -183,7 +183,7 @@ const privacyDe: LegalCopy = {
           '{name} ist ein kostenloses, nicht-kommerzielles Hobbyprojekt. Es ist ein reiner Browser-Editor („local-first"): Es gibt kein Benutzerkonto, keine serverseitige Datenbank und keine Cloud-Synchronisierung. Die von dir geschriebenen Dokumente, dein Versionsverlauf sowie deine Theme- und Spracheinstellungen werden ausschließlich in deinem eigenen Browser (in localStorage) gespeichert und nicht an uns übertragen.',
           v,
         ),
-        'Für die zentralen Editor-Funktionen verlassen deine Inhalte also dein Gerät nicht. Die folgenden Abschnitte erläutern die wenigen Fälle, in denen dennoch Daten verarbeitet werden – vor allem technische Server-Logs beim Hosting-Anbieter sowie Web-Schriftarten, die von einem Dritten geladen werden.',
+        'Für die zentralen Editor-Funktionen verlassen deine Inhalte also dein Gerät nicht. Die folgenden Abschnitte erläutern die wenigen Fälle, in denen dennoch Daten verarbeitet werden – vor allem technische Server-Logs beim Hosting-Anbieter, der auch die selbst gehosteten Schriftarten der Seite ausliefert.',
       ],
     },
     {
