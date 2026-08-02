@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useLocale } from '@/components/locale-provider';
 import { ObfuscatedEmail } from '@/components/ObfuscatedEmail';
 import { siteConfig, hasControllerContact } from '@/lib/siteConfig';
@@ -21,9 +22,7 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
       <header className="glass-bar sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 h-12 max-w-3xl mx-auto w-full">
           <Link to="/" className="flex items-center gap-2 min-w-0">
-            <div className="p-1 rounded-lg bg-primary/10">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
+            <BrandLogo title={siteConfig.siteName} />
             <span className="font-semibold text-sm tracking-tight truncate">
               {siteConfig.siteName}
             </span>
