@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
+  Folder,
   FolderOpen,
   Save,
   Download,
@@ -344,7 +345,7 @@ export const FileMenu = ({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-9 px-3 gap-2 font-medium">
-            <FileText className="h-4 w-4" />
+            <Folder className="h-4 w-4" />
             {t('fileMenuLabel')}
             <ChevronDown className="h-3 w-3" />
           </Button>

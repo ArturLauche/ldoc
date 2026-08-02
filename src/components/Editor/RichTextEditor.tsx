@@ -1,8 +1,9 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Cloud, FileText, Languages, Moon, Search, Sun } from 'lucide-react';
+import { Cloud, Languages, Moon, Search, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Link } from 'react-router-dom';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -113,9 +114,7 @@ export const RichTextEditor = () => {
           <div className="flex items-center justify-between px-4 h-12">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="p-1 rounded-lg bg-primary/10">
-                  <FileText className="h-4 w-4 text-primary" />
-                </div>
+                <BrandLogo />
                 <span className="font-semibold text-sm tracking-tight">LWrite</span>
               </div>
 
