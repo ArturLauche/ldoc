@@ -242,7 +242,8 @@ const en = {
   versionHistorySaveCurrent: 'Save Current Version',
   versionHistoryCloseAria: 'Close version history',
   versionHistoryEmptyTitle: 'No saved versions yet',
-  versionHistoryEmptyHint: 'Click "Save Current Version" to create a snapshot',
+  versionHistoryEmptyHint:
+    'Versions are created automatically while you write. You can also save a named snapshot anytime.',
   versionHistorySelectPrompt: 'Select a version to preview',
   versionSavedToast: 'Version saved',
   versionDeletedToast: 'Version deleted',
@@ -252,6 +253,10 @@ const en = {
   versionBeforeRestoreSuffix: '(before restore)',
   versionBeforeNewDocumentSuffix: '(before new document)',
   versionBeforeOpenSuffix: '(before opening document)',
+  versionAutomaticLabel: 'Automatic version',
+  versionKindAutomatic: 'Automatic',
+  versionKindManual: 'Saved',
+  versionKindSafety: 'Safety copy',
 
   // Find & replace
   findReplaceTitle: 'Find & Replace',
@@ -625,7 +630,8 @@ const de: TranslationCatalog = {
   versionHistorySaveCurrent: 'Aktuelle Version speichern',
   versionHistoryCloseAria: 'Versionsverlauf schließen',
   versionHistoryEmptyTitle: 'Noch keine gespeicherten Versionen',
-  versionHistoryEmptyHint: 'Klicke auf „Aktuelle Version speichern“, um einen Schnappschuss zu erstellen',
+  versionHistoryEmptyHint:
+    'Versionen werden automatisch erstellt, während du schreibst. Du kannst jederzeit einen benannten Schnappschuss speichern.',
   versionHistorySelectPrompt: 'Wähle eine Version für die Vorschau aus',
   versionSavedToast: 'Version gespeichert',
   versionDeletedToast: 'Version gelöscht',
@@ -635,6 +641,10 @@ const de: TranslationCatalog = {
   versionBeforeRestoreSuffix: '(vor Wiederherstellung)',
   versionBeforeNewDocumentSuffix: '(vor neuem Dokument)',
   versionBeforeOpenSuffix: '(vor dem Öffnen)',
+  versionAutomaticLabel: 'Automatische Version',
+  versionKindAutomatic: 'Automatisch',
+  versionKindManual: 'Gespeichert',
+  versionKindSafety: 'Sicherheitskopie',
   findReplaceTitle: 'Suchen und Ersetzen',
   findPlaceholder: 'Suchen...',
   replacePlaceholder: 'Ersetzen durch...',

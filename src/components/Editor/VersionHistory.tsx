@@ -63,6 +63,7 @@ export const VersionHistory = ({
       documentId,
       name: documentName,
       content: currentContent,
+      kind: 'manual',
     });
     loadVersions();
     toast.success(t('versionSavedToast'));
@@ -73,6 +74,7 @@ export const VersionHistory = ({
       documentId,
       name: `${documentName} ${t('versionBeforeRestoreSuffix')}`,
       content: currentContent,
+      kind: 'safety',
     });
     onRestore(version.content);
     toast.success(
@@ -81,6 +83,12 @@ export const VersionHistory = ({
       }),
     );
     onClose();
+  };
+
+  const versionKindLabel = (version: StoredVersion) => {
+    if (version.kind === 'auto') return t('versionKindAutomatic');
+    if (version.kind === 'safety') return t('versionKindSafety');
+    return t('versionKindManual');
   };
 
   const handleDelete = async (version: StoredVersion) => {
@@ -155,6 +163,9 @@ export const VersionHistory = ({
                     >
                       <div className="font-medium text-sm truncate">{version.name}</div>
                       <div className="text-xs text-muted-foreground mt-1">
+                        {versionKindLabel(version)}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
                         {dateFormat.format(new Date(version.timestamp))}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -175,6 +186,7 @@ export const VersionHistory = ({
                   <div>
                     <h3 className="font-medium">{selectedVersion.name}</h3>
                     <p className="text-sm text-muted-foreground">
+                      {versionKindLabel(selectedVersion)} ·{' '}
                       {dateTimeFormat.format(new Date(selectedVersion.timestamp))}
                     </p>
                   </div>

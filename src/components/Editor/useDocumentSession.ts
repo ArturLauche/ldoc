@@ -9,7 +9,11 @@ import {
   type StoredDocument,
 } from '@/lib/documentLibrary';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
-import { saveDocumentVersion } from '@/lib/versionHistory';
+import {
+  AUTO_VERSION_IDLE_MS,
+  considerAutomaticVersion,
+  saveDocumentVersion,
+} from '@/lib/versionHistory';
 import {
   readStorageItem,
   removeStorageItem,
@@ -96,6 +100,9 @@ export function useDocumentSession(editor: Editor | null) {
     setCharacterCount(text.length);
   }, [editor]);
 
+  const lastEditAtRef = useRef<number>(Date.now());
+  const [editEpoch, setEditEpoch] = useState(0);
+
   const saveSafetyVersion = useCallback(
     (suffix: string) => {
       if (!editor || !hasUnsavedChanges) return;
@@ -105,12 +112,29 @@ export function useDocumentSession(editor: Editor | null) {
           documentId,
           name: `${documentName} ${suffix}`,
           content: editor.getHTML(),
+          kind: 'safety',
         });
       } catch (error) {
         console.warn('Failed to save safety version:', error);
       }
     },
     [documentId, documentName, editor, hasUnsavedChanges],
+  );
+
+  const tryAutomaticVersion = useCallback(
+    (content: string) => {
+      try {
+        considerAutomaticVersion({
+          documentId,
+          content,
+          lastEditAt: lastEditAtRef.current,
+          autoVersionLabel: t('versionAutomaticLabel'),
+        });
+      } catch (error) {
+        console.warn('Failed to save automatic version:', error);
+      }
+    },
+    [documentId, t],
   );
 
   const saveDocument = useCallback(
@@ -138,6 +162,8 @@ export function useDocumentSession(editor: Editor | null) {
         setLastSaved(new Date(savedAt));
         setHasUnsavedChanges(false);
 
+        tryAutomaticVersion(savedDoc.content);
+
         if (options?.showToast) {
           toast.success(t('saveSuccess'));
         }
@@ -147,13 +173,15 @@ export function useDocumentSession(editor: Editor | null) {
         toast.error(t('saveFailed'));
       }
     },
-    [documentId, documentName, editor, t],
+    [documentId, documentName, editor, t, tryAutomaticVersion],
   );
 
   useEffect(() => {
     if (!editor) return;
 
     const handleUpdate = () => {
+      lastEditAtRef.current = Date.now();
+      setEditEpoch((epoch) => epoch + 1);
       setHasUnsavedChanges(true);
       updateCounts();
     };
@@ -163,6 +191,30 @@ export function useDocumentSession(editor: Editor | null) {
       editor.off('update', handleUpdate);
     };
   }, [editor, updateCounts]);
+
+  // Idle checkpoint: runs from the last edit, surviving autosave clearing unsaved state.
+  useEffect(() => {
+    if (!editor || editEpoch === 0) return;
+
+    const timer = window.setTimeout(() => {
+      tryAutomaticVersion(editor.getHTML());
+    }, AUTO_VERSION_IDLE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [editEpoch, editor, tryAutomaticVersion]);
+
+  // Capture a version when the tab is hidden after edits (closing laptop, switching apps).
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'hidden' || editEpoch === 0) return;
+      tryAutomaticVersion(editor.getHTML());
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [editEpoch, editor, tryAutomaticVersion]);
 
   useEffect(() => {
     if (!editor) return;
