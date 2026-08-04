@@ -49,7 +49,9 @@ import type { ExportFormat } from '@/lib/export/types';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/components/locale-provider';
 import { useConfirm } from '@/components/confirm-provider';
+import { logError } from '@/lib/logger';
 import {
+  addImportedDocumentToLibrary,
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
@@ -165,7 +167,7 @@ export const FileMenu = ({
           setRefreshKey((value) => value + 1);
           toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
-          console.error('Import error:', error);
+          logError('Import error', error);
           toast.error(t('importFailed'), { id: 'import' });
         } finally {
           setIsImporting(false);
@@ -174,7 +176,7 @@ export const FileMenu = ({
 
       input.click();
     } catch (error) {
-      console.error('Open failed:', error);
+      logError('Open failed', error);
       toast.error(t('openFailed'));
     }
   };
@@ -195,7 +197,7 @@ export const FileMenu = ({
         formatMessage(t('exportedLibraryToast'), { count: documents.length }),
       );
     } catch (error) {
-      console.error('Library export failed:', error);
+      logError('Library export failed', error);
       toast.error(t('exportLibraryFailed'));
     }
   };
@@ -219,33 +221,71 @@ export const FileMenu = ({
           }),
         );
       } catch (error) {
-        console.error('Library import failed:', error);
+        logError('Library import failed', error);
         toast.error(t('invalidLibraryFile'));
       }
     };
     input.click();
   };
 
+  /**
+   * Imports one or more individual files into the library as new documents.
+   * Accepts both LWrite document files (.json) and regular document formats
+   * (.docx, .odt, .rtf, .html, .txt, ...). The open document is never replaced.
+   */
   const handleImportSingleDocument = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,.lwrite.json,application/json';
+    input.multiple = true;
+    input.accept = `${SUPPORTED_IMPORT_FORMATS},.json,.lwrite.json,application/json`;
     input.onchange = async (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+      const files = Array.from((event.target as HTMLInputElement).files ?? []);
+      if (files.length === 0) return;
 
-      try {
-        const raw = await file.text();
-        const doc = importSingleLibraryDocument(raw);
-        setRefreshKey((value) => value + 1);
-        toast.success(`${t('importedSingleDocToast')}: ${doc.name}`);
-      } catch (error) {
-        console.error('Single document import failed:', error);
-        toast.error(t('invalidLibraryFile'));
+      setIsImporting(true);
+      toast.loading(t('importInProgress'), { id: 'import-single' });
+
+      let lastName = '';
+      let imported = 0;
+      let failed = 0;
+
+      for (const file of files) {
+        try {
+          const isLibraryFile = /\.json$/i.test(file.name) || file.type === 'application/json';
+          if (isLibraryFile) {
+            const doc = importSingleLibraryDocument(await file.text());
+            lastName = doc.name;
+          } else {
+            const { importDocument } = await import('./DocumentImporter');
+            const result = await importDocument(file);
+            const doc = addImportedDocumentToLibrary(result.fileName, result.content);
+            lastName = doc.name;
+          }
+          imported += 1;
+        } catch (error) {
+          logError('Single document import failed', error);
+          failed += 1;
+        }
+      }
+
+      setRefreshKey((value) => value + 1);
+      setIsImporting(false);
+      toast.dismiss('import-single');
+
+      if (imported > 0) {
+        toast.success(
+          imported === 1
+            ? `${t('importedSingleDocToast')}: ${lastName}`
+            : `${t('importedSingleDocToast')} (${imported})`,
+        );
+      }
+      if (failed > 0) {
+        toast.error(t('importFailed'));
       }
     };
     input.click();
   };
+
 
   const handleExportLibraryDocument = (doc: StoredDocument) => {
     try {
@@ -255,7 +295,7 @@ export const FileMenu = ({
       downloadBlob(blob, fileName);
       toast.success(formatMessage(t('exportedDocumentToast'), { name: doc.name }));
     } catch (error) {
-      console.error('Document export failed:', error);
+      logError('Document export failed', error);
       toast.error(t('exportDocumentFailed'));
     }
   };
@@ -266,7 +306,7 @@ export const FileMenu = ({
       setRefreshKey((value) => value + 1);
       toast.success(formatMessage(t('documentDuplicatedToast'), { name: duplicated.name }));
     } catch (error) {
-      console.error('Document duplicate failed:', error);
+      logError('Document duplicate failed', error);
       toast.error(t('duplicateDocumentFailed'));
     }
   };
@@ -285,7 +325,7 @@ export const FileMenu = ({
       setRefreshKey((value) => value + 1);
       toast.success(formatMessage(t('documentDeletedToast'), { name: doc.name }));
     } catch (error) {
-      console.error('Document delete failed:', error);
+      logError('Document delete failed', error);
       toast.error(t('deleteDocumentFailed'));
     }
   };
@@ -324,7 +364,7 @@ export const FileMenu = ({
         toast.warning(summary);
       }
     } catch (error) {
-      console.error('Export failed:', error);
+      logError('Export failed', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       toast.error(formatMessage(t('exportFailedToast'), { message }));
     } finally {
@@ -344,7 +384,7 @@ export const FileMenu = ({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-9 px-3 gap-2 font-medium">
+          <Button variant="ghost" className="h-8 px-2.5 gap-1.5 text-sm font-medium">
             <Folder className="h-4 w-4" />
             {t('fileMenuLabel')}
             <ChevronDown className="h-3 w-3" />

@@ -101,6 +101,11 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     }),
     Link.configure({
       openOnClick: false,
+      autolink: false,
+      protocols: ['http', 'https', 'mailto'],
+      // Defense in depth: never let javascript:/data: URLs reach the schema,
+      // even if they somehow survive an import.
+      validate: (href: string) => /^(https?:\/\/|mailto:|#|\/)/i.test(href.trim()),
       HTMLAttributes: {
         class: 'text-primary underline cursor-pointer hover:text-primary/80',
       },

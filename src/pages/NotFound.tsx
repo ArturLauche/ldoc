@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useSEO } from "@/hooks/useSEO";
 import { useLocale } from "@/components/locale-provider";
+import { logError } from "@/lib/logger";
 
 const NotFound = () => {
   const location = useLocation();
@@ -14,7 +15,7 @@ const NotFound = () => {
   });
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    logError('404: requested route does not exist', location.pathname);
   }, [location.pathname]);
 
   return (

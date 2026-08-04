@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   LIBRARY_STORAGE_KEY,
+  addImportedDocumentToLibrary,
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
@@ -117,5 +118,12 @@ describe('documentLibrary', () => {
 
     expect(exported).not.toContain('javascript:');
     expect(exported).not.toContain('onerror');
+  });
+  it('adds imported files as new sanitized library documents', () => {
+    const doc = addImportedDocumentToLibrary('  Imported Report  ', '<p onclick="alert(1)">Hello</p>');
+
+    expect(doc.name).toBe('Imported Report');
+    expect(doc.content).toBe('<p>Hello</p>');
+    expect(getLibraryDocuments().some((entry) => entry.id === doc.id)).toBe(true);
   });
 });

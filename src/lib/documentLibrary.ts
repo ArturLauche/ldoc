@@ -254,6 +254,19 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
   return { imported, skipped };
 }
 
+/**
+ * Adds an imported document (from a .docx/.odt/.txt/... file) to the library as
+ * a brand new entry so the currently open document is never overwritten.
+ */
+export function addImportedDocumentToLibrary(name: string, content: string): StoredDocument {
+  return upsertLibraryDocument({
+    id: createDocumentId(),
+    name: name.trim() || 'Untitled Document',
+    content: sanitizeDocumentHtml(content),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export function importSingleLibraryDocument(rawText: string): StoredDocument {
   const parsed = JSON.parse(rawText) as UnifiedLibraryFile;
   if (

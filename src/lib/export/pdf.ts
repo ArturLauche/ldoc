@@ -65,7 +65,9 @@ export async function renderPdf(documentModel: ExportDocumentModel, warnings: Wa
   }
 
   const bytes = await pdfDoc.save();
-  return new Blob([bytes], { type: 'application/pdf' });
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return new Blob([buffer], { type: 'application/pdf' });
 }
 
 export function layoutPdfRuns(
