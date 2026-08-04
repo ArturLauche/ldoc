@@ -297,7 +297,7 @@ body {
   --tw-prose-th-borders: hsl(var(--border));
   --tw-prose-td-borders: hsl(var(--border));
   min-height: 500px;
-  padding: 3rem 4rem;
+  padding: 2.25rem 3rem;
   outline: none;
   color: hsl(var(--foreground));
   transition: color 260ms ease;
@@ -310,6 +310,26 @@ body {
   color: inherit;
   transition: color 260ms ease;
 }
+
+/*
+ * Headings must always follow the active theme, exactly like body text.
+ * Imported documents often carry a hardcoded inline `color` on the heading
+ * element itself, which would stay black in dark mode. Intentional colors are
+ * applied by the Color mark on a nested <span>, so overriding the heading
+ * element is safe and keeps deliberate user colors intact.
+ */
+.editor-content .ProseMirror :is(h1, h2, h3)[style*="color" i],
+.document-preview :is(h1, h2, h3)[style*="color" i] {
+  color: hsl(var(--foreground)) !important;
+}
+
+.editor-content .ProseMirror :is(h1, h2, h3) span[style*="font-size" i],
+.editor-content .ProseMirror :is(h1, h2, h3) span[style*="line-height" i],
+.editor-content .ProseMirror :is(h1, h2, h3) span[style*="font-family" i],
+.document-preview :is(h1, h2, h3) {
+  color: inherit;
+}
+
 
 .editor-content .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

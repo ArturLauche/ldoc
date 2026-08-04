@@ -1,4 +1,5 @@
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
+import { logError } from '@/lib/logger';
 
 export type SupportedFormat =
   | 'txt'
@@ -249,7 +250,7 @@ async function importOdt(file: File): Promise<string> {
       return `data:${inferImageMimeType(href)};base64,${base64}`;
     });
   } catch (error) {
-    console.error('ODT import error:', error);
+    logError('ODT import error', error);
     const text = await file.text();
     return textToParagraphHtml(text);
   }
@@ -263,7 +264,7 @@ async function importFodt(file: File): Promise<string> {
     const doc = parser.parseFromString(text, 'text/xml');
     return convertOdtXmlToHtml(doc);
   } catch (error) {
-    console.error('FODT import error:', error);
+    logError('FODT import error', error);
     const text = await file.text();
     return textToParagraphHtml(text);
   }

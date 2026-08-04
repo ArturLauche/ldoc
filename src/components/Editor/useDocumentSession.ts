@@ -22,6 +22,7 @@ import {
 } from '@/lib/storage';
 import { useLocale } from '@/components/locale-provider';
 import { useConfirm } from '@/components/confirm-provider';
+import { logError, logWarning } from '@/lib/logger';
 
 const AUTOSAVE_DELAY = 3000;
 
@@ -115,7 +116,7 @@ export function useDocumentSession(editor: Editor | null) {
           kind: 'safety',
         });
       } catch (error) {
-        console.warn('Failed to save safety version:', error);
+        logWarning('Failed to save safety version', error);
       }
     },
     [documentId, documentName, editor, hasUnsavedChanges],
@@ -131,7 +132,7 @@ export function useDocumentSession(editor: Editor | null) {
           autoVersionLabel: t('versionAutomaticLabel'),
         });
       } catch (error) {
-        console.warn('Failed to save automatic version:', error);
+        logWarning('Failed to save automatic version', error);
       }
     },
     [documentId, t],
@@ -168,7 +169,7 @@ export function useDocumentSession(editor: Editor | null) {
           toast.success(t('saveSuccess'));
         }
       } catch (error) {
-        console.error('Failed to save document:', error);
+        logError('Failed to save document', error);
         setHasUnsavedChanges(true);
         toast.error(t('saveFailed'));
       }
@@ -266,7 +267,7 @@ export function useDocumentSession(editor: Editor | null) {
           removeStorageItem(LEGACY_STORAGE_KEY);
         }
       } catch (error) {
-        console.warn('Failed to migrate current document storage:', error);
+        logWarning('Failed to migrate current document storage', error);
       }
     }
 
@@ -280,7 +281,7 @@ export function useDocumentSession(editor: Editor | null) {
             updatedAt: nextSavedAt,
           });
         } catch (error) {
-          console.warn('Failed to seed migrated document library:', error);
+          logWarning('Failed to seed migrated document library', error);
         }
       });
     }
@@ -378,7 +379,7 @@ export function useDocumentSession(editor: Editor | null) {
           savedAt: doc.updatedAt,
         });
       } catch (error) {
-        console.warn('Failed to set current document after load:', error);
+        logWarning('Failed to set current document after load', error);
       }
       updateCounts();
     },

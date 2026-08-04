@@ -12,17 +12,36 @@ import type { ExportDocumentOptions, ExportFormat, ExportResult } from './types'
 
 export type { ExportDocumentOptions, ExportFormat, ExportResult } from './types';
 
+const EXPORT_FORMATS: readonly ExportFormat[] = ['txt', 'html', 'rtf', 'docx', 'odt', 'pdf'];
+const MAX_EXPORT_HTML_CHARACTERS = 5_000_000;
+
+export function isExportFormat(value: unknown): value is ExportFormat {
+  return typeof value === 'string' && (EXPORT_FORMATS as readonly string[]).includes(value);
+}
+
 export async function exportDocument({
   html,
   name,
   locale,
   format,
 }: ExportDocumentOptions): Promise<ExportResult> {
+  if (!isExportFormat(format)) {
+    throw new Error('Unsupported export format.');
+  }
+
+  if (typeof html !== 'string') {
+    throw new Error('Nothing to export.');
+  }
+
+  if (html.length > MAX_EXPORT_HTML_CHARACTERS) {
+    throw new Error('This document is too large to export.');
+  }
+
   const sanitizedHtml = sanitizeDocumentHtml(html);
   const documentModel = extractExportDocumentFromHtml({
     html: sanitizedHtml,
-    name,
-    locale,
+    name: typeof name === 'string' ? name : '',
+    locale: typeof locale === 'string' && locale ? locale : 'en',
   });
   const warnings = new WarningCollector(format);
 

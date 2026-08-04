@@ -34,7 +34,7 @@ const FindReplaceBar = lazy(() =>
 );
 
 const FileMenuFallback = () => (
-  <div aria-hidden="true" className="h-9 w-[5.75rem] flex-shrink-0 rounded-md bg-transparent" />
+  <div aria-hidden="true" className="h-8 w-[5.25rem] flex-shrink-0 rounded-md bg-transparent" />
 );
 
 const ToolbarFallback = () => (
@@ -111,11 +111,11 @@ export const RichTextEditor = () => {
       <div className="sticky top-0 z-40">
         {/* Header */}
         <header className="glass-bar">
-          <div className="flex items-center justify-between px-4 h-12">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2 px-3 h-10">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 <BrandLogo />
-                <span className="font-semibold text-sm tracking-tight">LWrite</span>
+                <span className="hidden sm:inline font-semibold text-sm tracking-tight">LWrite</span>
               </div>
 
               <Suspense fallback={<FileMenuFallback />}>
@@ -132,19 +132,19 @@ export const RichTextEditor = () => {
                 />
               </Suspense>
 
-              <div className="h-5 w-px bg-border/40 flex-shrink-0 hidden sm:block" />
-
+              {/* The title sits directly next to the file controls so the
+                  header stays a single compact row. */}
               <input
                 type="text"
                 value={documentName}
                 onChange={(e) => renameDocument(e.target.value)}
-                className="text-sm font-medium bg-transparent border-none outline-none min-w-0 flex-1 placeholder:text-muted-foreground/50 truncate"
+                className="h-7 rounded-md px-2 text-sm font-medium bg-transparent border border-transparent outline-none min-w-0 w-full max-w-[16rem] hover:border-border/50 focus:border-border focus:bg-background/60 placeholder:text-muted-foreground/50 truncate transition-colors"
                 placeholder={t('untitledDocument')}
                 aria-label={t('documentName')}
               />
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
               {/* Save Status */}
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 {hasUnsavedChanges ? (
@@ -219,7 +219,7 @@ export const RichTextEditor = () => {
         </header>
 
         {/* Toolbar */}
-        <div className="px-4 py-2 glass-bar glass-bar--toolbar">
+        <div className="px-3 py-1.5 glass-bar glass-bar--toolbar">
           <Suspense fallback={<ToolbarFallback />}>
             <EditorToolbar editor={editor} />
           </Suspense>

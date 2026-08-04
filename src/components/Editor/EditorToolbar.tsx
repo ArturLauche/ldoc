@@ -157,6 +157,17 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
     setLinkUrl('');
   }, [editor, linkUrl]);
 
+  const applyFontSize = useCallback(
+    (value: string) => {
+      if (!editor) return;
+      // With a collapsed cursor the mark is stored, so the next typed
+      // characters pick up the requested size.
+      editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
+    },
+    [editor],
+  );
+
+
   const isInTable = editor?.isActive('table') ?? false;
   const isInDiagram = editor?.isActive('smartDiagram') ?? false;
 
@@ -212,7 +223,12 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
     if (!editor) return;
 
     const syncFontSize = () => {
-      const fontSize = editor.getAttributes('textStyle').fontSize;
+      // Stored marks hold the pending size for a collapsed cursor; without
+      // them the dropdown would snap back to the default right after a change.
+      const storedFontSize = editor.state.storedMarks?.find(
+        (mark) => mark.type.name === 'textStyle',
+      )?.attrs.fontSize;
+      const fontSize = storedFontSize ?? editor.getAttributes('textStyle').fontSize;
       setActiveFontSize(typeof fontSize === 'string' && fontSize.length > 0 ? fontSize : '16px');
     };
 
@@ -294,7 +310,8 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
       <Select
         value={activeFontSize}
         onValueChange={(value) => {
-          editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
+          setActiveFontSize(value);
+          applyFontSize(value);
         }}
       >
         <SelectTrigger
@@ -303,7 +320,14 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent
+          onCloseAutoFocus={(event) => {
+            // Radix returns focus to the trigger by default, which pulls focus
+            // out of the document and makes the new size feel "not applied".
+            event.preventDefault();
+            editor.commands.focus();
+          }}
+        >
           {fontSizes.map((size) => (
             <SelectItem key={size.value} value={size.value}>
               {size.name}
@@ -311,6 +335,7 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
           ))}
         </SelectContent>
       </Select>
+
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 

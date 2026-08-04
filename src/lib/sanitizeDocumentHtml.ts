@@ -1,3 +1,5 @@
+import { logError } from './logger';
+
 const BLOCKED_ELEMENTS = 'script, style, iframe, object, embed, link, meta, base';
 const URI_ATTRIBUTES = new Set(['href', 'src', 'xlink:href', 'formaction']);
 const SAFE_DATA_URI_PATTERN = /^data:image\/(?:png|gif|jpeg|jpg|webp|svg\+xml);base64,/i;
@@ -253,7 +255,7 @@ export function sanitizeDocumentHtml(value: string): string {
 
     return doc.body.innerHTML || '<p></p>';
   } catch (error) {
-    console.error('Failed to sanitize document HTML:', error);
+    logError('Failed to sanitize document HTML', error);
     return '<p></p>';
   }
 }

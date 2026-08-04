@@ -208,7 +208,7 @@ export const VersionHistory = ({
                 </div>
                 <ScrollArea className="flex-1 p-4">
                   <div
-                    className="prose prose-sm max-w-none"
+                    className="document-preview prose prose-sm max-w-none text-foreground"
                     dangerouslySetInnerHTML={{ __html: sanitizeDocumentHtml(selectedVersion.content) }}
                   />
                 </ScrollArea>
