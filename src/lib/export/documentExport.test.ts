@@ -202,4 +202,26 @@ describe('exportDocument', () => {
       drawTextSpy.mockRestore();
     }
   });
+  it('rejects unsupported export formats', async () => {
+    await expect(
+      exportDocument({
+        html: '<p>Hi</p>',
+        name: 'Doc',
+        locale: 'en',
+        // @ts-expect-error deliberately invalid format
+        format: 'exe',
+      }),
+    ).rejects.toThrow('Unsupported export format.');
+  });
+
+  it('rejects documents that exceed the export size limit', async () => {
+    await expect(
+      exportDocument({
+        html: `<p>${'a'.repeat(5_000_001)}</p>`,
+        name: 'Doc',
+        locale: 'en',
+        format: 'txt',
+      }),
+    ).rejects.toThrow('too large');
+  });
 });
