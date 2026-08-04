@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   LIBRARY_STORAGE_KEY,
+  addImportedDocumentToLibrary,
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
