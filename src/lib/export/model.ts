@@ -82,7 +82,7 @@ function parseChildrenAsBlocks(parent: ParentNode): ExportBlock[] {
 
 function parseElementAsBlocks(element: HTMLElement): ExportBlock[] {
   if (element.hasAttribute('data-smart-diagram')) {
-    return [parseSmartDiagram(element)];
+    return [parseLegacySmartDiagram(element)];
   }
 
   const tag = element.tagName.toLowerCase();
@@ -205,16 +205,18 @@ function parseImage(img: HTMLImageElement): ExportImageBlock {
   };
 }
 
-function parseSmartDiagram(element: HTMLElement): ExportBlock {
-  const rawItems = element.getAttribute('data-items') ?? '';
+function parseLegacySmartDiagram(element: HTMLElement): ExportBlock {
+  const title = (element.getAttribute('data-title') ?? '').replace(/\s+/g, ' ').trim();
+  const items = (element.getAttribute('data-items') ?? '')
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const itemText = items.join(' -> ');
+  const fallback = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const text = title && itemText ? `${title}: ${itemText}` : title || itemText || fallback;
   return {
-    type: 'smart-diagram',
-    title: element.getAttribute('data-title') ?? 'Diagram',
-    template: element.getAttribute('data-template') ?? 'process',
-    items: rawItems
-      .split('|')
-      .map((item) => item.trim())
-      .filter(Boolean),
+    type: 'paragraph',
+    runs: [{ text, marks: {} }],
   };
 }
 

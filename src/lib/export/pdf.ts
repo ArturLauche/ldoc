@@ -180,12 +180,6 @@ async function drawBlock(state: PdfState, block: ExportBlock, depth: number): Pr
     state.y -= 8;
     return;
   }
-  if (block.type === 'smart-diagram') {
-    state.warnings.add('smart-diagram-as-placeholder', block.title);
-    drawParagraph(state, diagramRuns(block.title, block.template, block.items), { baseSize: 12, indent: depth * 18 });
-    state.y -= 6;
-    return;
-  }
   if (block.type === 'table') {
     drawTable(state, block);
     state.y -= 8;
@@ -441,13 +435,6 @@ function headingSize(level: number): number {
   if (level === 1) return 22;
   if (level === 2) return 17;
   return 14;
-}
-
-function diagramRuns(title: string, template: string, items: string[]): ExportInlineRun[] {
-  return [
-    { text: `${title} (${template})`, marks: { bold: true } },
-    { text: items.length ? `: ${items.join(' -> ')}` : '', marks: {} },
-  ];
 }
 
 function resolveDisplayWidth(image: ExportImageBlock): number {

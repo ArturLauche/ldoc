@@ -51,6 +51,8 @@ describe('RichTextEditor', () => {
       expect(screen.getByLabelText('Document name')).toHaveValue('Loaded Document');
     });
     expect(screen.getByLabelText('Document editor')).toHaveTextContent('Saved body');
+    expect(screen.queryByLabelText('Table')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Diagram')).not.toBeInTheDocument();
   });
 
   it('does not seed the full document library for current-format startup records', async () => {

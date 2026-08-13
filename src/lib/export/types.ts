@@ -29,7 +29,6 @@ export type ExportWarningCode =
   | 'table-layout-simplified'
   | 'unsupported-style-dropped'
   | 'rtf-basic-format'
-  | 'smart-diagram-as-placeholder'
   | 'link-not-supported-by-format';
 
 export interface ExportWarning {
@@ -51,8 +50,7 @@ export type ExportBlock =
   | ExportListBlock
   | ExportTableBlock
   | ExportImageBlock
-  | ExportHorizontalRuleBlock
-  | ExportSmartDiagramBlock;
+  | ExportHorizontalRuleBlock;
 
 export type ExportTextBlockType = 'paragraph' | 'heading' | 'blockquote';
 export type ExportAlignment = 'left' | 'center' | 'right' | 'justify';
@@ -112,13 +110,6 @@ export type ExportImageMimeType = 'image/png' | 'image/jpeg' | 'image/jpg';
 
 export interface ExportHorizontalRuleBlock {
   type: 'horizontal-rule';
-}
-
-export interface ExportSmartDiagramBlock {
-  type: 'smart-diagram';
-  title: string;
-  template: string;
-  items: string[];
 }
 
 export interface ExportInlineRun {

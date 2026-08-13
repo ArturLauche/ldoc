@@ -180,10 +180,6 @@ function renderBlock(block: ExportBlock, context: DocxContext, level: number, li
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
   }
   if (block.type === 'image') return renderImageParagraph(block, context, listInfo);
-  if (block.type === 'smart-diagram') {
-    context.warnings.add('smart-diagram-as-placeholder', block.title);
-    return renderParagraph(diagramRuns(block.title, block.template, block.items), undefined, context, listInfo);
-  }
   if (block.type === 'table') return renderTable(block.rows, context);
   if (block.type === 'list') return renderList(block, context, level);
   return '';
@@ -382,13 +378,6 @@ function normalizeDocxHighlight(color?: string): string | null {
 function docxAlignment(value: string): string {
   if (value === 'justify') return 'both';
   return value;
-}
-
-function diagramRuns(title: string, template: string, items: string[]): ExportInlineRun[] {
-  return [
-    { text: `${title} (${template})`, marks: { bold: true } },
-    { text: items.length ? `: ${items.join(' -> ')}` : '', marks: {} },
-  ];
 }
 
 function resolveDisplayWidth(image: ExportImageBlock): number {

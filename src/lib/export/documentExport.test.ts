@@ -8,7 +8,7 @@ const TINY_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
 describe('extractExportDocumentFromHtml', () => {
-  it('extracts structured blocks, links, marks, nested lists, tables, images and diagrams', () => {
+  it('extracts structured blocks, links, marks, nested lists, tables and images', () => {
     const model = extractExportDocumentFromHtml({
       html: `
         <h1>Title</h1>
@@ -48,7 +48,16 @@ next()</code></pre>
     expect(model.blocks.some((block) => block.type === 'list')).toBe(true);
     expect(model.blocks.some((block) => block.type === 'table')).toBe(true);
     expect(model.blocks.some((block) => block.type === 'image')).toBe(true);
-    expect(model.blocks.some((block) => block.type === 'smart-diagram')).toBe(true);
+    expect(model.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'paragraph',
+          runs: expect.arrayContaining([
+            expect.objectContaining({ text: 'Plan: A -> B' }),
+          ]),
+        }),
+      ]),
+    );
   });
 });
 
@@ -78,7 +87,21 @@ describe('exportDocument', () => {
     expect(html).toContain('<html lang="de">');
     expect(html).toContain('<p>Safe</p>');
     expect(html).not.toContain('<script>');
+    expect(html).not.toContain('smart-diagram');
     expect(result.fileName).toBe('Page.html');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('exports leftover smart diagrams as readable text', async () => {
+    const result = await exportDocument({
+      html: '<div data-smart-diagram="true" data-template="process" data-title="Plan" data-items="A|B"></div>',
+      name: 'Plan',
+      locale: 'en',
+      format: 'txt',
+    });
+
+    await expect(result.blob.text()).resolves.toBe('Plan: A -> B');
+    expect(result.fileName).toBe('Plan.txt');
     expect(result.warnings).toEqual([]);
   });
 

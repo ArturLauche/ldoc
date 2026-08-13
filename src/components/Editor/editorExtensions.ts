@@ -15,7 +15,6 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
-import { SmartDiagram } from './SmartDiagram';
 import { FindReplace } from './findReplaceExtension';
 
 const EnhancedImage = Image.extend({
@@ -129,7 +128,6 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     TableRow,
     TableHeader,
     TableCell,
-    SmartDiagram,
     FindReplace,
   ];
 }

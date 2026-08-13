@@ -38,10 +38,6 @@ function renderBlock(
     warnings.add('image-format-unsupported', block.alt);
     return renderParagraph(imagePlaceholderRuns(block), block, fonts, colors);
   }
-  if (block.type === 'smart-diagram') {
-    warnings.add('smart-diagram-as-placeholder', block.title);
-    return renderParagraph(diagramRuns(block.title, block.template, block.items), undefined, fonts, colors);
-  }
   if (block.type === 'table') {
     warnings.add('table-layout-simplified');
     return block.rows
@@ -147,10 +143,6 @@ function blockRuns(block: ExportBlock, warnings: WarningCollector): ExportInline
     warnings.add('image-format-unsupported', block.alt);
     return imagePlaceholderRuns(block);
   }
-  if (block.type === 'smart-diagram') {
-    warnings.add('smart-diagram-as-placeholder', block.title);
-    return diagramRuns(block.title, block.template, block.items);
-  }
   return [{ text: blockPlainText(block), marks: {} }];
 }
 
@@ -159,7 +151,6 @@ function blockPlainText(block: ExportBlock): string {
     return getVisibleTextFromRuns(block.runs, true);
   }
   if (block.type === 'image') return getVisibleTextFromRuns(imagePlaceholderRuns(block));
-  if (block.type === 'smart-diagram') return `${block.title}: ${block.items.join(' -> ')}`;
   if (block.type === 'horizontal-rule') return '----------------------------------------';
   if (block.type === 'table') {
     return block.rows.map((row) => row.cells.map((cell) => cell.blocks.map(blockPlainText).join(' ')).join(' | ')).join(' ');
@@ -168,13 +159,6 @@ function blockPlainText(block: ExportBlock): string {
     return block.items.map((item) => item.blocks.map(blockPlainText).join(' ')).join(' ');
   }
   return '';
-}
-
-function diagramRuns(title: string, template: string, items: string[]): ExportInlineRun[] {
-  return [
-    { text: `${title} (${template})`, marks: { bold: true } },
-    { text: items.length ? `: ${items.join(' -> ')}` : '', marks: {} },
-  ];
 }
 
 function collectFonts(blocks: ExportBlock[]): Map<string, number> {

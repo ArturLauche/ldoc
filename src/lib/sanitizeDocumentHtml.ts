@@ -39,14 +39,7 @@ const ALLOWED_ATTRIBUTES = new Set([
   'alt',
   'class',
   'colspan',
-  'contenteditable',
   'data-align',
-  'data-item-count',
-  'data-items',
-  'data-smart-diagram',
-  'data-step',
-  'data-template',
-  'data-title',
   'data-width',
   'href',
   'rel',
@@ -186,14 +179,25 @@ function sanitizeClassAttribute(value: string): string | null {
   const classes = value
     .split(/\s+/)
     .map((token) => token.trim())
-    .filter((token) =>
-      ALLOWED_CLASS_TOKENS.has(token) ||
-      token === 'smart-diagram' ||
-      token.startsWith('smart-diagram__') ||
-      token.startsWith('smart-diagram--'),
-    );
+    .filter((token) => ALLOWED_CLASS_TOKENS.has(token));
 
   return classes.length ? classes.join(' ') : null;
+}
+
+function convertLegacySmartDiagrams(doc: Document): void {
+  doc.body.querySelectorAll('[data-smart-diagram]').forEach((element) => {
+    const title = (element.getAttribute('data-title') ?? '').replace(/\s+/g, ' ').trim();
+    const items = (element.getAttribute('data-items') ?? '')
+      .split('|')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const itemText = items.join(' -> ');
+    const fallback = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const text = title && itemText ? `${title}: ${itemText}` : title || itemText || fallback;
+    const paragraph = doc.createElement('p');
+    paragraph.textContent = text;
+    element.replaceWith(paragraph);
+  });
 }
 
 export function sanitizeDocumentHtml(value: string): string {
@@ -201,6 +205,7 @@ export function sanitizeDocumentHtml(value: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(value, 'text/html');
 
+    convertLegacySmartDiagrams(doc);
     doc.body.querySelectorAll(BLOCKED_ELEMENTS).forEach((element) => element.remove());
     doc.body.querySelectorAll('*').forEach((element) => {
       if (!ALLOWED_ELEMENTS.has(element.tagName.toLowerCase())) {
@@ -241,10 +246,6 @@ export function sanitizeDocumentHtml(value: string): string {
           } else {
             element.removeAttribute(attribute.name);
           }
-        }
-
-        if (attributeName === 'contenteditable' && attribute.value.toLowerCase() !== 'false') {
-          element.removeAttribute(attribute.name);
         }
       });
 
