@@ -251,6 +251,44 @@ describe('exportDocument', () => {
     expect(merged.warnings.map((warning) => warning.code)).toContain('table-layout-simplified');
   });
 
+  it('emits DOCX vertical merge continuation cells, cell alignment and hidden borders', async () => {
+    const result = await exportDocument({
+      html: `
+        <table data-borders="hidden">
+          <tr>
+            <td rowspan="2" style="text-align: center">A</td>
+            <td>B</td>
+          </tr>
+          <tr>
+            <td>C</td>
+          </tr>
+        </table>
+      `,
+      name: 'Merged Docx',
+      locale: 'en',
+      format: 'docx',
+    });
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    expect(documentXml).toContain('w:val="restart"');
+    expect(documentXml).toContain('<w:vMerge/>');
+    expect(documentXml).toContain('w:val="center"');
+    expect(documentXml).toContain('w:val="nil"');
+  });
+
+  it('keeps ODT cell fills', async () => {
+    const result = await exportDocument({
+      html: '<table><tr><td data-background-color="#FEF08A">Filled</td></tr></table>',
+      name: 'Fill',
+      locale: 'en',
+      format: 'odt',
+    });
+    const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
+    const contentXml = await zip.file('content.xml')?.async('string');
+    expect(contentXml).toContain('fo:background-color="#FEF08A"');
+    expect(contentXml).toContain('Filled');
+  });
+
   it('exports smart graphics as a structured outline and keeps leftover diagrams as text', async () => {
     const graphic = {
       version: 1 as const,

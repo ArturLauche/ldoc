@@ -101,15 +101,21 @@ describe('sanitizeDocumentHtml', () => {
     expect(sanitized).not.toContain('<script>');
     expect(sanitized).not.toContain('Ignore me');
 
-    const malformed = sanitizeDocumentHtml('<div data-lwrite-graphic="{not json}"><p>Visible copy</p></div>');
+    const malformed = sanitizeDocumentHtml(
+      '<div data-lwrite-graphic="{not json}"><script>alert(1)</script><ul><li>Visible copy</li></ul></div>',
+    );
     expect(malformed).toContain('Visible copy');
-    expect(malformed).not.toContain('data-lwrite-graphic');
+    expect(malformed).not.toContain('alert(1)');
+    expect(malformed).toContain('data-lwrite-graphic');
+
+    const emptyMalformed = sanitizeDocumentHtml('<div data-lwrite-graphic="{not json}"></div>');
+    expect(emptyMalformed).not.toContain('data-lwrite-graphic');
 
     const oversized = sanitizeDocumentHtml(
       `<div data-lwrite-graphic="${'x'.repeat(20_001)}">Huge</div>`,
     );
     expect(oversized).toContain('Huge');
-    expect(oversized).not.toContain('data-lwrite-graphic');
+    expect(oversized).not.toContain('x'.repeat(50));
   });
 });
 

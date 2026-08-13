@@ -78,6 +78,7 @@ export interface ExportListItem {
 export interface ExportTableBlock {
   type: 'table';
   rows: ExportTableRow[];
+  borders?: 'visible' | 'hidden';
 }
 
 export interface ExportTableRow {

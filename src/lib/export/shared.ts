@@ -8,6 +8,7 @@ import type {
   ExportLink,
   ExportListBlock,
   ExportTableBlock,
+  ExportTableCell,
 } from './types';
 
 export function escapeXml(value: string): string {
@@ -177,6 +178,68 @@ export function hashString(value: string): string {
 
 export function tableHasMergedCells(table: ExportTableBlock): boolean {
   return table.rows.some((row) => row.cells.some((cell) => cell.colSpan > 1 || cell.rowSpan > 1));
+}
+
+export interface ExpandedTableCell {
+  cell: ExportTableCell;
+  colSpan: number;
+  vMerge?: 'restart' | 'continue';
+}
+
+export function expandTableGrid(table: ExportTableBlock): { colCount: number; rows: ExpandedTableCell[][] } {
+  const occupancy: Array<Array<{ cell: ExportTableCell; originRow: number; originCol: number } | undefined>> = [];
+
+  table.rows.forEach((row, rowIndex) => {
+    if (!occupancy[rowIndex]) occupancy[rowIndex] = [];
+    let col = 0;
+    row.cells.forEach((cell) => {
+      while (occupancy[rowIndex][col]) {
+        col += 1;
+      }
+      for (let rowOffset = 0; rowOffset < cell.rowSpan; rowOffset += 1) {
+        if (!occupancy[rowIndex + rowOffset]) occupancy[rowIndex + rowOffset] = [];
+        for (let colOffset = 0; colOffset < cell.colSpan; colOffset += 1) {
+          occupancy[rowIndex + rowOffset][col + colOffset] = {
+            cell,
+            originRow: rowIndex,
+            originCol: col,
+          };
+        }
+      }
+      col += cell.colSpan;
+    });
+  });
+
+  const colCount = Math.max(1, ...occupancy.map((row) => row.length), 1);
+  const rows = occupancy.map((row, rowIndex) => {
+    const cells: ExpandedTableCell[] = [];
+    let col = 0;
+    while (col < colCount) {
+      const occupant = row[col];
+      if (!occupant) {
+        col += 1;
+        continue;
+      }
+      if (occupant.originCol !== col) {
+        col += 1;
+        continue;
+      }
+      cells.push({
+        cell: occupant.cell,
+        colSpan: occupant.cell.colSpan,
+        vMerge:
+          occupant.cell.rowSpan > 1
+            ? occupant.originRow === rowIndex
+              ? 'restart'
+              : 'continue'
+            : undefined,
+      });
+      col += occupant.cell.colSpan;
+    }
+    return cells;
+  });
+
+  return { colCount, rows };
 }
 
 export function graphicToFallbackBlocks(graphic: ExportGraphicBlock): ExportBlock[] {

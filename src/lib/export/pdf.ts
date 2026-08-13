@@ -335,7 +335,7 @@ function drawTable(state: PdfState, table: Extract<ExportBlock, { type: 'table' 
         width: cellWidth * cell.colSpan,
         height,
         borderColor: rgb(0.75, 0.75, 0.75),
-        borderWidth: 0.5,
+        borderWidth: table.borders === 'hidden' ? 0 : 0.5,
         color: rgbFromCss(cell.backgroundColor) ?? (cell.header ? rgb(0.95, 0.96, 0.98) : undefined),
       });
       const lines = cellLines[index];

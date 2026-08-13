@@ -2,6 +2,8 @@ export const SMART_GRAPHIC_VERSION = 1 as const;
 export const MAX_GRAPHIC_JSON_LENGTH = 20_000;
 export const MAX_GRAPHIC_LABEL_LENGTH = 200;
 export const MAX_GRAPHIC_TITLE_LENGTH = 120;
+export const MAX_GRAPHIC_NODES = 12;
+export const MAX_GRAPHIC_LIST_DEPTH = 4;
 
 export type SmartGraphicCategory =
   | 'list'
@@ -59,19 +61,6 @@ export interface GraphicOutlineItem {
   children: GraphicOutlineItem[];
 }
 
-const LAYOUT_IDS: readonly SmartGraphicLayoutId[] = [
-  'list-block',
-  'list-horizontal',
-  'process-chevron',
-  'process-steps',
-  'cycle-basic',
-  'hierarchy-org',
-  'relationship-opposing',
-  'relationship-radial',
-  'matrix-grid',
-  'pyramid-basic',
-];
-
 export const SMART_GRAPHIC_CATEGORIES: readonly SmartGraphicCategory[] = [
   'list',
   'process',
@@ -105,6 +94,10 @@ export const SMART_GRAPHIC_LAYOUTS: readonly SmartGraphicLayoutDefinition[] = [
   { id: 'matrix-grid', category: 'matrix', minItems: 4, maxItems: 4, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'item' },
   { id: 'pyramid-basic', category: 'pyramid', minItems: 2, maxItems: 5, maxDepth: 1, starterCount: 3, supportsHierarchy: false, placeholderKind: 'level' },
 ];
+
+export const SMART_GRAPHIC_LAYOUT_IDS: readonly SmartGraphicLayoutId[] = SMART_GRAPHIC_LAYOUTS.map(
+  (layout) => layout.id,
+);
 
 const LAYOUT_BY_ID = new Map(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id, layout]));
 
@@ -216,8 +209,8 @@ export function parseSmartGraphicJson(value: unknown): SmartGraphicModel | null 
   if (!layoutId) return null;
 
   const layout = getSmartGraphicLayout(layoutId);
-  const budget = { left: layout.maxItems };
-  const items = parseItems(parsed.items, 1, layout, budget);
+  const budget = { left: MAX_GRAPHIC_NODES };
+  const items = parseItems(parsed.items, 1, layout, budget, new Set());
   if (!items.length) return null;
 
   return clampGraphic({
@@ -232,7 +225,8 @@ export function parseSmartGraphicJson(value: unknown): SmartGraphicModel | null 
 
 export function parseSmartGraphicFromDom(element: HTMLElement): SmartGraphicModel | null {
   const titleSource =
-    element.querySelector(':scope > p.lwrite-graphic-title, :scope > p')?.textContent ?? '';
+    (element.querySelector(':scope > p.lwrite-graphic-title') ?? element.querySelector(':scope > p'))
+      ?.textContent ?? '';
   const list = element.querySelector(':scope > ul');
   const items = list ? parseListElement(list) : [];
   if (!items.length) {
@@ -275,10 +269,10 @@ export function switchGraphicLayout(model: SmartGraphicModel, layoutId: SmartGra
 }
 
 export function updateGraphicTitle(model: SmartGraphicModel, title: string): SmartGraphicModel {
-  return clampGraphic({
-    ...model,
-    title: sanitizeGraphicText(title, MAX_GRAPHIC_TITLE_LENGTH),
-  });
+  return {
+    ...clampGraphic(model),
+    title: sanitizeGraphicText(title, MAX_GRAPHIC_TITLE_LENGTH, { trim: false }),
+  };
 }
 
 export function updateGraphicAppearance(
@@ -292,10 +286,11 @@ export function updateGraphicAppearance(
 }
 
 export function updateItemLabel(model: SmartGraphicModel, id: string, label: string): SmartGraphicModel {
-  const nextLabel = sanitizeGraphicText(label, MAX_GRAPHIC_LABEL_LENGTH);
+  const nextLabel = sanitizeGraphicText(label, MAX_GRAPHIC_LABEL_LENGTH, { trim: false });
+  const normalized = clampGraphic(model);
   return {
-    ...clampGraphic(model),
-    items: mapItems(model.items, (item) => (item.id === id ? { ...item, label: nextLabel } : item)),
+    ...normalized,
+    items: mapItems(normalized.items, (item) => (item.id === id ? { ...item, label: nextLabel } : item)),
   };
 }
 
@@ -321,7 +316,7 @@ export function addGraphicItem(model: SmartGraphicModel, afterId?: string | null
 }
 
 export function removeGraphicItem(model: SmartGraphicModel, id: string): SmartGraphicModel {
-  if (countGraphicNodes(model.items) <= 1) {
+  if (countGraphicNodes(model.items) <= getSmartGraphicLayout(model.layoutId).minItems) {
     return model;
   }
 
@@ -367,7 +362,14 @@ export function canAddGraphicItem(model: SmartGraphicModel): boolean {
 }
 
 export function canRemoveGraphicItem(model: SmartGraphicModel): boolean {
-  return countGraphicNodes(model.items) > 1;
+  return countGraphicNodes(model.items) > getSmartGraphicLayout(model.layoutId).minItems;
+}
+
+export function canDemoteGraphicItem(model: SmartGraphicModel, id: string | null): boolean {
+  if (!id) return false;
+  const layout = getSmartGraphicLayout(model.layoutId);
+  if (!layout.supportsHierarchy) return false;
+  return findDemoteTarget(model.items, id, layout.maxDepth, 1) !== null;
 }
 
 export function graphicToOutline(model: SmartGraphicModel): { title: string; items: GraphicOutlineItem[] } {
@@ -402,9 +404,15 @@ export function graphicFallbackDOMSpec(model: SmartGraphicModel): Array<[string,
   return nodes;
 }
 
-export function sanitizeGraphicText(value: unknown, maxLength: number): string {
+export function sanitizeGraphicText(
+  value: unknown,
+  maxLength: number,
+  options?: { trim?: boolean },
+): string {
   if (typeof value !== 'string') return '';
-  return value.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  const collapsed = value.replace(/\s+/g, ' ');
+  const prepared = options?.trim === false ? collapsed.replace(/^\s+/, '') : collapsed.trim();
+  return prepared.slice(0, maxLength);
 }
 
 function clampGraphic(model: SmartGraphicModel): SmartGraphicModel {
@@ -428,8 +436,8 @@ function clampGraphic(model: SmartGraphicModel): SmartGraphicModel {
 }
 
 function capItems(items: SmartGraphicItem[], layout: SmartGraphicLayoutDefinition): SmartGraphicItem[] {
-  const budget = { left: layout.maxItems };
-  return parseItems(items, 1, layout, budget);
+  const budget = { left: MAX_GRAPHIC_NODES };
+  return parseItems(items, 1, layout, budget, new Set());
 }
 
 function parseItems(
@@ -437,6 +445,7 @@ function parseItems(
   depth: number,
   layout: SmartGraphicLayoutDefinition,
   budget: { left: number },
+  usedIds: Set<string>,
 ): SmartGraphicItem[] {
   if (!Array.isArray(value) || depth > layout.maxDepth || budget.left <= 0) {
     return [];
@@ -448,9 +457,9 @@ function parseItems(
     if (!isRecord(entry)) continue;
     budget.left -= 1;
     const allowChildren = layout.supportsHierarchy && depth < layout.maxDepth;
-    const children = allowChildren ? parseItems(entry.children, depth + 1, layout, budget) : [];
+    const children = allowChildren ? parseItems(entry.children, depth + 1, layout, budget, usedIds) : [];
     items.push({
-      id: sanitizeGraphicId(entry.id),
+      id: sanitizeGraphicId(entry.id, usedIds),
       label: sanitizeGraphicText(entry.label, MAX_GRAPHIC_LABEL_LENGTH),
       children,
     });
@@ -458,19 +467,34 @@ function parseItems(
   return items;
 }
 
-function parseListElement(list: Element): SmartGraphicItem[] {
-  return Array.from(list.children)
-    .filter((child): child is HTMLLIElement => child.tagName.toLowerCase() === 'li')
-    .map((item) => {
-      const nested = Array.from(item.children).find((child) => child.tagName.toLowerCase() === 'ul');
-      const labelSource = item.cloneNode(true) as HTMLElement;
-      labelSource.querySelectorAll('ul').forEach((node) => node.remove());
-      return createGraphicItem(
-        sanitizeGraphicText(labelSource.textContent ?? '', MAX_GRAPHIC_LABEL_LENGTH),
-        nested ? parseListElement(nested) : [],
-      );
-    })
-    .filter((item) => item.label.length > 0 || item.children.length > 0);
+function parseListElement(
+  list: Element,
+  depth = 1,
+  budget = { left: MAX_GRAPHIC_NODES },
+): SmartGraphicItem[] {
+  if (depth > MAX_GRAPHIC_LIST_DEPTH || budget.left <= 0) {
+    return [];
+  }
+
+  const items: SmartGraphicItem[] = [];
+  for (const child of Array.from(list.children)) {
+    if (budget.left <= 0) break;
+    if (child.tagName.toLowerCase() !== 'li') continue;
+    const nested = Array.from(child.children).find((node) => node.tagName.toLowerCase() === 'ul');
+    const labelSource = child.cloneNode(true) as HTMLElement;
+    labelSource.querySelectorAll('ul').forEach((node) => node.remove());
+    budget.left -= 1;
+    const item = createGraphicItem(
+      sanitizeGraphicText(labelSource.textContent ?? '', MAX_GRAPHIC_LABEL_LENGTH),
+      nested ? parseListElement(nested, depth + 1, budget) : [],
+    );
+    if (item.label.length > 0 || item.children.length > 0) {
+      items.push(item);
+    } else {
+      budget.left += 1;
+    }
+  }
+  return items;
 }
 
 function createListElement(doc: Document, items: SmartGraphicItem[]): HTMLUListElement {
@@ -533,6 +557,31 @@ function mapSiblings(
   return null;
 }
 
+function itemSubtreeDepth(item: SmartGraphicItem): number {
+  if (!item.children.length) return 1;
+  return 1 + Math.max(...item.children.map(itemSubtreeDepth));
+}
+
+function findDemoteTarget(
+  items: SmartGraphicItem[],
+  id: string,
+  maxDepth: number,
+  depth: number,
+): { index: number; items: SmartGraphicItem[] } | null {
+  const index = items.findIndex((item) => item.id === id);
+  if (index >= 0) {
+    if (index === 0) return null;
+    const moving = items[index];
+    if (depth + itemSubtreeDepth(moving) > maxDepth) return null;
+    return { index, items };
+  }
+  for (const item of items) {
+    const nested = findDemoteTarget(item.children, id, maxDepth, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 function demoteInTree(
   items: SmartGraphicItem[],
   id: string,
@@ -541,7 +590,7 @@ function demoteInTree(
 ): SmartGraphicItem[] | null {
   const index = items.findIndex((item) => item.id === id);
   if (index >= 0) {
-    if (index === 0 || depth >= maxDepth) return items;
+    if (index === 0 || depth + itemSubtreeDepth(items[index]) > maxDepth) return items;
     const previous = items[index - 1];
     const moving = items[index];
     const nextPrevious = { ...previous, children: [...previous.children, moving] };
@@ -583,15 +632,18 @@ function promoteInTree(items: SmartGraphicItem[], id: string): SmartGraphicItem[
   return null;
 }
 
-function sanitizeGraphicId(value: unknown): string {
-  if (typeof value === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(value)) {
-    return value;
+function sanitizeGraphicId(value: unknown, usedIds: Set<string>): string {
+  let candidate =
+    typeof value === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(value) ? value : createGraphicId();
+  while (usedIds.has(candidate)) {
+    candidate = createGraphicId();
   }
-  return createGraphicId();
+  usedIds.add(candidate);
+  return candidate;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isColorSet(value: unknown): value is SmartGraphicColorSet {
@@ -602,8 +654,3 @@ function isStyle(value: unknown): value is SmartGraphicStyle {
   return typeof value === 'string' && (SMART_GRAPHIC_STYLES as readonly string[]).includes(value);
 }
 
-export function isLayoutId(value: unknown): value is SmartGraphicLayoutId {
-  return isSmartGraphicLayoutId(value);
-}
-
-export { LAYOUT_IDS as SMART_GRAPHIC_LAYOUT_IDS };

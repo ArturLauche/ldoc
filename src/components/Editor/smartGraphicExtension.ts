@@ -5,6 +5,7 @@ import { ReactNodeViewRenderer } from '@tiptap/react';
 import {
   coerceGraphic,
   createStarterGraphic,
+  flattenGraphicLabels,
   graphicFallbackDOMSpec,
   parseSmartGraphicFromDom,
   parseSmartGraphicJson,
@@ -22,6 +23,12 @@ declare module '@tiptap/core' {
       deleteSmartGraphic: () => ReturnType;
     };
   }
+
+  interface Storage {
+    smartGraphic: {
+      activeItemId: string | null;
+    };
+  }
 }
 
 export const SmartGraphic = Node.create({
@@ -34,12 +41,17 @@ export const SmartGraphic = Node.create({
   addAttributes() {
     return {
       graphic: {
-        default: createStarterGraphic('list-block'),
+        default: null,
         renderHTML: (attributes: { graphic?: unknown }) => ({
           'data-lwrite-graphic': serializeSmartGraphic(coerceGraphic(attributes.graphic)),
         }),
       },
     };
+  },
+
+  renderText({ node }) {
+    const model = coerceGraphic(node.attrs.graphic);
+    return [model.title, ...flattenGraphicLabels(model)].filter(Boolean).join(' ');
   },
 
   parseHTML() {
@@ -72,6 +84,12 @@ export const SmartGraphic = Node.create({
     ];
   },
 
+  addStorage() {
+    return {
+      activeItemId: null as string | null,
+    };
+  },
+
   addNodeView() {
     return ReactNodeViewRenderer(SmartGraphicView, {
       as: 'div',
@@ -88,34 +106,31 @@ export const SmartGraphic = Node.create({
     return {
       insertSmartGraphic:
         (layoutId) =>
-        ({ chain }) =>
-          chain()
-            .insertContent({
-              type: this.name,
-              attrs: {
-                graphic: createStarterGraphic(layoutId ?? 'list-block'),
+        ({ chain, state }) => {
+          const insertPos = state.selection.from;
+          return chain()
+            .insertContentAt(
+              insertPos,
+              {
+                type: this.name,
+                attrs: {
+                  graphic: createStarterGraphic(layoutId ?? 'list-block'),
+                },
               },
-            })
+              { updateSelection: false },
+            )
             .command(({ tr, dispatch }) => {
-              let closestPos: number | null = null;
-              let closestDistance = Number.POSITIVE_INFINITY;
-              const from = tr.selection.from;
-              tr.doc.descendants((node, pos) => {
-                if (node.type.name !== 'smartGraphic') return true;
-                const distance = Math.abs(pos - from);
-                if (distance < closestDistance) {
-                  closestPos = pos;
-                  closestDistance = distance;
-                }
-                return true;
-              });
-              if (closestPos == null) return false;
+              const pos = tr.mapping.map(insertPos, -1);
+              if (tr.doc.nodeAt(pos)?.type.name !== this.name) {
+                return false;
+              }
               if (dispatch) {
-                tr.setSelection(NodeSelection.create(tr.doc, closestPos));
+                tr.setSelection(NodeSelection.create(tr.doc, pos));
               }
               return true;
             })
-            .run(),
+            .run();
+        },
       updateSmartGraphic:
         (graphic) =>
         ({ editor, commands }) => {

@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import { getBrowserLocale, t as translate } from '@/lib/translations';
+import { readStoredLocale } from '@/lib/localePreference';
 import { cn } from '@/lib/utils';
 import {
   type SmartGraphicColorSet,
@@ -156,7 +158,7 @@ function GraphicShape({
           onChange={(event) => shapeProps.onChangeLabel?.(item.id, event.target.value)}
           onFocus={() => shapeProps.onSelectItem?.(item.id)}
           className="w-full min-w-0 bg-transparent text-center outline-none placeholder:text-current/60"
-          aria-label={item.label || 'Graphic item'}
+          aria-label={item.label || translate(readStoredLocale() ?? getBrowserLocale(), 'graphicItemPlaceholder')}
         />
       ) : (
         <span className={cn('min-w-0', shapeProps.compact ? 'truncate' : 'break-words')}>{item.label}</span>
@@ -175,9 +177,8 @@ function shapeStyle(style: SmartGraphicStyle, fill: string, palette: GraphicPale
       };
     case 'subtle':
       return {
-        backgroundColor: fill,
+        backgroundColor: `color-mix(in srgb, ${fill} 18%, hsl(var(--background)))`,
         color: palette.textOnSubtle,
-        opacity: 0.78,
         border: `1px solid ${fill}`,
       };
     case 'intense':

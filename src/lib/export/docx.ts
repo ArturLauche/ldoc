@@ -18,6 +18,7 @@ import {
   resolvePtFromCssSize,
   graphicToFallbackBlocks,
   tableHasMergedCells,
+  expandTableGrid,
 } from './shared';
 import type { WarningCollector } from './warnings';
 
@@ -211,29 +212,51 @@ function renderTable(table: ExportTableBlock, context: DocxContext): string {
   if (tableHasMergedCells(table)) {
     context.warnings.add('table-layout-simplified');
   }
-  const maxCols = Math.max(
-    ...table.rows.map((row) => row.cells.reduce((sum, cell) => sum + cell.colSpan, 0)),
-    1,
-  );
-  const colWidth = Math.max(1, Math.floor(9000 / maxCols));
-  const grid = `<w:tblGrid>${Array.from({ length: maxCols }, () => `<w:gridCol w:w="${colWidth}"/>`).join('')}</w:tblGrid>`;
-  const rowXml = table.rows
-    .map((row) => `<w:tr>${row.cells.map((cell) => renderTableCell(cell, context, colWidth)).join('')}</w:tr>`)
+  const { colCount, rows } = expandTableGrid(table);
+  const colWidth = Math.max(1, Math.floor(9000 / colCount));
+  const grid = `<w:tblGrid>${Array.from({ length: colCount }, () => `<w:gridCol w:w="${colWidth}"/>`).join('')}</w:tblGrid>`;
+  const borderVal = table.borders === 'hidden' ? 'nil' : 'single';
+  const borders = `<w:tblBorders><w:top w:val="${borderVal}" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="${borderVal}" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="${borderVal}" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="${borderVal}" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="${borderVal}" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="${borderVal}" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders>`;
+  const rowXml = rows
+    .map(
+      (row) =>
+        `<w:tr>${row.map((cell) => renderTableCell(cell.cell, context, colWidth, cell.vMerge, cell.colSpan)).join('')}</w:tr>`,
+    )
     .join('');
-  return `<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders></w:tblPr>${grid}${rowXml}</w:tbl>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>${borders}</w:tblPr>${grid}${rowXml}</w:tbl>`;
 }
 
-function renderTableCell(cell: ExportTableCell, context: DocxContext, colWidth: number): string {
-  const gridSpan = cell.colSpan > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : '';
-  const vMerge = cell.rowSpan > 1 ? '<w:vMerge w:val="restart"/>' : '';
+function renderTableCell(
+  cell: ExportTableCell,
+  context: DocxContext,
+  colWidth: number,
+  vMergeKind?: 'restart' | 'continue',
+  colSpan = cell.colSpan,
+): string {
+  const gridSpan = colSpan > 1 ? `<w:gridSpan w:val="${colSpan}"/>` : '';
+  const vMerge =
+    vMergeKind === 'restart' ? '<w:vMerge w:val="restart"/>' : vMergeKind === 'continue' ? '<w:vMerge/>' : '';
   const fillHex = normalizeColorToHex(cell.backgroundColor);
   const fill = fillHex
     ? `<w:shd w:val="clear" w:color="auto" w:fill="${fillHex}"/>`
     : cell.header
       ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>'
       : '';
-  const body = cell.blocks.map((block) => renderBlock(block, context, 0)).join('') || '<w:p/>';
-  return `<w:tc><w:tcPr><w:tcW w:w="${colWidth * cell.colSpan}" w:type="dxa"/>${gridSpan}${vMerge}${fill}</w:tcPr>${body}</w:tc>`;
+  const alignedBlocks = cell.blocks.map((block) => {
+    if (
+      cell.align &&
+      (block.type === 'paragraph' || block.type === 'heading' || block.type === 'blockquote') &&
+      !block.align
+    ) {
+      return { ...block, align: cell.align };
+    }
+    return block;
+  });
+  const body =
+    vMergeKind === 'continue'
+      ? '<w:p/>'
+      : alignedBlocks.map((block) => renderBlock(block, context, 0)).join('') || '<w:p/>';
+  return `<w:tc><w:tcPr><w:tcW w:w="${colWidth * colSpan}" w:type="dxa"/>${gridSpan}${vMerge}${fill}</w:tcPr>${body}</w:tc>`;
 }
 
 function renderParagraph(

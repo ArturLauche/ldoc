@@ -45,6 +45,28 @@ describe('table insert and tools', () => {
     expect(html).toContain('<th');
   });
 
+  it('inserts a rounded custom size and ignores empty custom fields', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<TableGridPicker editor={editor} />);
+
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    const rowInput = screen.getByLabelText('Rows');
+    const colInput = screen.getByLabelText('Columns');
+    await user.clear(rowInput);
+    await user.type(rowInput, '2.7');
+    await user.clear(colInput);
+    await user.type(colInput, '1e1');
+    await user.click(screen.getByRole('button', { name: 'Insert custom size' }));
+
+    expect(editor.getHTML().match(/<tr/g)?.length).toBe(3);
+    expect(editor.getHTML().match(/<th/g)?.length).toBe(10);
+
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    await user.clear(screen.getByLabelText('Rows'));
+    expect(screen.getByRole('button', { name: 'Insert custom size' })).toBeDisabled();
+  });
+
   it('disables merge when a single cell is selected and supports row actions', () => {
     editor = createTestEditor();
     editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });

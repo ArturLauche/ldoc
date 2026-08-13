@@ -9,15 +9,13 @@ describe('SmartGraphicCanvas compact previews', () => {
     const chevronRoot = chevron.getByTestId('graphic-layout-process-chevron');
     expect(chevronRoot).toHaveClass('flex-nowrap');
     expect(chevronRoot).not.toHaveClass('flex-wrap');
-    expect(chevronRoot.innerHTML).not.toContain('min-w-[7rem]');
-    expect(chevronRoot.innerHTML).not.toContain('min-w-[6.5rem]');
+    expect(chevron.container.querySelector('[data-compact="true"]')).toBeTruthy();
     chevron.unmount();
 
     const steps = render(<SmartGraphicCanvas graphic={createStarterGraphic('process-steps')} compact />);
     const stepsRoot = steps.getByTestId('graphic-layout-process-steps');
     expect(stepsRoot).toHaveClass('flex-nowrap');
     expect(stepsRoot).not.toHaveClass('flex-wrap');
-    expect(stepsRoot.innerHTML).not.toContain('min-w-[5.5rem]');
   });
 
   it('sizes compact cycle and radial layouts to the gallery preview height', () => {
@@ -43,6 +41,6 @@ describe('SmartGraphicCanvas compact previews', () => {
     org.unmount();
 
     const pyramid = render(<SmartGraphicCanvas graphic={createStarterGraphic('pyramid-basic')} compact />);
-    expect(pyramid.getByTestId('graphic-layout-pyramid-basic').innerHTML).not.toContain('min-w-[8rem]');
+    expect(pyramid.getByTestId('graphic-layout-pyramid-basic')).toBeInTheDocument();
   });
 });

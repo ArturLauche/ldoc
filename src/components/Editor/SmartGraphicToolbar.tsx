@@ -32,6 +32,7 @@ import {
   SMART_GRAPHIC_STYLES,
   addGraphicItem,
   canAddGraphicItem,
+  canDemoteGraphicItem,
   canRemoveGraphicItem,
   coerceGraphic,
   demoteGraphicItem,
@@ -76,7 +77,6 @@ interface SmartGraphicToolbarProps {
 export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
   const { t } = useLocale();
   const [textPaneOpen, setTextPaneOpen] = useState(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   const graphicState = useEditorState({
     editor,
@@ -85,17 +85,30 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
       graphic: current.isActive('smartGraphic')
         ? coerceGraphic(current.getAttributes('smartGraphic').graphic)
         : null,
+      activeItemId: (current.storage.smartGraphic?.activeItemId as string | null) ?? null,
     }),
   });
 
-  const apply = (next: SmartGraphicModel) => {
-    editor.chain().focus().updateSmartGraphic(next).run();
+  const apply = (next: SmartGraphicModel, options?: { focus?: boolean }) => {
+    const chain = editor.chain();
+    if (options?.focus !== false) {
+      chain.focus();
+    }
+    chain.updateSmartGraphic(next).run();
+  };
+
+  const selectItem = (id: string) => {
+    editor.storage.smartGraphic.activeItemId = id;
+    editor.view.dispatch(editor.state.tr.setMeta('smartGraphicActiveId', id));
   };
 
   const graphic = graphicState.graphic;
-  const selectedId = activeId && graphic && flattenGraphicItems(graphic.items).some((item) => item.id === activeId)
-    ? activeId
-    : graphic?.items[0]?.id ?? null;
+  const selectedId =
+    graphicState.activeItemId &&
+    graphic &&
+    flattenGraphicItems(graphic.items).some((item) => item.id === graphicState.activeItemId)
+      ? graphicState.activeItemId
+      : graphic?.items[0]?.id ?? null;
   const layout = graphic ? getSmartGraphicLayout(graphic.layoutId) : null;
 
   return (
@@ -207,7 +220,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
               </ToolbarIconButton>
               <ToolbarIconButton
                 tooltip={t('graphicDemote')}
-                disabled={!selectedId}
+                disabled={!canDemoteGraphicItem(graphic, selectedId)}
                 onClick={() => selectedId && apply(demoteGraphicItem(graphic, selectedId))}
               >
                 <IndentIncrease className="h-4 w-4" />
@@ -235,16 +248,17 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                   value={graphic.title}
                   placeholder={t('graphicTitlePlaceholder')}
                   aria-label={t('graphicTitlePlaceholder')}
-                  onChange={(event) => apply(updateGraphicTitle(graphic, event.target.value))}
+                  onChange={(event) => apply(updateGraphicTitle(graphic, event.target.value), { focus: false })}
                   className="h-8"
                 />
-                <ScrollArea className="max-h-64">
+                <ScrollArea className="h-[min(16rem,50vh)]">
                   <GraphicTextTree
                     items={graphic.items}
                     depth={0}
                     activeId={selectedId}
-                    onSelect={setActiveId}
-                    onChange={(id, label) => apply(updateItemLabel(graphic, id, label))}
+                    itemAriaLabel={t('graphicItemPlaceholder')}
+                    onSelect={selectItem}
+                    onChange={(id, label) => apply(updateItemLabel(graphic, id, label), { focus: false })}
                   />
                 </ScrollArea>
               </div>
@@ -290,12 +304,14 @@ function GraphicTextTree({
   items,
   depth,
   activeId,
+  itemAriaLabel,
   onSelect,
   onChange,
 }: {
   items: SmartGraphicModel['items'];
   depth: number;
   activeId: string | null;
+  itemAriaLabel: string;
   onSelect: (id: string) => void;
   onChange: (id: string, label: string) => void;
 }) {
@@ -305,7 +321,7 @@ function GraphicTextTree({
         <div key={item.id} className="space-y-1">
           <Input
             value={item.label}
-            aria-label={item.label || 'Graphic item'}
+            aria-label={item.label || itemAriaLabel}
             onFocus={() => onSelect(item.id)}
             onChange={(event) => onChange(item.id, event.target.value)}
             className={item.id === activeId ? 'h-8 ring-1 ring-ring' : 'h-8'}
@@ -316,6 +332,7 @@ function GraphicTextTree({
               items={item.children}
               depth={depth + 1}
               activeId={activeId}
+              itemAriaLabel={itemAriaLabel}
               onSelect={onSelect}
               onChange={onChange}
             />

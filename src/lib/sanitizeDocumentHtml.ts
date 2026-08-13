@@ -2,6 +2,7 @@ import { logError } from './logger';
 import {
   MAX_GRAPHIC_JSON_LENGTH,
   appendGraphicFallback,
+  parseSmartGraphicFromDom,
   parseSmartGraphicJson,
   serializeSmartGraphic,
 } from './smartGraphic';
@@ -225,7 +226,10 @@ function convertLegacySmartDiagrams(doc: Document): void {
 
 function convertSmartGraphics(doc: Document): void {
   doc.body.querySelectorAll('[data-lwrite-graphic]').forEach((element) => {
-    const parsed = parseSmartGraphicJson(element.getAttribute('data-lwrite-graphic'));
+    element.querySelectorAll(BLOCKED_ELEMENTS).forEach((node) => node.remove());
+    const parsed =
+      parseSmartGraphicJson(element.getAttribute('data-lwrite-graphic')) ??
+      parseSmartGraphicFromDom(element as HTMLElement);
     if (!parsed) {
       const fallback = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
       const paragraph = doc.createElement('p');

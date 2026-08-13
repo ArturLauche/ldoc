@@ -38,6 +38,67 @@ describe('smartGraphic model', () => {
     expect(switched.layoutId).toBe('list-block');
   });
 
+  it('keeps extra labels when switching to a layout with a smaller visual budget', () => {
+    let model = createStarterGraphic('list-block');
+    model = updateItemLabel(model, model.items[0].id, 'One');
+    model = updateItemLabel(model, model.items[1].id, 'Two');
+    model = updateItemLabel(model, model.items[2].id, 'Three');
+    model = updateItemLabel(model, model.items[3].id, 'Four');
+    while (canAddGraphicItem(model)) {
+      model = addGraphicItem(model);
+    }
+    expect(model.items.length).toBe(8);
+    const switched = switchGraphicLayout(model, 'pyramid-basic');
+    expect(switched.layoutId).toBe('pyramid-basic');
+    expect(flattenGraphicLabels(switched)).toEqual(expect.arrayContaining(['One', 'Two', 'Three', 'Four']));
+    expect(flattenGraphicLabels(switched).length).toBe(8);
+  });
+
+  it('preserves trailing spaces while editing labels and titles', () => {
+    const started = createStarterGraphic('list-block');
+    const labeled = updateItemLabel(started, started.items[0].id, 'Hello ');
+    expect(labeled.items[0].label).toBe('Hello ');
+    const titled = updateGraphicTitle(started, 'Plan ');
+    expect(titled.title).toBe('Plan ');
+  });
+
+  it('does not demote a node when its subtree would exceed max depth', () => {
+    const org = createStarterGraphic('hierarchy-org');
+    const nestedParent = org.items[0].children[1];
+    const grandchild = nestedParent?.children[0];
+    expect(nestedParent).toBeDefined();
+    expect(grandchild).toBeDefined();
+    if (!nestedParent || !grandchild) {
+      throw new Error('expected nested hierarchy starter nodes');
+    }
+
+    const demoted = demoteGraphicItem(org, nestedParent.id);
+    expect(demoted.items[0].children.map((item) => item.id)).toEqual(org.items[0].children.map((item) => item.id));
+    expect(flattenGraphicLabels(demoted)).toContain(grandchild.label);
+  });
+
+  it('disables removal at the layout minimum and skips array item entries', () => {
+    const matrix = createStarterGraphic('matrix-grid');
+    expect(canRemoveGraphicItem(matrix)).toBe(false);
+    expect(removeGraphicItem(matrix, matrix.items[0].id).items).toHaveLength(4);
+
+    const parsed = parseSmartGraphicJson({
+      version: 1,
+      layoutId: 'list-block',
+      colorSet: 'theme',
+      style: 'filled',
+      title: '',
+      items: [
+        ['not-an-item'],
+        { id: 'dup', label: 'First', children: [] },
+        { id: 'dup', label: 'Second', children: [] },
+      ],
+    });
+    expect(parsed?.items).toHaveLength(2);
+    expect(parsed?.items.map((item) => item.label)).toEqual(['First', 'Second']);
+    expect(parsed?.items[0].id).not.toBe(parsed?.items[1].id);
+  });
+
   it('adds, removes and reorders nodes without dropping remaining labels', () => {
     let model = createStarterGraphic('list-block');
     model = updateItemLabel(model, model.items[0].id, 'Alpha');
@@ -86,7 +147,7 @@ describe('smartGraphic model', () => {
 
     expect(parsed).not.toBeNull();
     expect(parsed?.title).toBe('Matrix plan');
-    expect(parsed?.items).toHaveLength(4);
+    expect(parsed?.items).toHaveLength(12);
     expect(parsed?.items.every((item) => item.children.length === 0)).toBe(true);
     expect(parsed?.items[0].label).toContain('Q0');
     expect(parsed?.items[0].label).toContain('<img');
@@ -115,6 +176,43 @@ describe('smartGraphic model', () => {
     expect(fromDom?.title).toBe('Plan');
     expect(fromDom?.items.map((item) => item.label)).toEqual(['One', 'Two']);
     expect(fromDom?.items[0].children[0].label).toBe('Child');
+
+    const unordered = parsedDom.createElement('div');
+    const leading = parsedDom.createElement('p');
+    leading.textContent = 'Not the title';
+    const classedTitle = parsedDom.createElement('p');
+    classedTitle.className = 'lwrite-graphic-title';
+    classedTitle.textContent = 'Real title';
+    const simpleList = parsedDom.createElement('ul');
+    const only = parsedDom.createElement('li');
+    only.textContent = 'Only';
+    simpleList.append(only);
+    unordered.append(leading, classedTitle, simpleList);
+    expect(parseSmartGraphicFromDom(unordered)?.title).toBe('Real title');
+
+    const deep = parsedDom.createElement('div');
+    const currentList = parsedDom.createElement('ul');
+    deep.append(currentList);
+    let currentItem = parsedDom.createElement('li');
+    currentItem.append('L1');
+    currentList.append(currentItem);
+    for (let level = 2; level <= 8; level += 1) {
+      const nestedList = parsedDom.createElement('ul');
+      const nestedItem = parsedDom.createElement('li');
+      nestedItem.append(`L${level}`);
+      nestedList.append(nestedItem);
+      currentItem.append(nestedList);
+      currentItem = nestedItem;
+    }
+    const deepModel = parseSmartGraphicFromDom(deep);
+    expect(deepModel).not.toBeNull();
+    let depth = 0;
+    let cursor = deepModel?.items[0];
+    while (cursor) {
+      depth += 1;
+      cursor = cursor.children[0];
+    }
+    expect(depth).toBeLessThanOrEqual(4);
 
     const starter = updateGraphicTitle(createStarterGraphic('cycle-basic'), 'Cycle');
     const serialized = serializeSmartGraphic(starter);

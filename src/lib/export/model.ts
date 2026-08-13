@@ -199,7 +199,7 @@ function parseTable(table: HTMLTableElement): ExportTableBlock {
         };
       }),
   }));
-  return { type: 'table', rows: rows.filter((row) => row.cells.length) };
+  return { type: 'table', borders: table.getAttribute('data-borders') === 'hidden' ? 'hidden' : 'visible', rows: rows.filter((row) => row.cells.length) };
 }
 
 function parseImage(img: HTMLImageElement): ExportImageBlock {

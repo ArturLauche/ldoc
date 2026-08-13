@@ -13,6 +13,7 @@ import {
   serializeSmartGraphic,
   switchGraphicLayout,
   updateItemLabel,
+  updateGraphicTitle,
   type SmartGraphicModel,
 } from '@/lib/smartGraphic';
 import { createEditorExtensions } from './editorExtensions';
@@ -57,8 +58,7 @@ describe('smart graphic insert and editing', () => {
     expect(screen.getAllByTestId('graphic-preview-frame').length).toBeGreaterThan(0);
     screen.getAllByTestId('graphic-preview-frame').forEach((frame) => {
       expect(frame).toHaveClass('h-36', 'items-center', 'justify-center');
-      expect(frame.querySelector('[class*="scale-["]')).toBeNull();
-      expect(frame.querySelector('[class*="origin-top"]')).toBeNull();
+      expect(frame.querySelector('[data-compact="true"]')).toBeTruthy();
     });
     expect(screen.getByTestId('graphic-layout-process-chevron')).toHaveClass('flex-nowrap');
     expect(screen.getByTestId('graphic-layout-process-steps')).toHaveClass('flex-nowrap');
@@ -108,5 +108,39 @@ describe('smart graphic insert and editing', () => {
     expect(editor.schema.nodes.smartDiagram).toBeUndefined();
     expect(editor.getHTML()).toContain('data-lwrite-graphic');
     expect(flattenGraphicLabels(graphicFromEditor(editor))).toEqual(['One', 'Two', 'Three']);
+  });
+
+  it('rebuilds a graphic from malformed JSON using the list fallback', () => {
+    editor = createTestEditor(
+      '<div data-lwrite-graphic="{not json}"><ul><li>Alpha</li><li>Beta</li></ul></div>',
+    );
+    expect(editor.isActive('smartGraphic') || editor.getJSON().content?.some((item) => item.type === 'smartGraphic')).toBe(
+      true,
+    );
+    expect(flattenGraphicLabels(graphicFromEditor(editor))).toEqual(['Alpha', 'Beta']);
+  });
+
+  it('does not create a graphic from malformed JSON without usable content', () => {
+    editor = createTestEditor('<div data-lwrite-graphic="{not json}"></div>');
+    expect(editor.getJSON().content?.some((item) => item.type === 'smartGraphic')).toBeFalsy();
+  });
+
+  it('selects the newly inserted graphic even when another graphic follows', () => {
+    editor = createTestEditor();
+    editor.commands.insertSmartGraphic('list-block');
+    editor.commands.insertContentAt(0, { type: 'paragraph' });
+    editor.commands.setTextSelection(1);
+    editor.commands.insertSmartGraphic('process-chevron');
+    expect(editor.isActive('smartGraphic')).toBe(true);
+    expect(coerceGraphic(editor.getAttributes('smartGraphic').graphic).layoutId).toBe('process-chevron');
+  });
+
+  it('includes graphic labels in document text', () => {
+    editor = createTestEditor();
+    editor.commands.insertSmartGraphic('list-block');
+    const labeled = updateItemLabel(graphicFromEditor(editor), graphicFromEditor(editor).items[0].id, 'Counted');
+    editor.commands.updateSmartGraphic(updateGraphicTitle(labeled, 'Title'));
+    expect(editor.getText()).toContain('Counted');
+    expect(editor.getText()).toContain('Title');
   });
 });

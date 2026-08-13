@@ -28,6 +28,12 @@ function clampSize(value: number): number {
   return Math.min(TABLE_CUSTOM_MAX, Math.max(1, Math.round(value)));
 }
 
+function parseCustomSize(value: string): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return clampSize(parsed);
+}
+
 export function TableGridPicker({ editor }: TableGridPickerProps) {
   const { t } = useLocale();
   const gridId = useId();
@@ -59,6 +65,10 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
     setHoverRows(Math.min(TABLE_PICKER_MAX, Math.max(1, rows)));
     setHoverCols(Math.min(TABLE_PICKER_MAX, Math.max(1, cols)));
   }, []);
+
+  const customRowCount = parseCustomSize(customRows);
+  const customColCount = parseCustomSize(customCols);
+  const canInsertCustom = customRowCount !== null && customColCount !== null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -183,13 +193,15 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
           <Button
             size="sm"
             className="w-full"
-            onClick={() =>
+            disabled={!canInsertCustom}
+            onClick={() => {
+              if (customRowCount === null || customColCount === null) return;
               insertTable({
-                rows: Number.parseInt(customRows, 10),
-                cols: Number.parseInt(customCols, 10),
+                rows: customRowCount,
+                cols: customColCount,
                 withHeaderRow,
-              })
-            }
+              });
+            }}
           >
             {t('tableInsertCustom')}
           </Button>
