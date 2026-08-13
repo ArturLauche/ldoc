@@ -67,9 +67,13 @@ export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
             onValueChange={(value) => setCategory(value as SmartGraphicCategory)}
             className="min-h-0 flex-1"
           >
-            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-0 rounded-none border-b border-border bg-transparent p-0 text-foreground">
               {SMART_GRAPHIC_CATEGORIES.map((item) => (
-                <TabsTrigger key={item} value={item} className="px-2 py-1 text-xs sm:text-sm">
+                <TabsTrigger
+                  key={item}
+                  value={item}
+                  className="rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-xs text-muted-foreground shadow-none sm:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
                   {t(GRAPHIC_CATEGORY_KEYS[item])}
                 </TabsTrigger>
               ))}

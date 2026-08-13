@@ -90,7 +90,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
       </Tooltip>
       <PopoverContent
         align="start"
-        className="w-[min(20rem,calc(100vw-1.5rem))] p-3 bg-popover border border-border shadow-lg z-50"
+        className="w-[min(22rem,calc(100vw-1.5rem))] p-3 bg-popover border border-border shadow-lg z-50"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="space-y-3">
@@ -119,7 +119,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
               }
             }}
           >
-            <div className="grid grid-cols-10 gap-0.5">
+            <div className="grid w-full grid-cols-10 gap-1">
               {Array.from({ length: TABLE_PICKER_MAX }, (_, rowIndex) =>
                 Array.from({ length: TABLE_PICKER_MAX }, (_, colIndex) => {
                   const row = rowIndex + 1;
@@ -134,7 +134,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
                       aria-label={formatMessage(t('tablePickerSize'), { rows: row, cols: col })}
                       aria-selected={active}
                       className={cn(
-                        'h-4 w-4 rounded-[3px] border transition-colors',
+                        'aspect-square w-full min-h-7 rounded-sm border transition-colors',
                         active
                           ? 'border-primary bg-primary/25'
                           : 'border-border bg-background hover:border-primary/60',
