@@ -15,7 +15,6 @@ export const defaultWarningMessages: Record<ExportWarningCode, string> = {
   'table-layout-simplified': 'A table was exported with simplified layout.',
   'unsupported-style-dropped': 'Some styling was dropped because this format does not support it.',
   'rtf-basic-format': 'RTF is exported as a basic compatibility format.',
-  'smart-diagram-as-placeholder': 'A smart diagram was exported as structured placeholder text.',
   'link-not-supported-by-format': 'A hyperlink was exported as visible text because this format cannot keep links.',
 };
 

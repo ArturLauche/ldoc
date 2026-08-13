@@ -27,11 +27,6 @@ function buildHtmlDocument(documentModel: ExportDocumentModel): string {
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { border: 1px solid #d1d5db; padding: 0.5rem; vertical-align: top; }
     th { background: #f3f4f6; text-align: left; }
-    .smart-diagram { border: 1px solid #d1d5db; border-radius: 10px; padding: 0.75rem; margin: 1rem 0; }
-    .smart-diagram__title { font-weight: 600; margin-bottom: 0.5rem; }
-    .smart-diagram__nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-    .smart-diagram__node { border: 1px solid #cbd5e1; border-radius: 999px; padding: 0.25rem 0.75rem; background: #eef2ff; }
-    .smart-diagram__connector { color: #64748b; }
   </style>
 </head>
 <body>

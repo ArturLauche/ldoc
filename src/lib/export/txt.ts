@@ -16,10 +16,6 @@ function blockToText(block: ExportBlock, depth: number): string[] {
   }
   if (block.type === 'horizontal-rule') return ['----------------------------------------'];
   if (block.type === 'image') return [getVisibleTextFromRuns(imagePlaceholderRuns(block), true)];
-  if (block.type === 'smart-diagram') {
-    const items = block.items.length ? `: ${block.items.join(' -> ')}` : '';
-    return [`${block.title} (${block.template})${items}`];
-  }
   if (block.type === 'table') {
     return block.rows.map((row) => row.cells.map(formatCellText).join(' | '));
   }

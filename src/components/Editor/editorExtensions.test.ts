@@ -36,4 +36,18 @@ describe('editorExtensions', () => {
 
     editor.destroy();
   });
+
+  it('keeps imported tables in the schema without the removed smart diagram node', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(getPlaceholder),
+      content: '<table><tr><th>Head</th></tr><tr><td>Cell</td></tr></table>',
+    });
+
+    expect(editor.schema.nodes.table).toBeDefined();
+    expect(editor.schema.nodes.smartDiagram).toBeUndefined();
+    expect(editor.getHTML()).toContain('<table');
+    expect(editor.getHTML()).toContain('Cell');
+
+    editor.destroy();
+  });
 });

@@ -22,13 +22,6 @@ import {
   Palette,
   Highlighter,
   ChevronsUpDown,
-  Table as TableIcon,
-  Rows3,
-  Workflow,
-  SplitSquareHorizontal,
-  Combine,
-  Plus,
-  Minus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,10 +43,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/components/locale-provider';
-import type { SmartDiagramTemplate } from './SmartDiagram';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -84,13 +75,6 @@ const highlightColors = [
   '#FEF08A', '#FDE68A', '#FECACA', '#D1FAE5', '#CFFAFE', '#DDD6FE',
   '#FBCFE8', '#FED7AA', '#E0E7FF', '#CCE5FF', REMOVE_HIGHLIGHT,
 ];
-
-const normalizeDiagramItems = (value: string) =>
-  value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 8);
 
 const ToolbarButton = ({
   onClick,
@@ -137,12 +121,6 @@ const ToolbarButton = ({
 export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   const { t } = useLocale();
   const [linkUrl, setLinkUrl] = useState('');
-  const [tableRows, setTableRows] = useState('3');
-  const [tableCols, setTableCols] = useState('3');
-  const [tableWithHeader, setTableWithHeader] = useState(true);
-  const [diagramTitle, setDiagramTitle] = useState(() => t('toolbarDefaultDiagramTitle'));
-  const [diagramTemplate, setDiagramTemplate] = useState<SmartDiagramTemplate>('process');
-  const [diagramItems, setDiagramItems] = useState(() => t('toolbarDefaultDiagramItems'));
   const [activeFontSize, setActiveFontSize] = useState('16px');
 
   const setLink = useCallback(() => {
@@ -167,57 +145,12 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
     [editor],
   );
 
-
-  const isInTable = editor?.isActive('table') ?? false;
-  const isInDiagram = editor?.isActive('smartDiagram') ?? false;
-
-  const createTable = () => {
-    if (!editor) return;
-    const rows = Math.max(1, Math.min(12, Number.parseInt(tableRows, 10) || 3));
-    const cols = Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3));
-    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: tableWithHeader }).run();
-  };
-
-  const tablePresets = useMemo(() => ([
-    { label: t('toolbarPresetBasicGrid'), rows: '3', cols: '3', withHeader: true },
-    { label: t('toolbarPresetComparison'), rows: '4', cols: '4', withHeader: true },
-    { label: t('toolbarPresetAgenda'), rows: '5', cols: '3', withHeader: true },
-    { label: t('toolbarPresetMatrix'), rows: '4', cols: '5', withHeader: false },
-  ]), [t]);
-
   const lineSpacings = useMemo(() => ([
     { name: t('toolbarSpacingSingle'), value: '1' },
     { name: '1.15', value: '1.15' },
     { name: '1.5', value: '1.5' },
     { name: t('toolbarSpacingDouble'), value: '2' },
   ]), [t]);
-
-  const diagramItemList = useMemo(() => normalizeDiagramItems(diagramItems), [diagramItems]);
-  const diagramItemsValue = diagramItemList.join('|');
-  const diagramLimitReached = diagramItemList.length >= 8;
-  const canInsertDiagram = diagramItemList.length >= 2;
-  const tableSummary = `${Math.max(1, Math.min(12, Number.parseInt(tableRows, 10) || 3))}×${Math.max(1, Math.min(8, Number.parseInt(tableCols, 10) || 3))}`;
-
-  useEffect(() => {
-    if (!editor) return;
-
-    const syncDiagramSelection = () => {
-      if (!editor.isActive('smartDiagram')) return;
-      const attrs = editor.getAttributes('smartDiagram');
-      setDiagramTemplate((attrs.template as SmartDiagramTemplate) || 'process');
-      setDiagramTitle(attrs.title || t('toolbarDefaultDiagramTitle'));
-      setDiagramItems(String(attrs.items || '').split('|').join('\n'));
-    };
-
-    syncDiagramSelection();
-    editor.on('selectionUpdate', syncDiagramSelection);
-    editor.on('transaction', syncDiagramSelection);
-
-    return () => {
-      editor.off('selectionUpdate', syncDiagramSelection);
-      editor.off('transaction', syncDiagramSelection);
-    };
-  }, [editor, t]);
 
   useEffect(() => {
     if (!editor) return;
@@ -241,32 +174,6 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
       editor.off('transaction', syncFontSize);
     };
   }, [editor]);
-
-  const insertDiagram = () => {
-    if (!editor || !canInsertDiagram) return;
-    editor
-      .chain()
-      .focus()
-      .insertSmartDiagram({
-        template: diagramTemplate,
-        title: diagramTitle.trim() || t('toolbarDefaultDiagramTitle'),
-        items: diagramItemsValue,
-      })
-      .run();
-  };
-
-  const updateDiagram = () => {
-    if (!editor || !canInsertDiagram) return;
-    editor
-      .chain()
-      .focus()
-      .updateSmartDiagram({
-        template: diagramTemplate,
-        title: diagramTitle.trim() || t('toolbarDefaultDiagramTitle'),
-        items: diagramItemsValue,
-      })
-      .run();
-  };
 
   if (!editor) return null;
 
@@ -560,189 +467,6 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
       </Popover>
 
       <Separator orientation="vertical" className="h-6 mx-1" />
-
-      {/* Tables */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarTable')}>
-            <TableIcon className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-3 bg-popover border border-border shadow-lg z-50">
-          <div className="space-y-3">
-            <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarCreateTable')}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={tableRows}
-                  onChange={(e) => setTableRows(e.target.value)}
-                  aria-label={t('toolbarRows')}
-                  placeholder={t('toolbarRows')}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={tableCols}
-                  onChange={(e) => setTableCols(e.target.value)}
-                  aria-label={t('toolbarColumns')}
-                  placeholder={t('toolbarColumns')}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {tablePresets.map((preset) => (
-                  <Button
-                    key={preset.label}
-                    size="sm"
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      setTableRows(preset.rows);
-                      setTableCols(preset.cols);
-                      setTableWithHeader(preset.withHeader);
-                    }}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full"
-                onClick={() => setTableWithHeader((value) => !value)}
-              >
-                {tableWithHeader ? t('toolbarHeaderRowOn') : t('toolbarHeaderRowOff')}
-              </Button>
-              <Button size="sm" className="w-full" onClick={createTable}>
-                <Rows3 className="h-4 w-4 mr-2" /> {t('toolbarInsertTable')} ({tableSummary})
-              </Button>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarTableTools')}</p>
-              <div className="grid grid-cols-2 gap-1">
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowBefore().run()} disabled={!isInTable}>
-                  {t('toolbarAddRowBefore')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addRowAfter().run()} disabled={!isInTable}>
-                  {t('toolbarAddRowAfter')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnBefore().run()} disabled={!isInTable}>
-                  {t('toolbarAddColumnBefore')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().addColumnAfter().run()} disabled={!isInTable}>
-                  {t('toolbarAddColumnAfter')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().mergeCells().run()} disabled={!isInTable}>
-                  <Combine className="h-4 w-4 mr-1" /> {t('toolbarMergeCells')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().splitCell().run()} disabled={!isInTable}>
-                  <SplitSquareHorizontal className="h-4 w-4 mr-1" /> {t('toolbarSplitCell')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderRow().run()} disabled={!isInTable}>
-                  {t('toolbarToggleHeaderRow')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} disabled={!isInTable}>
-                  {t('toolbarToggleHeaderColumn')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteRow().run()} disabled={!isInTable}>
-                  {t('toolbarDeleteRow')}
-                </Button>
-                <Button size="sm" variant="ghost" className="justify-start" onClick={() => editor.chain().focus().deleteColumn().run()} disabled={!isInTable}>
-                  {t('toolbarDeleteColumn')}
-                </Button>
-              </div>
-              <Button size="sm" variant="destructive" className="w-full mt-2" onClick={() => editor.chain().focus().deleteTable().run()} disabled={!isInTable}>
-                {t('toolbarDeleteTable')}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      {/* Smart diagram */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('toolbarDiagram')}>
-            <Workflow className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 p-3 bg-popover border border-border shadow-lg z-50">
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('toolbarDiagram')}</p>
-            <Input
-              value={diagramTitle}
-              onChange={(e) => setDiagramTitle(e.target.value)}
-              placeholder={t('toolbarDiagramTitle')}
-              aria-label={t('toolbarDiagramTitle')}
-            />
-            <Select
-              value={diagramTemplate}
-              onValueChange={(value) => setDiagramTemplate(value as SmartDiagramTemplate)}
-            >
-              <SelectTrigger aria-label={t('toolbarDiagramTemplate')}>
-                <SelectValue placeholder={t('toolbarDiagramTemplate')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="process">{t('toolbarProcess')}</SelectItem>
-                <SelectItem value="cycle">{t('toolbarCycle')}</SelectItem>
-                <SelectItem value="hierarchy">{t('toolbarHierarchy')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Textarea
-              rows={5}
-              value={diagramItems}
-              onChange={(e) => setDiagramItems(e.target.value)}
-              placeholder={t('toolbarDiagramItems')}
-              aria-label={t('toolbarDiagramItems')}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="justify-start"
-                onClick={() =>
-                  setDiagramItems(
-                    (value) =>
-                      `${value.trim()}\n${t('toolbarDiagramAutoItemLabel')} ${diagramItemList.length + 1}`.trim(),
-                  )
-                }
-                disabled={diagramLimitReached}
-              >
-                <Plus className="h-4 w-4 mr-2" /> {t('toolbarDiagramAddItem')}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="justify-start"
-                onClick={() => setDiagramItems(diagramItemList.slice(0, -1).join('\n'))}
-                disabled={diagramItemList.length <= 2}
-              >
-                <Minus className="h-4 w-4 mr-2" /> {t('toolbarDiagramRemoveItem')}
-              </Button>
-            </div>
-            <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between gap-2">
-                <span>{t('toolbarDiagramHint')}</span>
-                <span>{diagramItemList.length}/8</span>
-              </div>
-              {diagramLimitReached && <p className="mt-1">{t('toolbarDiagramHintOverflow')}</p>}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" onClick={insertDiagram} disabled={!canInsertDiagram}>{t('toolbarInsertDiagram')}</Button>
-              <Button size="sm" variant="outline" onClick={updateDiagram} disabled={!isInDiagram || !canInsertDiagram}>
-                {t('toolbarUpdateDiagram')}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
 
       {/* Link */}
       <Popover>

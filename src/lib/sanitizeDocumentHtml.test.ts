@@ -17,7 +17,7 @@ describe('sanitizeDocumentHtml', () => {
     expect(sanitized).not.toContain('data:text/html');
   });
 
-  it('keeps document formatting and smart diagram attributes', () => {
+  it('keeps document formatting and converts leftover smart diagrams to readable text', () => {
     const sanitized = sanitizeDocumentHtml(`
       <div data-smart-diagram="true" data-template="process" data-title="Plan" data-items="A|B">
         <span class="smart-diagram__node">A</span>
@@ -26,8 +26,9 @@ describe('sanitizeDocumentHtml', () => {
       <p><strong>Bold</strong> <mark style="background-color: #fef08a">mark</mark></p>
     `);
 
-    expect(sanitized).toContain('data-smart-diagram="true"');
-    expect(sanitized).toContain('data-items="A|B"');
+    const parsed = new DOMParser().parseFromString(sanitized, 'text/html');
+    expect(parsed.body.textContent).toContain('Plan: A -> B');
+    expect(sanitized).not.toContain('data-smart-diagram');
     expect(sanitized).toContain('<ol start="4">');
     expect(sanitized).toContain('<strong>Bold</strong>');
     expect(sanitized).toContain('background-color');
@@ -37,13 +38,13 @@ describe('sanitizeDocumentHtml', () => {
     const sanitized = sanitizeDocumentHtml(`
       <p class="text-primary hacked" style="color: rgb(10, 20, 30); position: fixed; width: 50%; background-image: url(javascript:alert(1))">Text</p>
       <span style="font-size: 18px; line-height: 1.5; behavior: url(#bad)">Size</span>
-      <div class="smart-diagram smart-diagram__node unknown" contenteditable="true">Diagram</div>
+      <div class="unknown" contenteditable="true">Diagram</div>
     `);
 
     expect(sanitized).toContain('class="text-primary"');
     expect(sanitized).toContain('style="color: rgb(10, 20, 30); width: 50%;"');
     expect(sanitized).toContain('style="font-size: 18px; line-height: 1.5;"');
-    expect(sanitized).toContain('class="smart-diagram smart-diagram__node"');
+    expect(sanitized).toContain('<div>Diagram</div>');
     expect(sanitized).not.toContain('position');
     expect(sanitized).not.toContain('background-image');
     expect(sanitized).not.toContain('behavior');

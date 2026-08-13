@@ -94,10 +94,6 @@ function renderBlock(block: ExportBlock, context: OdtContext, level: number): st
   }
   if (block.type === 'horizontal-rule') return `<text:p>${escapeXml('-'.repeat(48))}</text:p>`;
   if (block.type === 'image') return renderImage(block, context);
-  if (block.type === 'smart-diagram') {
-    context.warnings.add('smart-diagram-as-placeholder', block.title);
-    return `<text:p>${renderRuns(diagramRuns(block.title, block.template, block.items))}</text:p>`;
-  }
   if (block.type === 'table') return renderTable(block.rows.map((row) => row.cells), context);
   if (block.type === 'list') return renderList(block, context, level);
   return '';
@@ -252,13 +248,6 @@ function textStyleName(marks: ExportInlineMarks): string {
 
 function paragraphStyleName(align: string): string {
   return `P-${align}`;
-}
-
-function diagramRuns(title: string, template: string, items: string[]): ExportInlineRun[] {
-  return [
-    { text: `${title} (${template})`, marks: { bold: true } },
-    { text: items.length ? `: ${items.join(' -> ')}` : '', marks: {} },
-  ];
 }
 
 function resolveDisplayWidth(image: ExportImageBlock): number {
