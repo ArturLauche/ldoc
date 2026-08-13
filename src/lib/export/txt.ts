@@ -1,5 +1,5 @@
 import type { ExportBlock, ExportDocumentModel, ExportListBlock, ExportTableCell } from './types';
-import { getVisibleTextFromRuns, imagePlaceholderRuns } from './shared';
+import { getVisibleTextFromRuns, graphicToFallbackBlocks, imagePlaceholderRuns } from './shared';
 
 export function renderTxt(documentModel: ExportDocumentModel): Blob {
   return new Blob([blocksToText(documentModel.blocks).join('\n')], { type: 'text/plain' });
@@ -18,6 +18,9 @@ function blockToText(block: ExportBlock, depth: number): string[] {
   if (block.type === 'image') return [getVisibleTextFromRuns(imagePlaceholderRuns(block), true)];
   if (block.type === 'table') {
     return block.rows.map((row) => row.cells.map(formatCellText).join(' | '));
+  }
+  if (block.type === 'graphic') {
+    return blocksToText(graphicToFallbackBlocks(block), depth);
   }
   if (block.type === 'list') return listToText(block, depth);
   return [];

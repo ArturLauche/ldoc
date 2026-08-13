@@ -555,3 +555,69 @@ body {
 .editor-content .ProseMirror .selectedCell {
   background: hsl(var(--primary) / 0.08);
 }
+
+.editor-content .ProseMirror .tableWrapper {
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.editor-content .ProseMirror .tableWrapper table {
+  margin: 0;
+}
+
+.editor-content .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: hsl(var(--primary));
+  pointer-events: auto;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.editor-content .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+.editor-content .ProseMirror table.ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--primary) / 0.65);
+  outline-offset: 2px;
+}
+
+.editor-content .ProseMirror table[data-borders='hidden'] {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.editor-content .ProseMirror table[data-borders='hidden'] th,
+.editor-content .ProseMirror table[data-borders='hidden'] td {
+  border-color: transparent;
+}
+
+.editor-content .ProseMirror td[data-background-color],
+.editor-content .ProseMirror th[data-background-color] {
+  background-image: none;
+}
+
+.editor-content .ProseMirror .lwrite-graphic-view,
+.editor-content .ProseMirror div.lwrite-graphic {
+  margin: 1.25rem 0;
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 1rem;
+  background: hsl(var(--card) / 0.92);
+  padding: 0.85rem;
+}
+
+.editor-content .ProseMirror .lwrite-graphic-view.is-selected,
+.editor-content .ProseMirror .lwrite-graphic-view.ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--primary) / 0.7);
+  outline-offset: 2px;
+}
+
+.editor-content .ProseMirror .lwrite-graphic-canvas {
+  color: hsl(var(--foreground));
+}
+

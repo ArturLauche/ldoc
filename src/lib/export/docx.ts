@@ -5,6 +5,7 @@ import type {
   ExportInlineMarks,
   ExportInlineRun,
   ExportListBlock,
+  ExportTableBlock,
   ExportTableCell,
 } from './types';
 import {
@@ -15,6 +16,8 @@ import {
   normalizeFontFamilyValue,
   normalizeRuns,
   resolvePtFromCssSize,
+  graphicToFallbackBlocks,
+  tableHasMergedCells,
 } from './shared';
 import type { WarningCollector } from './warnings';
 
@@ -180,7 +183,13 @@ function renderBlock(block: ExportBlock, context: DocxContext, level: number, li
     return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr></w:pPr></w:p>`;
   }
   if (block.type === 'image') return renderImageParagraph(block, context, listInfo);
-  if (block.type === 'table') return renderTable(block.rows, context);
+  if (block.type === 'table') return renderTable(block, context);
+  if (block.type === 'graphic') {
+    context.warnings.add('graphic-layout-simplified');
+    return graphicToFallbackBlocks(block)
+      .map((item) => renderBlock(item, context, level, listInfo))
+      .join('');
+  }
   if (block.type === 'list') return renderList(block, context, level);
   return '';
 }
@@ -198,23 +207,33 @@ function renderList(list: ExportListBlock, context: DocxContext, level: number):
     .join('');
 }
 
-function renderTable(rows: ExportTableCell[][] | { cells: ExportTableCell[] }[], context: DocxContext): string {
-  context.warnings.add('table-layout-simplified');
-  const rowXml = rows
-    .map((row) => {
-      const cells = Array.isArray(row) ? row : row.cells;
-      return `<w:tr>${cells.map((cell) => renderTableCell(cell, context)).join('')}</w:tr>`;
-    })
+function renderTable(table: ExportTableBlock, context: DocxContext): string {
+  if (tableHasMergedCells(table)) {
+    context.warnings.add('table-layout-simplified');
+  }
+  const maxCols = Math.max(
+    ...table.rows.map((row) => row.cells.reduce((sum, cell) => sum + cell.colSpan, 0)),
+    1,
+  );
+  const colWidth = Math.max(1, Math.floor(9000 / maxCols));
+  const grid = `<w:tblGrid>${Array.from({ length: maxCols }, () => `<w:gridCol w:w="${colWidth}"/>`).join('')}</w:tblGrid>`;
+  const rowXml = table.rows
+    .map((row) => `<w:tr>${row.cells.map((cell) => renderTableCell(cell, context, colWidth)).join('')}</w:tr>`)
     .join('');
-  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders></w:tblPr>${rowXml}</w:tbl>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:left w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:bottom w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:right w:val="single" w:sz="8" w:space="0" w:color="BFBFBF"/><w:insideH w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/><w:insideV w:val="single" w:sz="8" w:space="0" w:color="D4D4D4"/></w:tblBorders></w:tblPr>${grid}${rowXml}</w:tbl>`;
 }
 
-function renderTableCell(cell: ExportTableCell, context: DocxContext): string {
+function renderTableCell(cell: ExportTableCell, context: DocxContext, colWidth: number): string {
   const gridSpan = cell.colSpan > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : '';
   const vMerge = cell.rowSpan > 1 ? '<w:vMerge w:val="restart"/>' : '';
-  const headerFill = cell.header ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' : '';
+  const fillHex = normalizeColorToHex(cell.backgroundColor);
+  const fill = fillHex
+    ? `<w:shd w:val="clear" w:color="auto" w:fill="${fillHex}"/>`
+    : cell.header
+      ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>'
+      : '';
   const body = cell.blocks.map((block) => renderBlock(block, context, 0)).join('') || '<w:p/>';
-  return `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/>${gridSpan}${vMerge}${headerFill}</w:tcPr>${body}</w:tc>`;
+  return `<w:tc><w:tcPr><w:tcW w:w="${colWidth * cell.colSpan}" w:type="dxa"/>${gridSpan}${vMerge}${fill}</w:tcPr>${body}</w:tc>`;
 }
 
 function renderParagraph(

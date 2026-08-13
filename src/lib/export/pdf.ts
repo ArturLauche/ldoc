@@ -13,7 +13,7 @@ import type {
   ExportInlineRun,
   ExportListBlock,
 } from './types';
-import { imagePlaceholderRuns, normalizeColorToHex, normalizeRuns, resolvePtFromCssSize } from './shared';
+import { imagePlaceholderRuns, normalizeColorToHex, normalizeRuns, resolvePtFromCssSize, graphicToFallbackBlocks, tableHasMergedCells } from './shared';
 import type { WarningCollector } from './warnings';
 
 const PAGE_WIDTH = 612;
@@ -185,6 +185,13 @@ async function drawBlock(state: PdfState, block: ExportBlock, depth: number): Pr
     state.y -= 8;
     return;
   }
+  if (block.type === 'graphic') {
+    state.warnings.add('graphic-layout-simplified');
+    for (const item of graphicToFallbackBlocks(block)) {
+      await drawBlock(state, item, depth);
+    }
+    return;
+  }
   if (block.type === 'list') {
     await drawList(state, block, depth);
   }
@@ -298,7 +305,9 @@ async function drawImage(state: PdfState, image: ExportImageBlock): Promise<void
 }
 
 function drawTable(state: PdfState, table: Extract<ExportBlock, { type: 'table' }>): void {
-  state.warnings.add('table-layout-simplified');
+  if (tableHasMergedCells(table)) {
+    state.warnings.add('table-layout-simplified');
+  }
   const maxCols = Math.max(...table.rows.map((row) => row.cells.length), 1);
   const cellWidth = CONTENT_WIDTH / maxCols;
   table.rows.forEach((row) => {
@@ -327,7 +336,7 @@ function drawTable(state: PdfState, table: Extract<ExportBlock, { type: 'table' 
         height,
         borderColor: rgb(0.75, 0.75, 0.75),
         borderWidth: 0.5,
-        color: cell.header ? rgb(0.95, 0.96, 0.98) : undefined,
+        color: rgbFromCss(cell.backgroundColor) ?? (cell.header ? rgb(0.95, 0.96, 0.98) : undefined),
       });
       const lines = cellLines[index];
       let y = state.y - 16;

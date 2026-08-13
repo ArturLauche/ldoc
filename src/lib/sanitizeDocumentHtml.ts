@@ -1,4 +1,10 @@
 import { logError } from './logger';
+import {
+  MAX_GRAPHIC_JSON_LENGTH,
+  appendGraphicFallback,
+  parseSmartGraphicJson,
+  serializeSmartGraphic,
+} from './smartGraphic';
 
 const BLOCKED_ELEMENTS = 'script, style, iframe, object, embed, link, meta, base';
 const URI_ATTRIBUTES = new Set(['href', 'src', 'xlink:href', 'formaction']);
@@ -8,6 +14,8 @@ const ALLOWED_ELEMENTS = new Set([
   'blockquote',
   'br',
   'code',
+  'col',
+  'colgroup',
   'div',
   'em',
   'h1',
@@ -39,7 +47,13 @@ const ALLOWED_ATTRIBUTES = new Set([
   'alt',
   'class',
   'colspan',
+  'colwidth',
+  'contenteditable',
   'data-align',
+  'data-background-color',
+  'data-border',
+  'data-borders',
+  'data-lwrite-graphic',
   'data-width',
   'href',
   'rel',
@@ -55,6 +69,8 @@ const ALLOWED_CLASS_TOKENS = new Set([
   'cursor-pointer',
   'h-auto',
   'hover:text-primary/80',
+  'lwrite-graphic',
+  'lwrite-graphic-title',
   'max-w-full',
   'mx-auto',
   'my-4',
@@ -72,13 +88,17 @@ const ALLOWED_STYLE_PROPERTIES = new Set([
   'height',
   'line-height',
   'max-width',
+  'min-width',
   'text-align',
   'text-decoration',
   'text-decoration-line',
+  'vertical-align',
   'width',
 ]);
+const COLWIDTH_PATTERN = /^\d{1,4}(?:,\d{1,4}){0,32}$/;
 const FORBIDDEN_STYLE_PATTERN = /expression\s*\(|url\s*\(|@import|-moz-binding|behavior\s*:|var\s*\(/i;
 const CSS_SIZE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)$/i;
+const CSS_LENGTH_PATTERN = /^(?:0|[1-9]\d{0,4})(?:\.\d+)?(?:px|pt|em|rem|%)$/i;
 const CSS_NUMBER_OR_SIZE_PATTERN = /^(?:normal|(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)?)$/i;
 const CSS_PERCENT_PATTERN = /^(?:0|[1-9]\d?|100)(?:\.\d+)?%$/;
 const FONT_FAMILY_PATTERN = /^[a-z0-9\s"',._-]+$/i;
@@ -142,14 +162,17 @@ function isSafeStyleDeclaration(property: string, value: string): boolean {
       return CSS_NUMBER_OR_SIZE_PATTERN.test(value);
     case 'text-align':
       return /^(left|center|right|justify|start|end)$/i.test(value);
+    case 'vertical-align':
+      return /^(top|middle|bottom|baseline)$/i.test(value);
     case 'text-decoration':
     case 'text-decoration-line':
       return /^(none|underline|line-through|underline line-through|line-through underline)$/i.test(value);
     case 'height':
       return /^auto$/i.test(value);
     case 'max-width':
+    case 'min-width':
     case 'width':
-      return /^auto$/i.test(value) || CSS_PERCENT_PATTERN.test(value);
+      return /^auto$/i.test(value) || CSS_PERCENT_PATTERN.test(value) || CSS_LENGTH_PATTERN.test(value);
     default:
       return false;
   }
@@ -200,12 +223,52 @@ function convertLegacySmartDiagrams(doc: Document): void {
   });
 }
 
+function convertSmartGraphics(doc: Document): void {
+  doc.body.querySelectorAll('[data-lwrite-graphic]').forEach((element) => {
+    const parsed = parseSmartGraphicJson(element.getAttribute('data-lwrite-graphic'));
+    if (!parsed) {
+      const fallback = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const paragraph = doc.createElement('p');
+      paragraph.textContent = fallback;
+      element.replaceWith(paragraph);
+      return;
+    }
+
+    element.setAttribute('data-lwrite-graphic', serializeSmartGraphic(parsed));
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('class', 'lwrite-graphic');
+    appendGraphicFallback(doc, element, parsed);
+  });
+}
+
+function sanitizeSpecialAttribute(attributeName: string, value: string): string | null {
+  if (attributeName === 'contenteditable') {
+    return value.toLowerCase() === 'false' ? 'false' : null;
+  }
+  if (attributeName === 'colwidth') {
+    return COLWIDTH_PATTERN.test(value) ? value : null;
+  }
+  if (attributeName === 'data-background-color') {
+    return isSafeColorValue(value) ? value : null;
+  }
+  if (attributeName === 'data-border' || attributeName === 'data-borders') {
+    return value === 'hidden' || value === 'visible' ? value : null;
+  }
+  if (attributeName === 'data-lwrite-graphic') {
+    if (value.length > MAX_GRAPHIC_JSON_LENGTH) return null;
+    const parsed = parseSmartGraphicJson(value);
+    return parsed ? serializeSmartGraphic(parsed) : null;
+  }
+  return value;
+}
+
 export function sanitizeDocumentHtml(value: string): string {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(value, 'text/html');
 
     convertLegacySmartDiagrams(doc);
+    convertSmartGraphics(doc);
     doc.body.querySelectorAll(BLOCKED_ELEMENTS).forEach((element) => element.remove());
     doc.body.querySelectorAll('*').forEach((element) => {
       if (!ALLOWED_ELEMENTS.has(element.tagName.toLowerCase())) {
@@ -227,6 +290,23 @@ export function sanitizeDocumentHtml(value: string): string {
 
         if (isUnsafeUri(attributeName, attribute.value)) {
           element.removeAttribute(attribute.name);
+          return;
+        }
+
+        const specialValue = sanitizeSpecialAttribute(attributeName, attribute.value);
+        if (
+          attributeName === 'contenteditable' ||
+          attributeName === 'colwidth' ||
+          attributeName === 'data-background-color' ||
+          attributeName === 'data-border' ||
+          attributeName === 'data-borders' ||
+          attributeName === 'data-lwrite-graphic'
+        ) {
+          if (specialValue) {
+            element.setAttribute(attribute.name, specialValue);
+          } else {
+            element.removeAttribute(attribute.name);
+          }
           return;
         }
 

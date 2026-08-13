@@ -1,9 +1,13 @@
 import type {
   ExportBlock,
+  ExportGraphicBlock,
+  ExportGraphicItem,
   ExportImageBlock,
   ExportInlineMarks,
   ExportInlineRun,
   ExportLink,
+  ExportListBlock,
+  ExportTableBlock,
 } from './types';
 
 export function escapeXml(value: string): string {
@@ -170,3 +174,41 @@ export function hashString(value: string): string {
   }
   return hash.toString(16);
 }
+
+export function tableHasMergedCells(table: ExportTableBlock): boolean {
+  return table.rows.some((row) => row.cells.some((cell) => cell.colSpan > 1 || cell.rowSpan > 1));
+}
+
+export function graphicToFallbackBlocks(graphic: ExportGraphicBlock): ExportBlock[] {
+  const blocks: ExportBlock[] = [];
+  if (graphic.title.trim()) {
+    blocks.push({
+      type: 'heading',
+      level: 2,
+      runs: [{ text: graphic.title, marks: {} }],
+    });
+  }
+  if (graphic.items.length) {
+    blocks.push(graphicItemsToList(graphic.items, isOrderedGraphicLayout(graphic.layoutId)));
+  }
+  return blocks.length ? blocks : [{ type: 'paragraph', runs: [{ text: '', marks: {} }] }];
+}
+
+function isOrderedGraphicLayout(layoutId: string): boolean {
+  return layoutId.startsWith('process') || layoutId.startsWith('cycle');
+}
+
+function graphicItemsToList(items: ExportGraphicItem[], ordered: boolean): ExportListBlock {
+  return {
+    type: 'list',
+    ordered,
+    start: 1,
+    items: items.map((item) => ({
+      blocks: [
+        { type: 'paragraph' as const, runs: [{ text: item.label, marks: {} }] },
+        ...(item.children.length ? [graphicItemsToList(item.children, ordered)] : []),
+      ],
+    })),
+  };
+}
+

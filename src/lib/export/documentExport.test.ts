@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { exportDocument } from './documentExport';
 import { extractExportDocumentFromHtml } from './model';
+import { serializeSmartGraphic } from '@/lib/smartGraphic';
 
 const TINY_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
@@ -199,7 +200,7 @@ describe('exportDocument', () => {
     const loaded = await PDFDocument.load(await result.blob.arrayBuffer());
     expect(loaded.getPageCount()).toBeGreaterThan(0);
     expect(result.fileName).toBe('Pdf.pdf');
-    expect(result.warnings.map((warning) => warning.code)).toContain('table-layout-simplified');
+    expect(result.warnings.map((warning) => warning.code)).not.toContain('table-layout-simplified');
   });
 
   it('draws PDF headings and table cells with their layout base font sizes', async () => {
@@ -225,6 +226,79 @@ describe('exportDocument', () => {
       drawTextSpy.mockRestore();
     }
   });
+
+  it('exports a representative table with file name, MIME type and cell text', async () => {
+    const result = await exportDocument({
+      html: '<table><tr><th>Name</th><th>Qty</th></tr><tr><td>Apples</td><td>3</td></tr></table>',
+      name: 'Inventory',
+      locale: 'en',
+      format: 'txt',
+    });
+
+    await expect(result.blob.text()).resolves.toBe('Name | Qty\nApples | 3');
+    expect(result.fileName).toBe('Inventory.txt');
+    expect(result.blob.type).toBe('text/plain');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('warns only when a table uses merged cells in PDF', async () => {
+    const merged = await exportDocument({
+      html: '<table><tr><th colspan="2">Head</th></tr><tr><td>A</td><td>B</td></tr></table>',
+      name: 'Merged',
+      locale: 'en',
+      format: 'pdf',
+    });
+    expect(merged.warnings.map((warning) => warning.code)).toContain('table-layout-simplified');
+  });
+
+  it('exports smart graphics as a structured outline and keeps leftover diagrams as text', async () => {
+    const graphic = {
+      version: 1 as const,
+      layoutId: 'process-chevron' as const,
+      colorSet: 'theme' as const,
+      style: 'filled' as const,
+      title: 'Launch',
+      items: [
+        { id: 'a1', label: 'Alpha', children: [] },
+        { id: 'b2', label: 'Beta', children: [] },
+      ],
+    };
+    const html = `<div data-lwrite-graphic='${serializeSmartGraphic(graphic)}'></div>`;
+
+    const txt = await exportDocument({
+      html,
+      name: 'Graphic',
+      locale: 'en',
+      format: 'txt',
+    });
+    const text = await txt.blob.text();
+    expect(text).toContain('Launch');
+    expect(text).toContain('Alpha');
+    expect(text).toContain('Beta');
+    expect(txt.fileName).toBe('Graphic.txt');
+
+    const htmlExport = await exportDocument({
+      html,
+      name: 'Graphic',
+      locale: 'en',
+      format: 'html',
+    });
+    const htmlText = await htmlExport.blob.text();
+    expect(htmlText).toContain('data-lwrite-graphic');
+    expect(htmlText).toContain('<ul>');
+    expect(htmlText).toContain('Alpha');
+    expect(htmlExport.warnings).toEqual([]);
+
+    const docx = await exportDocument({
+      html,
+      name: 'Graphic',
+      locale: 'en',
+      format: 'docx',
+    });
+    expect(docx.warnings.map((warning) => warning.code)).toContain('graphic-layout-simplified');
+    expect(docx.blob.type).toContain('officedocument');
+  });
+
   it('rejects unsupported export formats', async () => {
     await expect(
       exportDocument({

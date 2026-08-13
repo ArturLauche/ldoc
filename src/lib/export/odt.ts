@@ -10,6 +10,7 @@ import type {
 import {
   escapeXml,
   escapeXmlAttr,
+  graphicToFallbackBlocks,
   hashString,
   imagePlaceholderRuns,
   normalizeColorToHex,
@@ -95,6 +96,12 @@ function renderBlock(block: ExportBlock, context: OdtContext, level: number): st
   if (block.type === 'horizontal-rule') return `<text:p>${escapeXml('-'.repeat(48))}</text:p>`;
   if (block.type === 'image') return renderImage(block, context);
   if (block.type === 'table') return renderTable(block.rows.map((row) => row.cells), context);
+  if (block.type === 'graphic') {
+    context.warnings.add('graphic-layout-simplified');
+    return graphicToFallbackBlocks(block)
+      .map((item) => renderBlock(item, context, level))
+      .join('');
+  }
   if (block.type === 'list') return renderList(block, context, level);
   return '';
 }

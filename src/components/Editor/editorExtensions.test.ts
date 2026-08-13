@@ -45,6 +45,7 @@ describe('editorExtensions', () => {
 
     expect(editor.schema.nodes.table).toBeDefined();
     expect(editor.schema.nodes.smartDiagram).toBeUndefined();
+    expect(editor.schema.nodes.smartGraphic).toBeDefined();
     expect(editor.getHTML()).toContain('<table');
     expect(editor.getHTML()).toContain('Cell');
 

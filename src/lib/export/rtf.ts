@@ -7,6 +7,7 @@ import {
   normalizeRuns,
   resolvePtFromCssSize,
   walkRuns,
+  graphicToFallbackBlocks,
 } from './shared';
 import type { WarningCollector } from './warnings';
 
@@ -52,6 +53,12 @@ function renderBlock(
           colors,
         ),
       )
+      .join('\\par\n');
+  }
+  if (block.type === 'graphic') {
+    warnings.add('graphic-layout-simplified');
+    return graphicToFallbackBlocks(block)
+      .map((item) => renderBlock(item, fonts, colors, warnings, listDepth, listIndex))
       .join('\\par\n');
   }
   if (block.type === 'list') {
@@ -157,6 +164,9 @@ function blockPlainText(block: ExportBlock): string {
   }
   if (block.type === 'list') {
     return block.items.map((item) => item.blocks.map(blockPlainText).join(' ')).join(' ');
+  }
+  if (block.type === 'graphic') {
+    return graphicToFallbackBlocks(block).map(blockPlainText).join(' ');
   }
   return '';
 }

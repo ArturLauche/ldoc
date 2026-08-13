@@ -13,6 +13,8 @@ export const defaultWarningMessages: Record<ExportWarningCode, string> = {
   'pdf-glyph-missing': 'Some characters could not be rendered by the selected PDF font.',
   'unicode-not-fully-supported': 'Some Unicode characters were represented with compatibility escapes.',
   'table-layout-simplified': 'A table was exported with simplified layout.',
+  'graphic-layout-simplified':
+    'A graphic was exported as a structured outline because this format cannot keep the visual layout.',
   'unsupported-style-dropped': 'Some styling was dropped because this format does not support it.',
   'rtf-basic-format': 'RTF is exported as a basic compatibility format.',
   'link-not-supported-by-format': 'A hyperlink was exported as visible text because this format cannot keep links.',
