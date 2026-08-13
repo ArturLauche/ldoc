@@ -54,6 +54,14 @@ describe('smart graphic insert and editing', () => {
     await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
     expect(screen.getByText('Insert Graphic')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Process' }));
+    expect(screen.getAllByTestId('graphic-preview-frame').length).toBeGreaterThan(0);
+    screen.getAllByTestId('graphic-preview-frame').forEach((frame) => {
+      expect(frame).toHaveClass('h-36', 'items-center', 'justify-center');
+      expect(frame.querySelector('[class*="scale-["]')).toBeNull();
+      expect(frame.querySelector('[class*="origin-top"]')).toBeNull();
+    });
+    expect(screen.getByTestId('graphic-layout-process-chevron')).toHaveClass('flex-nowrap');
+    expect(screen.getByTestId('graphic-layout-process-steps')).toHaveClass('flex-nowrap');
     await user.click(screen.getByRole('button', { name: 'Chevron Process' }));
 
     expect(editor.isActive('smartGraphic')).toBe(true);

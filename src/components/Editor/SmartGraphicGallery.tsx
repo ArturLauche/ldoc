@@ -31,7 +31,6 @@ export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<SmartGraphicCategory>('list');
-  const [previewId, setPreviewId] = useState<SmartGraphicLayoutId | null>(null);
 
   const layouts = useMemo(() => layoutsForCategory(category), [category]);
 
@@ -81,22 +80,22 @@ export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {(item === category ? layouts : layoutsForCategory(item)).map((layout) => {
                       const preview = createStarterGraphic(layout.id);
-                      const isPreview = previewId === layout.id;
                       return (
                         <button
                           key={layout.id}
                           type="button"
                           className="rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                          onMouseEnter={() => setPreviewId(layout.id)}
-                          onFocus={() => setPreviewId(layout.id)}
                           onClick={() => insertLayout(layout.id)}
                           aria-label={t(GRAPHIC_LAYOUT_KEYS[layout.id])}
                         >
                           <div className="mb-2 text-sm font-medium text-foreground">
                             {t(GRAPHIC_LAYOUT_KEYS[layout.id])}
                           </div>
-                          <div className="h-32 overflow-hidden rounded-lg border border-border/70 bg-background p-2">
-                            <div className={isPreview ? 'origin-top scale-100' : 'origin-top scale-[0.92]'}>
+                          <div
+                            data-testid="graphic-preview-frame"
+                            className="flex h-36 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-background p-2"
+                          >
+                            <div className="flex h-full w-full min-w-0 items-center justify-center">
                               <SmartGraphicCanvas graphic={preview} compact />
                             </div>
                           </div>
