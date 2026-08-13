@@ -11,11 +11,9 @@ import FontFamily from '@tiptap/extension-font-family';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes, type Extensions } from '@tiptap/core';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { TableCell } from '@tiptap/extension-table-cell';
 import { FindReplace } from './findReplaceExtension';
+import { SmartGraphic } from './smartGraphicExtension';
+import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
 
 const EnhancedImage = Image.extend({
   addAttributes() {
@@ -122,12 +120,11 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
         class: 'rounded-lg max-w-full h-auto my-4 mx-auto block',
       },
     }),
-    Table.configure({
-      resizable: true,
-    }),
-    TableRow,
-    TableHeader,
-    TableCell,
+    EditorTable,
+    EditorTableRow,
+    EditorTableHeader,
+    EditorTableCell,
+    SmartGraphic,
     FindReplace,
   ];
 }

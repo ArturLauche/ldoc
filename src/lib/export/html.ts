@@ -27,6 +27,10 @@ function buildHtmlDocument(documentModel: ExportDocumentModel): string {
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { border: 1px solid #d1d5db; padding: 0.5rem; vertical-align: top; }
     th { background: #f3f4f6; text-align: left; }
+    table[data-borders="hidden"] th, table[data-borders="hidden"] td { border-color: transparent; }
+    .lwrite-graphic { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; margin: 1rem 0; background: #f9fafb; }
+    .lwrite-graphic-title { font-weight: 700; margin: 0 0 0.5rem; }
+
   </style>
 </head>
 <body>

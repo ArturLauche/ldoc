@@ -50,5 +50,72 @@ describe('sanitizeDocumentHtml', () => {
     expect(sanitized).not.toContain('behavior');
     expect(sanitized).not.toContain('contenteditable');
   });
+
+  it('keeps table structure, column widths and cell fills', () => {
+    const sanitized = sanitizeDocumentHtml(`
+      <table style="min-width: 240px" data-borders="visible">
+        <colgroup><col style="width: 120px"></colgroup>
+        <tr>
+          <th colwidth="120" data-background-color="#FEF08A">Head</th>
+          <td style="background-color: rgb(10, 20, 30)">Cell<script>alert(1)</script></td>
+        </tr>
+      </table>
+    `);
+
+    expect(sanitized).toContain('<table');
+    expect(sanitized).toContain('<colgroup>');
+    expect(sanitized).toContain('width: 120px');
+    expect(sanitized).toContain('min-width: 240px');
+    expect(sanitized).toContain('colwidth="120"');
+    expect(sanitized).toContain('background-color: rgb(10, 20, 30)');
+    expect(sanitized).toContain('data-background-color="#FEF08A"');
+    expect(sanitized).not.toContain('<script>');
+  });
+
+  it('keeps sanitized smart graphics and converts malformed or oversized payloads to text', () => {
+    const graphic = {
+      version: 1,
+      layoutId: 'process-chevron',
+      colorSet: 'blue',
+      style: 'filled',
+      title: 'Launch',
+      items: [
+        { id: 'a1', label: 'Alpha', children: [] },
+        { id: 'b2', label: 'Beta', children: [] },
+      ],
+    };
+    const sanitized = sanitizeDocumentHtml(`
+      <div data-lwrite-graphic='${JSON.stringify(graphic)}' contenteditable="true">
+        <script>alert(1)</script>
+        <p>Ignore me</p>
+      </div>
+    `);
+
+    expect(sanitized).toContain('data-lwrite-graphic');
+    expect(sanitized).toContain('contenteditable="false"');
+    expect(sanitized).toContain('class="lwrite-graphic"');
+    expect(sanitized).toContain('<ul>');
+    expect(sanitized).toContain('Alpha');
+    expect(sanitized).toContain('Beta');
+    expect(sanitized).toContain('Launch');
+    expect(sanitized).not.toContain('<script>');
+    expect(sanitized).not.toContain('Ignore me');
+
+    const malformed = sanitizeDocumentHtml(
+      '<div data-lwrite-graphic="{not json}"><script>alert(1)</script><ul><li>Visible copy</li></ul></div>',
+    );
+    expect(malformed).toContain('Visible copy');
+    expect(malformed).not.toContain('alert(1)');
+    expect(malformed).toContain('data-lwrite-graphic');
+
+    const emptyMalformed = sanitizeDocumentHtml('<div data-lwrite-graphic="{not json}"></div>');
+    expect(emptyMalformed).not.toContain('data-lwrite-graphic');
+
+    const oversized = sanitizeDocumentHtml(
+      `<div data-lwrite-graphic="${'x'.repeat(20_001)}">Huge</div>`,
+    );
+    expect(oversized).toContain('Huge');
+    expect(oversized).not.toContain('x'.repeat(50));
+  });
 });
 

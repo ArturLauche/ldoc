@@ -5,11 +5,13 @@ import type {
   ExportInlineMarks,
   ExportInlineRun,
   ExportListBlock,
+  ExportTableBlock,
   ExportTableCell,
 } from './types';
 import {
   escapeXml,
   escapeXmlAttr,
+  graphicToFallbackBlocks,
   hashString,
   imagePlaceholderRuns,
   normalizeColorToHex,
@@ -94,7 +96,13 @@ function renderBlock(block: ExportBlock, context: OdtContext, level: number): st
   }
   if (block.type === 'horizontal-rule') return `<text:p>${escapeXml('-'.repeat(48))}</text:p>`;
   if (block.type === 'image') return renderImage(block, context);
-  if (block.type === 'table') return renderTable(block.rows.map((row) => row.cells), context);
+  if (block.type === 'table') return renderTable(block, context);
+  if (block.type === 'graphic') {
+    context.warnings.add('graphic-layout-simplified');
+    return graphicToFallbackBlocks(block)
+      .map((item) => renderBlock(item, context, level))
+      .join('');
+  }
   if (block.type === 'list') return renderList(block, context, level);
   return '';
 }
@@ -109,22 +117,30 @@ function renderList(list: ExportListBlock, context: OdtContext, level: number): 
     .join('')}</text:list>`;
 }
 
-function renderTable(rows: ExportTableCell[][], context: OdtContext): string {
+function renderTable(table: ExportTableBlock, context: OdtContext): string {
+  const rows = table.rows.map((row) => row.cells);
   const maxCols = Math.max(...rows.map((row) => row.reduce((sum, cell) => sum + cell.colSpan, 0)), 1);
   if (rows.some((row) => row.some((cell) => cell.colSpan > 1 || cell.rowSpan > 1))) {
     context.warnings.add('table-layout-simplified');
   }
   const columns = Array.from({ length: maxCols }).map(() => '<table:table-column/>').join('');
+  const tableStyle = table.borders === 'hidden' ? ' table:style-name="LWriteTableNoBorder"' : '';
   const body = rows
-    .map((row) => `<table:table-row>${row.map((cell) => renderTableCell(cell, context)).join('')}</table:table-row>`)
+    .map(
+      (row) =>
+        `<table:table-row>${row.map((cell) => renderTableCell(cell, context, table.borders === 'hidden')).join('')}</table:table-row>`,
+    )
     .join('');
-  return `<table:table table:name="Table">${columns}${body}</table:table>`;
+  return `<table:table table:name="Table"${tableStyle}>${columns}${body}</table:table>`;
 }
 
-function renderTableCell(cell: ExportTableCell, context: OdtContext): string {
+function renderTableCell(cell: ExportTableCell, context: OdtContext, hiddenBorders: boolean): string {
+  const styleName = odtCellStyleName(cell, hiddenBorders);
+  const styleAttr = styleName ? ` table:style-name="${styleName}"` : '';
   const attrs = [
     cell.colSpan > 1 ? ` table:number-columns-spanned="${cell.colSpan}"` : '',
     cell.rowSpan > 1 ? ` table:number-rows-spanned="${cell.rowSpan}"` : '',
+    styleAttr,
   ].join('');
   const body = cell.blocks.map((block) => renderBlock(block, context, 0)).join('') || '<text:p/>';
   return `<table:table-cell office:value-type="string"${attrs}>${body}</table:table-cell>`;
@@ -159,6 +175,8 @@ function renderRuns(runs: ExportInlineRun[]): string {
 function buildAutomaticStyles(blocks: ExportBlock[]): string {
   const styles = new Map<string, ExportInlineMarks>();
   const alignments = new Set<string>();
+  const cellStyles = new Map<string, { fill?: string; hiddenBorders: boolean }>();
+  let hiddenTable = false;
   walkRuns(blocks, (run) => {
     const name = textStyleName(run.marks);
     if (name) styles.set(name, run.marks);
@@ -167,11 +185,42 @@ function buildAutomaticStyles(blocks: ExportBlock[]): string {
     if ((block.type === 'paragraph' || block.type === 'heading' || block.type === 'blockquote') && block.align) {
       alignments.add(block.align);
     }
+    if (block.type === 'table') {
+      const hiddenBorders = block.borders === 'hidden';
+      if (hiddenBorders) hiddenTable = true;
+      block.rows.forEach((row) => {
+        row.cells.forEach((cell) => {
+          const name = odtCellStyleName(cell, hiddenBorders);
+          if (!name) return;
+          cellStyles.set(name, {
+            fill: normalizeColorToHex(cell.backgroundColor) ?? undefined,
+            hiddenBorders,
+          });
+        });
+      });
+    }
   });
   const paragraphStyles = Array.from(alignments)
     .map((align) => `<style:style style:name="${paragraphStyleName(align)}" style:family="paragraph"><style:paragraph-properties fo:text-align="${align}"/></style:style>`)
     .join('');
-  return `${paragraphStyles}${Array.from(styles.entries()).map(([name, marks]) => buildTextStyle(name, marks)).join('')}`;
+  const tableStyle = hiddenTable
+    ? '<style:style style:name="LWriteTableNoBorder" style:family="table"><style:table-properties table:align="margins"/></style:style>'
+    : '';
+  const tableCellStyles = Array.from(cellStyles.entries())
+    .map(([name, style]) => {
+      const props: string[] = [];
+      if (style.fill) props.push(`fo:background-color="#${style.fill}"`);
+      if (style.hiddenBorders) props.push('fo:border="none"');
+      return `<style:style style:name="${name}" style:family="table-cell"><style:table-cell-properties ${props.join(' ')}/></style:style>`;
+    })
+    .join('');
+  return `${paragraphStyles}${tableStyle}${tableCellStyles}${Array.from(styles.entries()).map(([name, marks]) => buildTextStyle(name, marks)).join('')}`;
+}
+
+function odtCellStyleName(cell: ExportTableCell, hiddenBorders: boolean): string | null {
+  const fill = normalizeColorToHex(cell.backgroundColor);
+  if (!fill && !hiddenBorders) return null;
+  return `TC${hiddenBorders ? 'NB' : ''}${fill ?? 'Plain'}`;
 }
 
 function buildTextStyle(name: string, marks: ExportInlineMarks): string {

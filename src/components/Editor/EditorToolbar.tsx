@@ -42,6 +42,8 @@ import { cn } from '@/lib/utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
+import { SmartGraphicToolbar } from './SmartGraphicToolbar';
+import { TableToolbar } from './TableToolbar';
 import { Input } from '@/components/ui/input';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/components/locale-provider';
@@ -518,6 +520,13 @@ export const EditorToolbar = ({ editor }: EditorToolbarProps) => {
 
       {/* Image */}
       <ImageToolbar editor={editor} />
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <TableToolbar editor={editor} />
+      <SmartGraphicToolbar editor={editor} />
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
 
       {/* Styles (Headings) */}
       <Select

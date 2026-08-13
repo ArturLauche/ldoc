@@ -27,6 +27,7 @@ export type ExportWarningCode =
   | 'pdf-glyph-missing'
   | 'unicode-not-fully-supported'
   | 'table-layout-simplified'
+  | 'graphic-layout-simplified'
   | 'unsupported-style-dropped'
   | 'rtf-basic-format'
   | 'link-not-supported-by-format';
@@ -50,7 +51,8 @@ export type ExportBlock =
   | ExportListBlock
   | ExportTableBlock
   | ExportImageBlock
-  | ExportHorizontalRuleBlock;
+  | ExportHorizontalRuleBlock
+  | ExportGraphicBlock;
 
 export type ExportTextBlockType = 'paragraph' | 'heading' | 'blockquote';
 export type ExportAlignment = 'left' | 'center' | 'right' | 'justify';
@@ -76,6 +78,7 @@ export interface ExportListItem {
 export interface ExportTableBlock {
   type: 'table';
   rows: ExportTableRow[];
+  borders?: 'visible' | 'hidden';
 }
 
 export interface ExportTableRow {
@@ -87,6 +90,20 @@ export interface ExportTableCell {
   colSpan: number;
   rowSpan: number;
   blocks: ExportBlock[];
+  backgroundColor?: string;
+  align?: ExportAlignment;
+}
+
+export interface ExportGraphicItem {
+  label: string;
+  children: ExportGraphicItem[];
+}
+
+export interface ExportGraphicBlock {
+  type: 'graphic';
+  layoutId: string;
+  title: string;
+  items: ExportGraphicItem[];
 }
 
 export interface ExportImageBlock {

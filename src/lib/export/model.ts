@@ -10,9 +10,13 @@ import type {
   ExportTableBlock,
   ExportTableCell,
   ExportTextBlock,
+  ExportGraphicBlock,
+  ExportGraphicItem,
 } from './types';
 import { hasVisibleText, normalizeFontFamilyValue, normalizeRuns } from './shared';
 import type { Locale } from '@/lib/translations';
+import { parseSmartGraphicFromDom, parseSmartGraphicJson } from '@/lib/smartGraphic';
+import type { SmartGraphicItem } from '@/lib/smartGraphic';
 
 interface ModelOptions {
   html: string;
@@ -83,6 +87,9 @@ function parseChildrenAsBlocks(parent: ParentNode): ExportBlock[] {
 function parseElementAsBlocks(element: HTMLElement): ExportBlock[] {
   if (element.hasAttribute('data-smart-diagram')) {
     return [parseLegacySmartDiagram(element)];
+  }
+  if (element.hasAttribute('data-lwrite-graphic')) {
+    return [parseGraphic(element)];
   }
 
   const tag = element.tagName.toLowerCase();
@@ -186,11 +193,13 @@ function parseTable(table: HTMLTableElement): ExportTableBlock {
           header: cell.tagName === 'TH',
           colSpan: Math.max(1, cell.colSpan || 1),
           rowSpan: Math.max(1, cell.rowSpan || 1),
+          backgroundColor: cell.style.backgroundColor || cell.getAttribute('data-background-color') || undefined,
+          align: getAlignment(cell),
           blocks: blocks.length ? blocks : [{ type: 'paragraph', runs: [{ text: '', marks: {} }] }],
         };
       }),
   }));
-  return { type: 'table', rows: rows.filter((row) => row.cells.length) };
+  return { type: 'table', borders: table.getAttribute('data-borders') === 'hidden' ? 'hidden' : 'visible', rows: rows.filter((row) => row.cells.length) };
 }
 
 function parseImage(img: HTMLImageElement): ExportImageBlock {
@@ -203,6 +212,28 @@ function parseImage(img: HTMLImageElement): ExportImageBlock {
     widthPercent,
     align: getAlignment(img) ?? normalizeAlignment(img.getAttribute('data-align')),
   };
+}
+
+function parseGraphic(element: HTMLElement): ExportBlock {
+  const model =
+    parseSmartGraphicJson(element.getAttribute('data-lwrite-graphic')) ?? parseSmartGraphicFromDom(element);
+  if (!model) {
+    const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return { type: 'paragraph', runs: [{ text, marks: {} }] };
+  }
+  return {
+    type: 'graphic',
+    layoutId: model.layoutId,
+    title: model.title,
+    items: toExportGraphicItems(model.items),
+  } satisfies ExportGraphicBlock;
+}
+
+function toExportGraphicItems(items: SmartGraphicItem[]): ExportGraphicItem[] {
+  return items.map((item) => ({
+    label: item.label,
+    children: toExportGraphicItems(item.children),
+  }));
 }
 
 function parseLegacySmartDiagram(element: HTMLElement): ExportBlock {
@@ -295,7 +326,7 @@ function mergeMarks(base: ExportInlineMarks, override: ExportInlineMarks): Expor
 }
 
 function isBlockElement(element: HTMLElement): boolean {
-  return BLOCK_TAGS.has(element.tagName.toLowerCase()) || element.hasAttribute('data-smart-diagram');
+  return BLOCK_TAGS.has(element.tagName.toLowerCase()) || element.hasAttribute('data-smart-diagram') || element.hasAttribute('data-lwrite-graphic');
 }
 
 function getAlignment(element: HTMLElement): ExportAlignment | undefined {
