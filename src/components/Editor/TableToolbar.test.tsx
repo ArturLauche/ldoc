@@ -37,12 +37,29 @@ describe('table insert and tools', () => {
     renderWithProviders(<TableGridPicker editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('1 × 1 table');
+    await user.hover(screen.getByTestId('table-picker-cell-3-4'));
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('3 × 4 table');
     await user.click(screen.getByTestId('table-picker-cell-3-4'));
 
     const html = editor.getHTML();
     expect(html).toContain('<table');
     expect(html.match(/<tr/g)?.length).toBe(3);
     expect(html).toContain('<th');
+  });
+
+  it('inserts from the grid with arrow keys', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<TableGridPicker editor={editor} />);
+
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    const grid = screen.getByRole('grid');
+    grid.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowDown}{Enter}');
+
+    expect(editor.getHTML().match(/<tr/g)?.length).toBe(2);
+    expect(editor.getHTML().match(/<th/g)?.length).toBe(3);
   });
 
   it('inserts a rounded custom size and ignores empty custom fields', async () => {
