@@ -37,6 +37,8 @@ describe('table insert and tools', () => {
     renderWithProviders(<TableGridPicker editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    await user.hover(screen.getByTestId('table-picker-cell-3-4'));
+    expect(screen.getByText('3 × 4 table')).toBeInTheDocument();
     await user.click(screen.getByTestId('table-picker-cell-3-4'));
 
     const html = editor.getHTML();
