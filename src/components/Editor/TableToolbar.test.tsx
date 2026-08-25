@@ -83,6 +83,9 @@ describe('table insert and tools', () => {
     expect(editor.getHTML()).toContain('background-color');
 
     renderWithProviders(<TableToolbar editor={editor} />);
+    expect(screen.getByRole('button', { name: 'Insert row below' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Insert column right' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge cells' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cell fill' })).toBeInTheDocument();
   });

@@ -104,7 +104,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
       {tableState.inTable ? (
         <div
           className={cn(
-            'flex items-center gap-0.5 rounded-md border border-border/70 bg-background/70 px-0.5',
+            'flex shrink-0 flex-nowrap items-center gap-0.5 rounded-md border border-border bg-background px-0.5 shadow-sm',
           )}
         >
           <TableToolButton
