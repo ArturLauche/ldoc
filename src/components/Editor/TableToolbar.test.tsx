@@ -40,6 +40,10 @@ describe('table insert and tools', () => {
     expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('1 × 1 table');
     await user.hover(screen.getByTestId('table-picker-cell-3-4'));
     expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('3 × 4 table');
+    expect(screen.getByRole('grid')).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByTestId('table-picker-cell-3-4').id,
+    );
     await user.click(screen.getByTestId('table-picker-cell-3-4'));
 
     const html = editor.getHTML();
@@ -56,8 +60,13 @@ describe('table insert and tools', () => {
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
     const grid = screen.getByRole('grid');
     grid.focus();
-    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowDown}{Enter}');
+    expect(grid).toHaveAttribute('aria-activedescendant', screen.getByTestId('table-picker-cell-1-1').id);
 
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowDown}');
+    expect(grid).toHaveAttribute('aria-activedescendant', screen.getByTestId('table-picker-cell-2-3').id);
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('2 × 3 table');
+
+    await user.keyboard('{Enter}');
     expect(editor.getHTML().match(/<tr/g)?.length).toBe(2);
     expect(editor.getHTML().match(/<th/g)?.length).toBe(3);
   });

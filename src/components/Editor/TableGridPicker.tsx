@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 export const TABLE_PICKER_MAX = 10;
 export const TABLE_CUSTOM_MAX = 20;
 export const TABLE_PICKER_CELL_PX = 16;
-export const TABLE_PICKER_GAP_PX = 2;
+export const TABLE_PICKER_HIT_PX = 24;
 
 export interface TableInsertSpec {
   rows: number;
@@ -37,16 +37,19 @@ function parseCustomSize(value: string): number | null {
   return clampSize(parsed);
 }
 
+function pickerCellId(gridId: string, row: number, col: number): string {
+  return `${gridId}-cell-${row}-${col}`;
+}
+
 function sizeFromPointer(clientX: number, clientY: number, grid: HTMLElement): { rows: number; cols: number } {
   const rect = grid.getBoundingClientRect();
-  const stride = TABLE_PICKER_CELL_PX + TABLE_PICKER_GAP_PX;
   const cols = Math.min(
     TABLE_PICKER_MAX,
-    Math.max(1, Math.ceil((clientX - rect.left) / stride)),
+    Math.max(1, Math.ceil((clientX - rect.left) / TABLE_PICKER_HIT_PX)),
   );
   const rows = Math.min(
     TABLE_PICKER_MAX,
-    Math.max(1, Math.ceil((clientY - rect.top) / stride)),
+    Math.max(1, Math.ceil((clientY - rect.top) / TABLE_PICKER_HIT_PX)),
   );
   return { rows, cols };
 }
@@ -93,8 +96,8 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
   const customColCount = parseCustomSize(customCols);
   const canInsertCustom = customRowCount !== null && customColCount !== null;
   const sizeLabel = formatMessage(t('tablePickerCaption'), { rows: hoverRows, cols: hoverCols });
-  const gridPx =
-    TABLE_PICKER_MAX * TABLE_PICKER_CELL_PX + (TABLE_PICKER_MAX - 1) * TABLE_PICKER_GAP_PX;
+  const activeCellId = pickerCellId(gridId, hoverRows, hoverCols);
+  const gridPx = TABLE_PICKER_MAX * TABLE_PICKER_HIT_PX;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -116,7 +119,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
       </Tooltip>
       <PopoverContent
         align="start"
-        className="w-auto p-2.5 bg-popover border border-border shadow-lg z-50"
+        className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-2.5 bg-popover border border-border shadow-lg z-50"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="flex flex-col gap-2">
@@ -126,12 +129,12 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             id={gridId}
             tabIndex={0}
             aria-label={sizeLabel}
+            aria-activedescendant={activeCellId}
             className="outline-none"
             style={{
               width: gridPx,
               display: 'grid',
-              gridTemplateColumns: `repeat(${TABLE_PICKER_MAX}, ${TABLE_PICKER_CELL_PX}px)`,
-              gap: TABLE_PICKER_GAP_PX,
+              gridTemplateColumns: `repeat(${TABLE_PICKER_MAX}, ${TABLE_PICKER_HIT_PX}px)`,
             }}
             onMouseMove={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
@@ -165,25 +168,35 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
                 const row = rowIndex + 1;
                 const col = colIndex + 1;
                 const active = row <= hoverRows && col <= hoverCols;
+                const isActiveDescendant = row === hoverRows && col === hoverCols;
                 return (
                   <button
                     key={`${row}-${col}`}
+                    id={pickerCellId(gridId, row, col)}
                     type="button"
                     role="gridcell"
                     tabIndex={-1}
                     data-testid={`table-picker-cell-${row}-${col}`}
                     aria-label={formatMessage(t('tablePickerSize'), { rows: row, cols: col })}
                     aria-selected={active}
-                    className={cn(
-                      'h-4 w-4 rounded-[1px] border transition-colors duration-75',
-                      active
-                        ? 'border-[#2b7de9] bg-[#c5dcff] dark:border-[#8ab4f8] dark:bg-[#1a73e8]/55'
-                        : 'border-[#c7c7c7] bg-white dark:border-white/25 dark:bg-background',
-                    )}
+                    className="flex items-center justify-center p-0"
+                    style={{ width: TABLE_PICKER_HIT_PX, height: TABLE_PICKER_HIT_PX }}
                     onMouseEnter={() => moveHover(row, col)}
                     onFocus={() => moveHover(row, col)}
                     onClick={() => insertTable({ rows: row, cols: col, withHeaderRow })}
-                  />
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'pointer-events-none rounded-[1px] border transition-colors duration-75',
+                        isActiveDescendant && 'ring-1 ring-primary ring-offset-0',
+                        active
+                          ? 'border-primary bg-primary/25'
+                          : 'border-border bg-background',
+                      )}
+                      style={{ width: TABLE_PICKER_CELL_PX, height: TABLE_PICKER_CELL_PX }}
+                    />
+                  </button>
                 );
               }),
             )}
@@ -200,11 +213,11 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
               type="checkbox"
               checked={withHeaderRow}
               onChange={(event) => setWithHeaderRow(event.target.checked)}
-              className="h-3.5 w-3.5 accent-[#2b7de9]"
+              className="h-3.5 w-3.5 accent-primary"
             />
             {t('tableHeaderRow')}
           </label>
-          <div className="flex items-end gap-1.5">
+          <div className="flex flex-wrap items-end gap-1.5">
             <div className="min-w-0">
               <Label htmlFor={`${gridId}-rows`} className="text-[11px] font-normal text-muted-foreground">
                 {t('tableCustomRows')}
@@ -238,7 +251,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             </div>
             <Button
               size="sm"
-              className="h-7 px-2.5 text-xs"
+              className="h-7 shrink-0 px-2.5 text-xs"
               disabled={!canInsertCustom}
               aria-label={t('tableInsertCustom')}
               onClick={() => {
