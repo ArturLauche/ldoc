@@ -1,12 +1,13 @@
+import type { ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
-  Columns3,
+  BetweenHorizontalEnd,
+  BetweenVerticalEnd,
   Combine,
   PaintBucket,
   PanelLeft,
   PanelTop,
-  Rows3,
   Square,
   SquareSplitHorizontal,
   TableProperties,
@@ -22,26 +23,58 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/components/locale-provider';
 import { formatMessage } from '@/lib/translations';
+import { cn } from '@/lib/utils';
 import { TableGridPicker } from './TableGridPicker';
 
 const CELL_FILL_COLORS = [
-  '#FEF08A',
-  '#FDE68A',
-  '#FECACA',
-  '#D1FAE5',
-  '#CFFAFE',
-  '#DDD6FE',
-  '#FBCFE8',
-  '#E0E7FF',
-  '#F3F4F6',
   '#FFFFFF',
+  '#F3F4F6',
+  '#FEE2E2',
+  '#FFEDD5',
+  '#FEF08A',
+  '#DCFCE7',
+  '#CFFAFE',
+  '#DBEAFE',
+  '#EDE9FE',
+  '#FCE7F3',
 ];
 
 interface TableToolbarProps {
   editor: Editor;
+}
+
+function TableToolButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function TableToolbar({ editor }: TableToolbarProps) {
@@ -69,7 +102,66 @@ export function TableToolbar({ editor }: TableToolbarProps) {
     <div className="flex items-center gap-0.5">
       <TableGridPicker editor={editor} />
       {tableState.inTable ? (
-        <>
+        <div
+          className={cn(
+            'flex shrink-0 flex-nowrap items-center gap-0.5 rounded-md border border-border bg-background px-0.5 shadow-sm',
+          )}
+        >
+          <TableToolButton
+            label={t('tableInsertRowBelow')}
+            disabled={!tableState.canAddRowAfter}
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+          >
+            <BetweenHorizontalEnd className="h-4 w-4" />
+          </TableToolButton>
+          <TableToolButton
+            label={t('tableInsertColRight')}
+            disabled={!tableState.canAddColumnAfter}
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+          >
+            <BetweenVerticalEnd className="h-4 w-4" />
+          </TableToolButton>
+          <TableToolButton
+            label={t('tableMergeCells')}
+            disabled={!tableState.canMergeCells}
+            onClick={() => editor.chain().focus().mergeCells().run()}
+          >
+            <Combine className="h-4 w-4" />
+          </TableToolButton>
+          <Separator orientation="vertical" className="mx-0.5 h-5" />
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('tableCellFill')}>
+                    <PaintBucket className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('tableCellFill')}</TooltipContent>
+            </Tooltip>
+            <PopoverContent align="start" className="w-auto p-2.5 bg-card border border-border shadow-md z-50">
+              <p className="mb-2 text-[11px] font-medium text-muted-foreground">{t('tableCellFill')}</p>
+              <div className="grid grid-cols-5 gap-1">
+                {CELL_FILL_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className="h-6 w-6 rounded-[2px] border border-neutral-300 dark:border-neutral-600 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                    style={{ backgroundColor: color }}
+                    aria-label={formatMessage(t('tableSetCellFill'), { color })}
+                    onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', color).run()}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded-[2px] border border-neutral-300 bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-xs after:text-muted-foreground dark:border-neutral-600"
+                  aria-label={t('tableClearFill')}
+                  onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', null).run()}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
           <DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -77,7 +169,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-1 px-2 text-xs"
+                    className="h-8 gap-1 px-1.5 text-xs"
                     aria-label={t('tableTools')}
                   >
                     <TableProperties className="h-4 w-4" />
@@ -87,34 +179,34 @@ export function TableToolbar({ editor }: TableToolbarProps) {
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('tableTools')}</TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="start" className="w-56 bg-popover border border-border shadow-lg z-50">
+            <DropdownMenuContent align="start" className="w-56 bg-card border border-border shadow-md z-50">
               <DropdownMenuLabel>{t('tableInsertGroup')}</DropdownMenuLabel>
               <DropdownMenuItem
                 disabled={!tableState.canAddRowBefore}
                 onSelect={() => editor.chain().focus().addRowBefore().run()}
               >
-                <Rows3 className="mr-2 h-4 w-4" />
+                <BetweenHorizontalEnd className="mr-2 h-4 w-4 rotate-180" />
                 {t('tableInsertRowAbove')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!tableState.canAddRowAfter}
                 onSelect={() => editor.chain().focus().addRowAfter().run()}
               >
-                <Rows3 className="mr-2 h-4 w-4" />
+                <BetweenHorizontalEnd className="mr-2 h-4 w-4" />
                 {t('tableInsertRowBelow')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!tableState.canAddColumnBefore}
                 onSelect={() => editor.chain().focus().addColumnBefore().run()}
               >
-                <Columns3 className="mr-2 h-4 w-4" />
+                <BetweenVerticalEnd className="mr-2 h-4 w-4 rotate-180" />
                 {t('tableInsertColLeft')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!tableState.canAddColumnAfter}
                 onSelect={() => editor.chain().focus().addColumnAfter().run()}
               >
-                <Columns3 className="mr-2 h-4 w-4" />
+                <BetweenVerticalEnd className="mr-2 h-4 w-4" />
                 {t('tableInsertColRight')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -186,39 +278,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('tableCellFill')}>
-                    <PaintBucket className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('tableCellFill')}</TooltipContent>
-            </Tooltip>
-            <PopoverContent className="w-auto p-3 bg-popover border border-border shadow-lg z-50">
-              <div className="grid grid-cols-5 gap-1.5">
-                {CELL_FILL_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring"
-                    style={{ backgroundColor: color }}
-                    aria-label={formatMessage(t('tableSetCellFill'), { color })}
-                    onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', color).run()}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className="h-6 w-6 rounded-md border border-border/50 bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
-                  aria-label={t('tableClearFill')}
-                  onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', null).run()}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
-        </>
+        </div>
       ) : null}
     </div>
   );

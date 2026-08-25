@@ -37,6 +37,8 @@ describe('table insert and tools', () => {
     renderWithProviders(<TableGridPicker editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    await user.hover(screen.getByTestId('table-picker-cell-3-4'));
+    expect(screen.getByText('3 × 4 table')).toBeInTheDocument();
     await user.click(screen.getByTestId('table-picker-cell-3-4'));
 
     const html = editor.getHTML();
@@ -81,6 +83,9 @@ describe('table insert and tools', () => {
     expect(editor.getHTML()).toContain('background-color');
 
     renderWithProviders(<TableToolbar editor={editor} />);
+    expect(screen.getByRole('button', { name: 'Insert row below' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Insert column right' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge cells' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cell fill' })).toBeInTheDocument();
   });

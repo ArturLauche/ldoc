@@ -25,9 +25,10 @@ function buildHtmlDocument(documentModel: ExportDocumentModel): string {
     img { max-width: 100%; height: auto; display: block; margin: 1rem auto; }
     hr { border: none; border-top: 1px solid #d1d5db; margin: 1.5em 0; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-    th, td { border: 1px solid #d1d5db; padding: 0.5rem; vertical-align: top; }
-    th { background: #f3f4f6; text-align: left; }
-    table[data-borders="hidden"] th, table[data-borders="hidden"] td { border-color: transparent; }
+    th, td { border: 1px solid #9ca3af; padding: 0.28rem 0.5rem; vertical-align: top; }
+    th { background: #eceff3; text-align: left; font-weight: 600; }
+    th p, td p { margin: 0; line-height: 1.4; }
+    table[data-borders="hidden"] th, table[data-borders="hidden"] td { border-color: #d1d5db; border-style: dashed; }
     .lwrite-graphic { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; margin: 1rem 0; background: #f9fafb; }
     .lwrite-graphic-title { font-weight: 700; margin: 0 0 0.5rem; }
 

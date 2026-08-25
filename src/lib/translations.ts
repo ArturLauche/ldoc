@@ -163,6 +163,8 @@ const en = {
   // Tables
   toolbarInsertTable: 'Insert table',
   tablePickerSize: '{rows} × {cols}',
+  tablePickerCaption: '{rows} × {cols} table',
+  tablePickerCustom: 'Custom size',
   tableHeaderRow: 'Header row',
   tableCustomRows: 'Rows',
   tableCustomCols: 'Columns',
@@ -593,6 +595,8 @@ const de: TranslationCatalog = {
   toolbarHorizontalRule: 'Trennlinie',
   toolbarInsertTable: 'Tabelle einfügen',
   tablePickerSize: '{rows} × {cols}',
+  tablePickerCaption: '{rows} × {cols} Tabelle',
+  tablePickerCustom: 'Benutzerdefinierte Größe',
   tableHeaderRow: 'Kopfzeile',
   tableCustomRows: 'Zeilen',
   tableCustomCols: 'Spalten',
