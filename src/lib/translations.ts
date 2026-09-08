@@ -24,6 +24,7 @@ export const localeNames: Record<Locale, string> = {
 const en = {
   // App shell
   placeholder: 'Start writing something amazing...',
+  skipToEditor: 'Skip to editor',
   untitledDocument: 'Untitled Document',
   saveSuccess: 'Document saved',
   saveFailed: 'Document could not be saved locally. Export a backup before closing this tab.',
@@ -477,6 +478,7 @@ const fr: TranslationCatalog = {
 
 const de: TranslationCatalog = {
   placeholder: 'Schreibe etwas Großartiges...',
+  skipToEditor: 'Zum Editor springen',
   untitledDocument: 'Unbenanntes Dokument',
   saveSuccess: 'Dokument gespeichert',
   saveFailed: 'Das Dokument konnte nicht lokal gespeichert werden. Exportiere ein Backup, bevor du diesen Tab schließt.',

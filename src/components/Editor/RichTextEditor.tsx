@@ -108,6 +108,14 @@ export const RichTextEditor = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col app-shell">
+      {/* Keyboard/assistive-tech skip link: visually hidden until focused,
+          so the interface stays uncluttered while remaining navigable. */}
+      <a
+        href="#lwrite-editor"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground focus:shadow-lg"
+      >
+        {t('skipToEditor')}
+      </a>
       <div className="sticky top-0 z-40">
         {/* Header */}
         <header className="glass-bar">
@@ -233,7 +241,7 @@ export const RichTextEditor = () => {
       </div>
 
       {/* Editor */}
-      <main className="flex-1 max-w-4xl mx-auto w-full">
+      <main id="lwrite-editor" tabIndex={-1} className="flex-1 max-w-4xl mx-auto w-full">
         <div className="editor-container glass-card shadow-floating my-6 mx-4 overflow-hidden">
           <EditorContent
             editor={editor}
