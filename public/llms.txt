@@ -1,0 +1,22 @@
+# LWrite
+
+> A free browser-only rich text editor. Documents are stored on the current device, without accounts or cloud synchronization.
+
+## Product
+
+- [Editor](/): Formatting, tables, graphics, images, find and replace, local autosave, a document library and up to 20 versions per document.
+- Imports: TXT, HTML, RTF, DOCX, ODT, OTT and FODT. RTF import extracts readable text.
+- Exports: TXT, HTML, RTF, DOCX, ODT and PDF. Some formats cannot preserve every layout detail.
+- Uploaded images and files are processed locally. Images inserted by URL contact their image host.
+- Storage belongs to the browser and origin. Export backups before clearing browser data or moving devices/domains.
+- The editor needs JavaScript. An already loaded editor works without a network connection; a fresh offline visit is not guaranteed.
+
+## Public information
+
+- [Privacy policy](/privacy)
+- [Datenschutz](/datenschutz)
+- [Terms of use](/terms)
+- [Nutzungsbedingungen](/nutzung)
+- [Source repository](https://github.com/ArturLauche/ldoc)
+
+There is no public document API, server-side document database, or public index of a user's writing.

@@ -31,3 +31,24 @@ describe('media helpers', () => {
   });
 });
 
+describe('persistent image input', () => {
+  it('rejects malformed data URLs and embedded credentials', () => {
+    expect(normalizeImageUrl('data:image/png,<script>bad</script>')).toMatchObject({ ok: false });
+    expect(normalizeImageUrl('data:image/png;base64,a')).toMatchObject({ ok: false });
+    expect(normalizeImageUrl('https://user:password@example.com/private.png')).toMatchObject({
+      ok: false,
+    });
+  });
+  it('keeps browser-supported AVIF uploads valid through the image input contract', () => {
+    expect(validateImageFile(new File(['image'], 'image.avif', { type: 'image/avif' }))).toEqual({
+      ok: true,
+    });
+    expect(normalizeImageUrl('data:image/avif;base64,YQ==')).toMatchObject({ ok: true });
+  });
+  it('applies the same size limit to data URLs as file uploads', () => {
+    expect(normalizeImageUrl(`data:image/png;base64,${'A'.repeat(14 * 1024 * 1024)}`)).toEqual({
+      ok: false,
+      code: 'too-large',
+    });
+  });
+});

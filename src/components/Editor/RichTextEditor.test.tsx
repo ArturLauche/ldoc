@@ -15,7 +15,7 @@ import { RichTextEditor } from './RichTextEditor';
 
 function renderEditor() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ThemeProvider attribute="class" defaultTheme="light">
         <LocaleProvider>
           <ConfirmProvider>
@@ -51,9 +51,10 @@ describe('RichTextEditor', () => {
       expect(screen.getByLabelText('Document name')).toHaveValue('Loaded Document');
     });
     expect(screen.getByLabelText('Document editor')).toHaveTextContent('Saved body');
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Insert table' })).toBeInTheDocument();
-    });
+    // The real lazy toolbar also needs its first module transform on a cold test run.
+    expect(
+      await screen.findByRole('button', { name: 'Insert table' }, { timeout: 3000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
   });
@@ -141,4 +142,3 @@ describe('RichTextEditor', () => {
     expect(storedCurrent.id).toBe(getLibraryDocuments()[0].id);
   });
 });
-

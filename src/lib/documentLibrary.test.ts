@@ -120,10 +120,42 @@ describe('documentLibrary', () => {
     expect(exported).not.toContain('onerror');
   });
   it('adds imported files as new sanitized library documents', () => {
-    const doc = addImportedDocumentToLibrary('  Imported Report  ', '<p onclick="alert(1)">Hello</p>');
+    const doc = addImportedDocumentToLibrary(
+      '  Imported Report  ',
+      '<p onclick="alert(1)">Hello</p>',
+    );
 
     expect(doc.name).toBe('Imported Report');
     expect(doc.content).toBe('<p>Hello</p>');
     expect(getLibraryDocuments().some((entry) => entry.id === doc.id)).toBe(true);
   });
 });
+
+it('does not overwrite an unreadable library during mutations', () => {
+  const raw = '{broken';
+  localStorage.setItem(LIBRARY_STORAGE_KEY, raw);
+  expect(() => upsertLibraryDocument({ name: 'New', content: '<p>New</p>' })).toThrow();
+  expect(localStorage.getItem(LIBRARY_STORAGE_KEY)).toBe(raw);
+  localStorage.clear();
+});
+
+it('invalidates cached documents after external writes and protects the cache from callers', () => {
+  localStorage.clear();
+  const first = upsertLibraryDocument({ name: 'First', content: '<p>Safe</p>' });
+  const documents = getLibraryDocuments();
+  documents[0].content = '<script>unsafe</script>';
+  expect(getLibraryDocuments()[0].content).toBe('<p>Safe</p>');
+  localStorage.setItem(
+    LIBRARY_STORAGE_KEY,
+    JSON.stringify([{ ...first, name: 'Other tab', content: '<p onclick="x()">Changed</p>' }]),
+  );
+  expect(getLibraryDocuments()[0]).toMatchObject({ name: 'Other tab', content: '<p>Changed</p>' });
+  localStorage.clear();
+});
+
+it.each(['null', '[]', '{}', '{"format":"lwrite-library","version":2,"documents":[]}'])(
+  'rejects malformed library envelopes: %s',
+  (raw) => {
+    expect(() => importUnifiedLibraryFile(raw)).toThrow();
+  },
+);

@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatMessage } from '@/lib/translations';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 import { cn } from '@/lib/utils';
 
 export const TABLE_PICKER_MAX = 10;
@@ -41,7 +41,11 @@ function pickerCellId(gridId: string, row: number, col: number): string {
   return `${gridId}-cell-${row}-${col}`;
 }
 
-function sizeFromPointer(clientX: number, clientY: number, grid: HTMLElement): { rows: number; cols: number } {
+function sizeFromPointer(
+  clientX: number,
+  clientY: number,
+  grid: HTMLElement,
+): { rows: number; cols: number } {
   const rect = grid.getBoundingClientRect();
   const cols = Math.min(
     TABLE_PICKER_MAX,
@@ -107,7 +111,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-9 w-9 p-0"
               aria-label={t('toolbarInsertTable')}
               aria-haspopup="dialog"
             >
@@ -118,6 +122,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
         <TooltipContent side="bottom">{t('toolbarInsertTable')}</TooltipContent>
       </Tooltip>
       <PopoverContent
+        aria-label={t('toolbarInsertTable')}
         align="start"
         className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-2.5 bg-popover border border-border shadow-lg z-50"
         onOpenAutoFocus={(event) => event.preventDefault()}
@@ -163,43 +168,43 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
               }
             }}
           >
-            {Array.from({ length: TABLE_PICKER_MAX }, (_, rowIndex) =>
-              Array.from({ length: TABLE_PICKER_MAX }, (_, colIndex) => {
-                const row = rowIndex + 1;
-                const col = colIndex + 1;
-                const active = row <= hoverRows && col <= hoverCols;
-                const isActiveDescendant = row === hoverRows && col === hoverCols;
-                return (
-                  <button
-                    key={`${row}-${col}`}
-                    id={pickerCellId(gridId, row, col)}
-                    type="button"
-                    role="gridcell"
-                    tabIndex={-1}
-                    data-testid={`table-picker-cell-${row}-${col}`}
-                    aria-label={formatMessage(t('tablePickerSize'), { rows: row, cols: col })}
-                    aria-selected={active}
-                    className="flex items-center justify-center p-0"
-                    style={{ width: TABLE_PICKER_HIT_PX, height: TABLE_PICKER_HIT_PX }}
-                    onMouseEnter={() => moveHover(row, col)}
-                    onFocus={() => moveHover(row, col)}
-                    onClick={() => insertTable({ rows: row, cols: col, withHeaderRow })}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'pointer-events-none rounded-[1px] border transition-colors duration-75',
-                        isActiveDescendant && 'ring-1 ring-primary ring-offset-0',
-                        active
-                          ? 'border-primary bg-primary/25'
-                          : 'border-border bg-background',
-                      )}
-                      style={{ width: TABLE_PICKER_CELL_PX, height: TABLE_PICKER_CELL_PX }}
-                    />
-                  </button>
-                );
-              }),
-            )}
+            {Array.from({ length: TABLE_PICKER_MAX }, (_, rowIndex) => (
+              <div key={rowIndex} role="row" className="contents">
+                {Array.from({ length: TABLE_PICKER_MAX }, (_, colIndex) => {
+                  const row = rowIndex + 1;
+                  const col = colIndex + 1;
+                  const active = row <= hoverRows && col <= hoverCols;
+                  const isActiveDescendant = row === hoverRows && col === hoverCols;
+                  return (
+                    <button
+                      key={`${row}-${col}`}
+                      id={pickerCellId(gridId, row, col)}
+                      type="button"
+                      role="gridcell"
+                      tabIndex={-1}
+                      data-testid={`table-picker-cell-${row}-${col}`}
+                      aria-label={formatMessage(t('tablePickerSize'), { rows: row, cols: col })}
+                      aria-selected={active}
+                      className="flex items-center justify-center p-0"
+                      style={{ width: TABLE_PICKER_HIT_PX, height: TABLE_PICKER_HIT_PX }}
+                      onMouseEnter={() => moveHover(row, col)}
+                      onFocus={() => moveHover(row, col)}
+                      onClick={() => insertTable({ rows: row, cols: col, withHeaderRow })}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'pointer-events-none rounded-[1px] border transition-colors duration-75',
+                          isActiveDescendant && 'ring-1 ring-primary ring-offset-0',
+                          active ? 'border-primary bg-primary/25' : 'border-border bg-background',
+                        )}
+                        style={{ width: TABLE_PICKER_CELL_PX, height: TABLE_PICKER_CELL_PX }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
           <p
             data-testid="table-picker-caption"
@@ -219,7 +224,10 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
           </label>
           <div className="flex flex-wrap items-end gap-1.5">
             <div className="min-w-0">
-              <Label htmlFor={`${gridId}-rows`} className="text-[11px] font-normal text-muted-foreground">
+              <Label
+                htmlFor={`${gridId}-rows`}
+                className="text-[11px] font-normal text-muted-foreground"
+              >
                 {t('tableCustomRows')}
               </Label>
               <Input
@@ -236,7 +244,10 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
               ×
             </span>
             <div className="min-w-0">
-              <Label htmlFor={`${gridId}-cols`} className="text-[11px] font-normal text-muted-foreground">
+              <Label
+                htmlFor={`${gridId}-cols`}
+                className="text-[11px] font-normal text-muted-foreground"
+              >
                 {t('tableCustomCols')}
               </Label>
               <Input

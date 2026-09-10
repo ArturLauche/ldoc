@@ -85,9 +85,7 @@ describe('useSEO', () => {
 
     expect(linkHref('link[rel="alternate"][hreflang="de"]')).toBe('http://localhost/nutzung');
     expect(linkHref('link[rel="alternate"][hreflang="en"]')).toBe('http://localhost/privacy');
-    expect(
-      document.head.querySelectorAll('link[rel="alternate"][hreflang="de"]'),
-    ).toHaveLength(1);
+    expect(document.head.querySelectorAll('link[rel="alternate"][hreflang="de"]')).toHaveLength(1);
   });
 
   it('sets article timestamps only for article pages', () => {
@@ -109,4 +107,21 @@ describe('useSEO', () => {
 
     expect(document.head.querySelector('meta[property="article:modified_time"]')).toBeNull();
   });
+});
+
+it('cleans stale OG locales and removes the canonical tag for a missing page', () => {
+  const { rerender } = renderHook(
+    ({ missing }) =>
+      useSEO({
+        title: 'Page',
+        description: 'Description',
+        noIndex: missing,
+        canonicalPath: missing ? undefined : '/',
+        ogLocaleAlternates: missing ? [] : ['de_DE'],
+      }),
+    { initialProps: { missing: false } },
+  );
+  rerender({ missing: true });
+  expect(document.head.querySelector('meta[property="og:locale:alternate"]')).toBeNull();
+  expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
 });

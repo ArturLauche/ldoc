@@ -1,34 +1,31 @@
-import { useLocation } from "react-router-dom";
-import { useEffect } from "react";
-import { useSEO } from "@/hooks/useSEO";
-import { useLocale } from "@/components/locale-provider";
-import { logError } from "@/lib/logger";
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { BrandLogo } from '@/components/BrandLogo';
+import { Button } from '@/components/ui/button';
+import { useSEO } from '@/hooks/useSEO';
+import { useLocale } from '@/hooks/useLocale';
 
-const NotFound = () => {
-  const location = useLocation();
-  const { t } = useLocale();
-
+export default function NotFound() {
+  const { t, locale } = useLocale();
   useSEO({
-    title: "404 | LWrite",
-    description: t("notFoundDescription"),
+    language: locale,
+    title: '404 | LWrite',
+    description: t('notFoundDescription'),
     noIndex: true,
   });
-
-  useEffect(() => {
-    logError('404: requested route does not exist', location.pathname);
-  }, [location.pathname]);
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">{t("notFoundTitle")}</p>
-        <a href="/" className="text-primary underline hover:text-primary/90">
-          {t("notFoundCta")}
-        </a>
+    <main className="flex min-h-dvh items-center justify-center px-6">
+      <div className="w-full max-w-md">
+        <BrandLogo className="mb-8 h-8 w-8" />
+        <h1 className="text-3xl font-semibold tracking-tight">{t('notFoundTitle')}</h1>
+        <p className="mt-3 text-base text-muted-foreground">{t('notFoundDescription')}</p>
+        <Button asChild className="mt-7">
+          <Link to="/">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {t('legalBackToEditor')}
+          </Link>
+        </Button>
       </div>
-    </div>
+    </main>
   );
-};
-
-export default NotFound;
+}

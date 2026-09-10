@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 import {
   SMART_GRAPHIC_COLOR_SETS,
   SMART_GRAPHIC_LAYOUTS,
@@ -108,11 +108,11 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
     graphic &&
     flattenGraphicItems(graphic.items).some((item) => item.id === graphicState.activeItemId)
       ? graphicState.activeItemId
-      : graphic?.items[0]?.id ?? null;
+      : (graphic?.items[0]?.id ?? null);
   const layout = graphic ? getSmartGraphicLayout(graphic.layoutId) : null;
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex max-w-full flex-wrap items-center gap-1">
       <SmartGraphicGallery editor={editor} />
       {graphic && layout ? (
         <>
@@ -123,21 +123,28 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-1 px-2 text-xs"
+                    className="h-9 gap-1 px-2 text-xs"
                     aria-label={t('graphicTools')}
                   >
-                    <span className="hidden max-w-[5.5rem] truncate sm:inline">{t('graphicTools')}</span>
+                    <span className="hidden max-w-[5.5rem] truncate sm:inline">
+                      {t('graphicTools')}
+                    </span>
                     <ChevronDown className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('graphicTools')}</TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="start" className="w-56 bg-popover border border-border shadow-lg z-50">
+            <DropdownMenuContent
+              align="start"
+              className="w-56 bg-popover border border-border shadow-lg z-50"
+            >
               <DropdownMenuLabel>{t('graphicLayout')}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={graphic.layoutId}
-                onValueChange={(value) => apply(switchGraphicLayout(graphic, value as SmartGraphicLayoutId))}
+                onValueChange={(value) =>
+                  apply(switchGraphicLayout(graphic, value as SmartGraphicLayoutId))
+                }
               >
                 {SMART_GRAPHIC_LAYOUTS.map((item) => (
                   <DropdownMenuRadioItem key={item.id} value={item.id} className="text-sm">
@@ -150,7 +157,9 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
               <DropdownMenuRadioGroup
                 value={graphic.colorSet}
                 onValueChange={(value) =>
-                  apply(updateGraphicAppearance(graphic, { colorSet: value as SmartGraphicColorSet }))
+                  apply(
+                    updateGraphicAppearance(graphic, { colorSet: value as SmartGraphicColorSet }),
+                  )
                 }
               >
                 {SMART_GRAPHIC_COLOR_SETS.map((colorSet) => (
@@ -232,7 +241,12 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('graphicTextPane')}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0"
+                    aria-label={t('graphicTextPane')}
+                  >
                     <ListTree className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
@@ -240,6 +254,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
               <TooltipContent side="bottom">{t('graphicTextPane')}</TooltipContent>
             </Tooltip>
             <PopoverContent
+              aria-label={t('graphicTextPane')}
               align="end"
               className="w-[min(20rem,calc(100vw-1.5rem))] p-3 bg-popover border border-border shadow-lg z-50"
             >
@@ -248,7 +263,9 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                   value={graphic.title}
                   placeholder={t('graphicTitlePlaceholder')}
                   aria-label={t('graphicTitlePlaceholder')}
-                  onChange={(event) => apply(updateGraphicTitle(graphic, event.target.value), { focus: false })}
+                  onChange={(event) =>
+                    apply(updateGraphicTitle(graphic, event.target.value), { focus: false })
+                  }
                   className="h-8"
                 />
                 <ScrollArea className="h-[min(16rem,50vh)]">
@@ -258,7 +275,9 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                     activeId={selectedId}
                     itemAriaLabel={t('graphicItemPlaceholder')}
                     onSelect={selectItem}
-                    onChange={(id, label) => apply(updateItemLabel(graphic, id, label), { focus: false })}
+                    onChange={(id, label) =>
+                      apply(updateItemLabel(graphic, id, label), { focus: false })
+                    }
                   />
                 </ScrollArea>
               </div>
@@ -287,7 +306,7 @@ function ToolbarIconButton({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0"
+          className="h-9 w-9 p-0"
           aria-label={tooltip}
           disabled={disabled}
           onClick={onClick}

@@ -1,8 +1,8 @@
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
+import { assertDocumentSize } from './documentLimits';
 import {
+  DocumentStorageError,
   readStorageItem,
-  readStorageJson,
-  removeStorageItem,
   throwIfStorageFailed,
   writeStorageJson,
 } from './storage';
@@ -26,13 +26,6 @@ interface UnifiedLibraryFile {
   documents: StoredDocument[];
 }
 
-interface CurrentDocumentRecord {
-  id?: string;
-  name?: string;
-  content: string;
-  savedAt?: string;
-}
-
 function isStoredDocument(value: unknown): value is StoredDocument {
   if (!value || typeof value !== 'object') return false;
   const doc = value as Record<string, unknown>;
@@ -51,14 +44,15 @@ function isValidDateString(value: string): boolean {
 
 function normalizeStoredDocument(value: unknown): StoredDocument | null {
   if (!isStoredDocument(value)) return null;
+  if (!value.id.trim()) return null;
   if (!isValidDateString(value.createdAt) || !isValidDateString(value.updatedAt)) return null;
 
   return {
     id: value.id,
     name: value.name.trim() || 'Untitled Document',
     content: sanitizeDocumentHtml(value.content),
-    createdAt: value.createdAt,
-    updatedAt: value.updatedAt,
+    createdAt: new Date(value.createdAt).toISOString(),
+    updatedAt: new Date(value.updatedAt).toISOString(),
   };
 }
 
@@ -68,27 +62,47 @@ export function createDocumentId(): string {
     : `doc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function getLibraryDocuments(): StoredDocument[] {
-  const result = readStorageJson<unknown[]>(
-    LIBRARY_STORAGE_KEY,
-    (value): value is unknown[] => Array.isArray(value),
-  );
+// One bounded cache, keyed by the actual stored string. Reads from another tab
+// invalidate it immediately. Return copies so callers cannot poison the cache.
+let libraryCache: { raw: string | null; documents: StoredDocument[]; invalid: boolean } | undefined;
 
-  if (!result.ok || !result.value) {
+export function getLibraryDocuments(options?: { strict?: boolean }): StoredDocument[] {
+  try {
+    const raw = throwIfStorageFailed(readStorageItem(LIBRARY_STORAGE_KEY));
+    if (!libraryCache || libraryCache.raw !== raw) {
+      const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('Invalid document library.');
+      const normalized = parsed.map(normalizeStoredDocument);
+      const documents = normalized.filter((doc): doc is StoredDocument => doc !== null);
+      libraryCache = {
+        raw,
+        documents: documents.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+        invalid:
+          documents.length !== parsed.length ||
+          new Set(documents.map((doc) => doc.id)).size !== documents.length,
+      };
+    }
+    if (options?.strict && libraryCache.invalid)
+      throw new Error('The library contains invalid records.');
+    return libraryCache.documents.map((doc) => ({ ...doc }));
+  } catch (error) {
+    if (options?.strict) {
+      throw error instanceof DocumentStorageError
+        ? error
+        : new DocumentStorageError('invalid-data', error);
+    }
     return [];
   }
-
-  return result.value
-    .map(normalizeStoredDocument)
-    .filter((document): document is StoredDocument => document !== null)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/** Internal writes contain only records normalized on ingress or cache read. */
 function setLibraryDocuments(documents: StoredDocument[]) {
-  const normalized = documents
-    .map(normalizeStoredDocument)
-    .filter((document): document is StoredDocument => document !== null);
-  throwIfStorageFailed(writeStorageJson(LIBRARY_STORAGE_KEY, normalized));
+  throwIfStorageFailed(writeStorageJson(LIBRARY_STORAGE_KEY, documents));
+  libraryCache = {
+    raw: JSON.stringify(documents),
+    documents: documents.map((doc) => ({ ...doc })),
+    invalid: false,
+  };
 }
 
 export function getLibraryDocument(id: string): StoredDocument | null {
@@ -101,8 +115,12 @@ export function upsertLibraryDocument(data: {
   content: string;
   updatedAt?: string;
 }): StoredDocument {
-  const now = data.updatedAt && isValidDateString(data.updatedAt) ? data.updatedAt : new Date().toISOString();
-  const documents = getLibraryDocuments();
+  const now =
+    data.updatedAt && isValidDateString(data.updatedAt)
+      ? new Date(data.updatedAt).toISOString()
+      : new Date().toISOString();
+  assertDocumentSize(data.content);
+  const documents = getLibraryDocuments({ strict: true });
   const existing = data.id ? documents.find((doc) => doc.id === data.id) : undefined;
 
   const document: StoredDocument = {
@@ -122,7 +140,7 @@ export function upsertLibraryDocument(data: {
 }
 
 export function renameLibraryDocument(id: string, name: string): StoredDocument {
-  const documents = getLibraryDocuments();
+  const documents = getLibraryDocuments({ strict: true });
   const existing = documents.find((doc) => doc.id === id);
 
   if (!existing) {
@@ -161,41 +179,7 @@ export function duplicateLibraryDocument(id: string): StoredDocument {
 }
 
 export function deleteLibraryDocument(id: string): void {
-  setLibraryDocuments(getLibraryDocuments().filter((doc) => doc.id !== id));
-}
-
-export function migrateLegacyDocumentToLibrary() {
-  const currentRaw = readStorageItem(STORAGE_KEY);
-  const legacyRaw = readStorageItem(LEGACY_STORAGE_KEY);
-  const raw = currentRaw.ok && currentRaw.value ? currentRaw.value : legacyRaw.ok ? legacyRaw.value : null;
-
-  if (!raw) return;
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<CurrentDocumentRecord>;
-    if (typeof parsed.content !== 'string') return;
-
-    const migrated = upsertLibraryDocument({
-      id: parsed.id,
-      name: parsed.name || 'Untitled Document',
-      content: parsed.content,
-      updatedAt: parsed.savedAt,
-    });
-
-    throwIfStorageFailed(writeStorageJson(
-      STORAGE_KEY,
-      {
-        id: migrated.id,
-        name: migrated.name,
-        content: migrated.content,
-        savedAt: migrated.updatedAt,
-      },
-    ));
-
-    removeStorageItem(LEGACY_STORAGE_KEY);
-  } catch {
-    // ignore invalid local data
-  }
+  setLibraryDocuments(getLibraryDocuments({ strict: true }).filter((doc) => doc.id !== id));
 }
 
 export function exportLibraryDocumentsFile(documents: StoredDocument[]): string {
@@ -213,20 +197,13 @@ export function exportLibraryDocumentsFile(documents: StoredDocument[]): string 
 }
 
 export function exportUnifiedLibraryFile(): string {
-  return exportLibraryDocumentsFile(getLibraryDocuments());
+  return exportLibraryDocumentsFile(getLibraryDocuments({ strict: true }));
 }
 
 export function importUnifiedLibraryFile(rawText: string): { imported: number; skipped: number } {
-  const parsed = JSON.parse(rawText) as UnifiedLibraryFile;
-  if (
-    parsed.format !== 'lwrite-library' ||
-    parsed.version !== 1 ||
-    !Array.isArray(parsed.documents)
-  ) {
-    throw new Error('Unsupported library format');
-  }
+  const parsed = parseLibraryFile(rawText);
 
-  const existing = getLibraryDocuments();
+  const existing = getLibraryDocuments({ strict: true });
   const byId = new Map(existing.map((doc) => [doc.id, doc]));
 
   let imported = 0;
@@ -240,7 +217,7 @@ export function importUnifiedLibraryFile(rawText: string): { imported: number; s
     }
 
     const previous = byId.get(normalized.id);
-    if (!previous || previous.updatedAt < normalized.updatedAt) {
+    if (!previous || Date.parse(previous.updatedAt) < Date.parse(normalized.updatedAt)) {
       byId.set(normalized.id, normalized);
       imported += 1;
     } else {
@@ -268,13 +245,8 @@ export function addImportedDocumentToLibrary(name: string, content: string): Sto
 }
 
 export function importSingleLibraryDocument(rawText: string): StoredDocument {
-  const parsed = JSON.parse(rawText) as UnifiedLibraryFile;
-  if (
-    parsed.format !== 'lwrite-library' ||
-    parsed.version !== 1 ||
-    !Array.isArray(parsed.documents) ||
-    parsed.documents.length === 0
-  ) {
+  const parsed = parseLibraryFile(rawText);
+  if (parsed.documents.length === 0) {
     throw new Error('Invalid or empty document file');
   }
 
@@ -290,4 +262,15 @@ export function importSingleLibraryDocument(rawText: string): StoredDocument {
     content: normalized.content,
     updatedAt: new Date().toISOString(),
   });
+}
+
+function parseLibraryFile(rawText: string): { documents: unknown[] } {
+  assertDocumentSize(rawText);
+  const parsed: unknown = JSON.parse(rawText);
+  if (!parsed || typeof parsed !== 'object') throw new Error('Invalid library file.');
+  const value = parsed as Record<string, unknown>;
+  if (value.format !== 'lwrite-library' || value.version !== 1 || !Array.isArray(value.documents)) {
+    throw new Error('Unsupported library format.');
+  }
+  return { documents: value.documents };
 }

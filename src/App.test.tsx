@@ -15,10 +15,10 @@ describe('App startup', () => {
     window.history.pushState({}, '', '/');
   });
 
-  it('renders the editor route without a blocking loading screen', () => {
+  it('loads the editor route without an artificial startup delay', async () => {
     render(<App />);
 
-    expect(screen.getByText('Editor ready')).toBeInTheDocument();
+    expect(await screen.findByText('Editor ready')).toBeInTheDocument();
     expect(screen.queryByText(/loading lwrite/i)).not.toBeInTheDocument();
   });
 });

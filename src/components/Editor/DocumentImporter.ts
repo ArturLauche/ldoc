@@ -1,15 +1,7 @@
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
-import { logError } from '@/lib/logger';
+import { assertDocumentSize } from '@/lib/documentLimits';
 
-export type SupportedFormat =
-  | 'txt'
-  | 'html'
-  | 'htm'
-  | 'rtf'
-  | 'docx'
-  | 'odt'
-  | 'ott'
-  | 'fodt';
+export type SupportedFormat = 'txt' | 'html' | 'htm' | 'rtf' | 'docx' | 'odt' | 'ott' | 'fodt';
 
 export interface ImportResult {
   content: string;
@@ -17,8 +9,16 @@ export interface ImportResult {
   format: SupportedFormat;
 }
 
-const SUPPORTED_FORMATS: SupportedFormat[] = ['txt', 'html', 'htm', 'rtf', 'docx', 'odt', 'ott', 'fodt'];
-const MAX_IMPORT_SIZE_MB = 20;
+const SUPPORTED_FORMATS: SupportedFormat[] = [
+  'txt',
+  'html',
+  'htm',
+  'rtf',
+  'docx',
+  'odt',
+  'ott',
+  'fodt',
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -51,6 +51,10 @@ function detectFormat(file: File): SupportedFormat {
   if (mime.includes('rtf')) return 'rtf';
   if (mime.includes('html')) return 'html';
 
+  if (extension && extension !== 'txt' && mime !== 'text/plain') {
+    throw new Error('Unsupported document format.');
+  }
+
   return 'txt';
 }
 
@@ -58,15 +62,18 @@ function detectFormat(file: File): SupportedFormat {
 async function importDocx(file: File): Promise<string> {
   const mammoth = await import('mammoth').then((module) => module.default);
   const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.convertToHtml({ arrayBuffer }, {
-    convertImage: mammoth.images.imgElement((image) => {
-      return image.read("base64").then((imageBuffer) => {
-        return {
-          src: `data:${image.contentType};base64,${imageBuffer}`,
-        };
-      });
-    }),
-  });
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      convertImage: mammoth.images.imgElement((image) => {
+        return image.read('base64').then((imageBuffer) => {
+          return {
+            src: `data:${image.contentType};base64,${imageBuffer}`,
+          };
+        });
+      }),
+    },
+  );
   return result.value;
 }
 
@@ -115,14 +122,21 @@ async function processOdtInlineNode(node: Node, resolveImage?: OdtImageResolver)
   if (tagName === 'text:line-break') return '<br>';
   if (tagName === 'text:tab') return '    ';
   if (tagName === 'text:s') {
-    const count = Math.max(1, Math.min(100, Number.parseInt(element.getAttribute('text:c') ?? '1', 10) || 1));
+    const count = Math.max(
+      1,
+      Math.min(100, Number.parseInt(element.getAttribute('text:c') ?? '1', 10) || 1),
+    );
     return '&nbsp;'.repeat(count);
   }
   if (tagName === 'draw:frame') {
     return processOdtImageFrame(element, resolveImage);
   }
 
-  const content = (await Promise.all(Array.from(element.childNodes).map((child) => processOdtInlineNode(child, resolveImage)))).join('');
+  const content = (
+    await Promise.all(
+      Array.from(element.childNodes).map((child) => processOdtInlineNode(child, resolveImage)),
+    )
+  ).join('');
 
   if (tagName === 'text:span') {
     const styleName = getXmlAttribute(element, 'text:style-name').toLowerCase();
@@ -138,8 +152,13 @@ async function processOdtInlineNode(node: Node, resolveImage?: OdtImageResolver)
   return content;
 }
 
-async function processOdtImageFrame(frame: Element, resolveImage?: OdtImageResolver): Promise<string> {
-  const image = getElementChildren(frame).find((child) => child.tagName.toLowerCase() === 'draw:image');
+async function processOdtImageFrame(
+  frame: Element,
+  resolveImage?: OdtImageResolver,
+): Promise<string> {
+  const image = getElementChildren(frame).find(
+    (child) => child.tagName.toLowerCase() === 'draw:image',
+  );
   const href = image ? getXmlAttribute(image, 'xlink:href', 'href') : '';
   if (!href) return '';
 
@@ -150,7 +169,10 @@ async function processOdtImageFrame(frame: Element, resolveImage?: OdtImageResol
   return `<img src="${escapeHtmlAttribute(resolved)}" alt="${escapeHtmlAttribute(alt)}">`;
 }
 
-async function processOdtBlocks(parent: ParentNode, resolveImage?: OdtImageResolver): Promise<string> {
+async function processOdtBlocks(
+  parent: ParentNode,
+  resolveImage?: OdtImageResolver,
+): Promise<string> {
   const parts: string[] = [];
 
   for (const child of getElementChildren(parent)) {
@@ -181,12 +203,14 @@ async function processOdtList(element: Element, resolveImage?: OdtImageResolver)
   const listTag = ordered ? 'ol' : 'ul';
   const items = getElementChildren(element, 'text:list-item');
   const firstStart = Number.parseInt(getXmlAttribute(items[0] ?? element, 'text:start-value'), 10);
-  const start = ordered && Number.isFinite(firstStart) && firstStart > 1 ? ` start="${firstStart}"` : '';
+  const start =
+    ordered && Number.isFinite(firstStart) && firstStart > 1 ? ` start="${firstStart}"` : '';
   const body = (
     await Promise.all(
       items.map(async (item) => {
         const itemStart = Number.parseInt(getXmlAttribute(item, 'text:start-value'), 10);
-        const value = ordered && Number.isFinite(itemStart) && itemStart > 0 ? ` value="${itemStart}"` : '';
+        const value =
+          ordered && Number.isFinite(itemStart) && itemStart > 0 ? ` value="${itemStart}"` : '';
         return `<li${value}>${await processOdtBlocks(item, resolveImage)}</li>`;
       }),
     )
@@ -200,12 +224,20 @@ async function processOdtTable(element: Element, resolveImage?: OdtImageResolver
   const body = (
     await Promise.all(
       rows.map(async (row) => {
-        const cells = getElementChildren(row).filter((cell) => cell.tagName.toLowerCase() === 'table:table-cell');
+        const cells = getElementChildren(row).filter(
+          (cell) => cell.tagName.toLowerCase() === 'table:table-cell',
+        );
         const cellHtml = (
           await Promise.all(
             cells.map(async (cell) => {
-              const colSpan = Number.parseInt(getXmlAttribute(cell, 'table:number-columns-spanned'), 10);
-              const rowSpan = Number.parseInt(getXmlAttribute(cell, 'table:number-rows-spanned'), 10);
+              const colSpan = Number.parseInt(
+                getXmlAttribute(cell, 'table:number-columns-spanned'),
+                10,
+              );
+              const rowSpan = Number.parseInt(
+                getXmlAttribute(cell, 'table:number-rows-spanned'),
+                10,
+              );
               const attrs = [
                 Number.isFinite(colSpan) && colSpan > 1 ? ` colspan="${colSpan}"` : '',
                 Number.isFinite(rowSpan) && rowSpan > 1 ? ` rowspan="${rowSpan}"` : '',
@@ -222,8 +254,12 @@ async function processOdtTable(element: Element, resolveImage?: OdtImageResolver
   return `<table>${body}</table>`;
 }
 
-async function convertOdtXmlToHtml(doc: Document, resolveImage?: OdtImageResolver): Promise<string> {
-  const officeText = doc.getElementsByTagName('office:text')[0] ?? doc.documentElement;
+async function convertOdtXmlToHtml(
+  doc: Document,
+  resolveImage?: OdtImageResolver,
+): Promise<string> {
+  const officeText = doc.getElementsByTagName('office:text')[0];
+  if (doc.querySelector('parsererror') || !officeText) throw new Error('Invalid OpenDocument XML.');
   const html = await processOdtBlocks(officeText, resolveImage);
   return html || '<p></p>';
 }
@@ -231,43 +267,31 @@ async function convertOdtXmlToHtml(doc: Document, resolveImage?: OdtImageResolve
 // Import ODT (OpenDocument Text)
 async function importOdt(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  
-  try {
-    const JSZip = await import('jszip').then((module) => module.default);
-    const zipFile = await JSZip.loadAsync(arrayBuffer);
-    
-    const contentXml = await zipFile.file('content.xml')?.async('string');
-    if (!contentXml) {
-      throw new Error('Invalid ODT file');
-    }
-    
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(contentXml, 'text/xml');
-    return convertOdtXmlToHtml(doc, async (href) => {
-      const fileEntry = zipFile.file(href);
-      if (!fileEntry) return null;
-      const base64 = await fileEntry.async('base64');
-      return `data:${inferImageMimeType(href)};base64,${base64}`;
-    });
-  } catch (error) {
-    logError('ODT import error', error);
-    const text = await file.text();
-    return textToParagraphHtml(text);
+  const JSZip = await import('jszip').then((module) => module.default);
+  const zipFile = await JSZip.loadAsync(arrayBuffer);
+
+  const contentXml = await zipFile.file('content.xml')?.async('string');
+  if (!contentXml) {
+    throw new Error('Invalid ODT file');
   }
+  assertDocumentSize(contentXml);
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(contentXml, 'text/xml');
+  return convertOdtXmlToHtml(doc, async (href) => {
+    const fileEntry = zipFile.file(href);
+    if (!fileEntry) return null;
+    const base64 = await fileEntry.async('base64');
+    return `data:${inferImageMimeType(href)};base64,${base64}`;
+  });
 }
 
 // Import FODT (Flat OpenDocument Text) - basic support
 async function importFodt(file: File): Promise<string> {
-  try {
-    const text = await file.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/xml');
-    return convertOdtXmlToHtml(doc);
-  } catch (error) {
-    logError('FODT import error', error);
-    const text = await file.text();
-    return textToParagraphHtml(text);
-  }
+  const text = await file.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'text/xml');
+  return convertOdtXmlToHtml(doc);
 }
 
 const SKIPPED_RTF_DESTINATIONS = new Set([
@@ -416,33 +440,32 @@ function importRtf(text: string): string {
 
 // Main import function
 export async function importDocument(file: File): Promise<ImportResult> {
-  if (file.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
-    throw new Error(`Document is too large. Please choose a file under ${MAX_IMPORT_SIZE_MB}MB.`);
-  }
+  assertDocumentSize(file);
 
   const fileName = file.name.replace(/\.[^/.]+$/, '').trim() || 'Untitled';
   const format = detectFormat(file);
-  
+
   const content: string = await (async () => {
     switch (format) {
-    case 'docx':
-      return importDocx(file);
-    case 'odt':
-    case 'ott':
-      return importOdt(file);
-    case 'fodt':
-      return importFodt(file);
-    case 'html':
-    case 'htm':
-      return sanitizeDocumentHtml(await file.text());
-    case 'rtf':
-      return importRtf(await file.text());
-    case 'txt':
-    default:
-      return textToParagraphHtml(await file.text());
+      case 'docx':
+        return importDocx(file);
+      case 'odt':
+      case 'ott':
+        return importOdt(file);
+      case 'fodt':
+        return importFodt(file);
+      case 'html':
+      case 'htm':
+        return sanitizeDocumentHtml(await file.text());
+      case 'rtf':
+        return importRtf(await file.text());
+      case 'txt':
+      default:
+        return textToParagraphHtml(await file.text());
     }
   })();
-  
+
+  assertDocumentSize(content);
   return {
     content: sanitizeDocumentHtml(content),
     fileName,

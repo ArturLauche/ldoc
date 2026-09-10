@@ -89,7 +89,11 @@ export function readStorageJson<T>(
   try {
     const parsed = JSON.parse(raw.value);
     if (!validate(parsed)) {
-      return { ok: false, code: 'invalid-data', error: new Error(`Invalid storage data for ${key}.`) };
+      return {
+        ok: false,
+        code: 'invalid-data',
+        error: new Error(`Invalid storage data for ${key}.`),
+      };
     }
 
     return { ok: true, value: parsed };
@@ -99,7 +103,13 @@ export function readStorageJson<T>(
 }
 
 export function writeStorageJson<T>(key: string, value: T): DocumentStorageResult<void> {
-  return writeStorageItem(key, JSON.stringify(value));
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) throw new Error('Value is not JSON serializable.');
+    return writeStorageItem(key, serialized);
+  } catch (error) {
+    return { ok: false, code: 'invalid-data', error };
+  }
 }
 
 export function throwIfStorageFailed<T>(result: DocumentStorageResult<T>): T {
@@ -109,4 +119,3 @@ export function throwIfStorageFailed<T>(result: DocumentStorageResult<T>): T {
 
   return result.value;
 }
-

@@ -6,18 +6,18 @@ LWrite is a browser-only, local-first rich-text editor (React + TipTap); there i
 
 - Package manager: `npm@10.9.2` (`package-lock.json` is authoritative; ignore `bun.lock`).
 - Stack (locked in `package-lock.json`): Vite `5.4.21`, React `18.3.1`,
-  TypeScript `5.8.3`, TipTap React/StarterKit `3.15.3`, Tailwind `3.4.17`,
-  react-router-dom `6.30.3`, Vitest `2.1.9`, ESLint `9.32.0`.
+  TypeScript `5.9.3`, TipTap React/StarterKit `3.31.3`, Tailwind `3.4.19`,
+  react-router-dom `6.30.6`, Vitest `2.1.9`, ESLint `9.39.5`.
 - Keep Vite 5 with Vitest `2.1.x`; Vitest 4 breaks clean installs.
 - Cloudflare Pages: build `npm run build`, output `dist`, clean `npm ci` must pass.
 
 ```sh
 npm install              # install
-npm run dev              # dev server (Vite prints URL, typically http://localhost:5173)
+npm run dev              # dev server (Vite prints URL, normally http://127.0.0.1:8080)
 npm run lint             # ESLint
-npm run typecheck        # tsc -p tsconfig.app.json --noEmit
+npm run typecheck        # strict app + build configuration TypeScript
 npm run test -- --run    # Vitest, single run
-npm run build            # production build
+npm run build            # production build + HTML/metadata verification
 npm run validate         # lint + typecheck + test --run + build (full gate)
 ```
 

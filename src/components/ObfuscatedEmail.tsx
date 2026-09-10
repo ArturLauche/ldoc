@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 
 interface ObfuscatedEmailProps {
   email: string;

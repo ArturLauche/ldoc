@@ -7,7 +7,7 @@ export function renderHtml(documentModel: ExportDocumentModel): Blob {
 
 function buildHtmlDocument(documentModel: ExportDocumentModel): string {
   return `<!DOCTYPE html>
-<html lang="${documentModel.locale}">
+<html lang="${escapeHtmlText(documentModel.locale)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

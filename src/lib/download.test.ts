@@ -9,6 +9,8 @@ describe('downloadBlob', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    // jsdom cannot navigate/download; real downloads are checked in the browser.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     createObjectURL = vi.fn(() => 'blob:fake-url');
     revokeObjectURL = vi.fn();
     originalCreate = URL.createObjectURL;

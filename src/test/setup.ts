@@ -1,5 +1,5 @@
-import "@testing-library/jest-dom/vitest";
-import { vi } from "vitest";
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
 class MemoryStorage implements Storage {
   private readonly items = new Map<string, string>();
@@ -38,11 +38,11 @@ function resolveTestStorage(): Storage {
     // Fall through to the memory implementation for opaque origins.
   }
 
-  Object.defineProperty(globalThis, "Storage", {
+  Object.defineProperty(globalThis, 'Storage', {
     configurable: true,
     value: MemoryStorage,
   });
-  Object.defineProperty(window, "Storage", {
+  Object.defineProperty(window, 'Storage', {
     configurable: true,
     value: MemoryStorage,
   });
@@ -52,17 +52,17 @@ function resolveTestStorage(): Storage {
 
 const testStorage = resolveTestStorage();
 
-Object.defineProperty(globalThis, "localStorage", {
+Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
   value: testStorage,
 });
 
-Object.defineProperty(window, "localStorage", {
+Object.defineProperty(window, 'localStorage', {
   configurable: true,
   value: testStorage,
 });
 
-Object.defineProperty(window, "matchMedia", {
+Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({
     matches: false,
@@ -83,3 +83,6 @@ class ResizeObserverMock {
 }
 
 window.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+
+// jsdom has no layout/scroll implementation. Browser QA covers route scrolling.
+window.scrollTo = vi.fn();

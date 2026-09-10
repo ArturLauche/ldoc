@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 import { formatMessage } from '@/lib/translations';
 import { TableGridPicker } from './TableGridPicker';
 
@@ -66,7 +66,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
   });
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex max-w-full flex-wrap items-center gap-1">
       <TableGridPicker editor={editor} />
       {tableState.inTable ? (
         <>
@@ -77,17 +77,22 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-1 px-2 text-xs"
+                    className="h-9 gap-1 px-2 text-xs"
                     aria-label={t('tableTools')}
                   >
                     <TableProperties className="h-4 w-4" />
-                    <span className="hidden sm:inline max-w-[4.5rem] truncate">{t('tableTools')}</span>
+                    <span className="hidden sm:inline max-w-[4.5rem] truncate">
+                      {t('tableTools')}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('tableTools')}</TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="start" className="w-56 bg-popover border border-border shadow-lg z-50">
+            <DropdownMenuContent
+              align="start"
+              className="w-56 bg-popover border border-border shadow-lg z-50"
+            >
               <DropdownMenuLabel>{t('tableInsertGroup')}</DropdownMenuLabel>
               <DropdownMenuItem
                 disabled={!tableState.canAddRowBefore}
@@ -190,14 +195,22 @@ export function TableToolbar({ editor }: TableToolbarProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={t('tableCellFill')}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0"
+                    aria-label={t('tableCellFill')}
+                  >
                     <PaintBucket className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('tableCellFill')}</TooltipContent>
             </Tooltip>
-            <PopoverContent className="w-auto p-3 bg-popover border border-border shadow-lg z-50">
+            <PopoverContent
+              aria-label={t('tableCellFill')}
+              className="w-auto p-3 bg-popover border border-border shadow-lg z-50"
+            >
               <div className="grid grid-cols-5 gap-1.5">
                 {CELL_FILL_COLORS.map((color) => (
                   <button
@@ -206,14 +219,18 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                     className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring"
                     style={{ backgroundColor: color }}
                     aria-label={formatMessage(t('tableSetCellFill'), { color })}
-                    onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', color).run()}
+                    onClick={() =>
+                      editor.chain().focus().setCellAttribute('backgroundColor', color).run()
+                    }
                   />
                 ))}
                 <button
                   type="button"
                   className="h-6 w-6 rounded-md border border-border/50 bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
                   aria-label={t('tableClearFill')}
-                  onClick={() => editor.chain().focus().setCellAttribute('backgroundColor', null).run()}
+                  onClick={() =>
+                    editor.chain().focus().setCellAttribute('backgroundColor', null).run()
+                  }
                 />
               </div>
             </PopoverContent>

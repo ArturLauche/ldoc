@@ -1,29 +1,32 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
+import { loadEnv } from 'vite';
+import { staticPages } from './build/staticPages';
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: '127.0.0.1',
     port: 8080,
   },
-  plugins: [react()],
+  plugins: [react(), staticPages(loadEnv(mode, process.cwd(), ''))],
+  build: { sourcemap: false },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   test: {
-    environment: "jsdom",
+    environment: 'jsdom',
     environmentOptions: {
       jsdom: {
-        url: "http://localhost/",
+        url: 'http://localhost/',
       },
     },
     globals: true,
-    setupFiles: "./src/test/setup.ts",
+    setupFiles: './src/test/setup.ts',
     css: true,
   },
-});
+}));

@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run check:build",
+    "check:build": "node scripts/check-build.mjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "validate": "npm run lint && npm run typecheck && npm run test -- --run && npm run build"
   },
   "dependencies": {

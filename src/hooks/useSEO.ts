@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { siteConfig } from "@/lib/siteConfig";
+import { useEffect } from 'react';
+import { siteConfig } from '@/lib/siteConfig';
 
 export type HreflangAlternate = {
   /** BCP 47 / hreflang value, e.g. "en", "de" or "x-default". */
@@ -9,11 +9,12 @@ export type HreflangAlternate = {
 };
 
 type SeoConfig = {
+  language?: string;
   title: string;
   description: string;
   canonicalPath?: string;
   noIndex?: boolean;
-  ogType?: "website" | "article";
+  ogType?: 'website' | 'article';
   structuredData?: Record<string, unknown>;
   /** hreflang alternates (e.g. EN primary <-> DE alias on legal pages). */
   alternates?: HreflangAlternate[];
@@ -29,13 +30,13 @@ type SeoConfig = {
 };
 
 const SITE_NAME = siteConfig.siteName;
-const OG_IMAGE_WIDTH = "1200";
-const OG_IMAGE_HEIGHT = "630";
-const OG_IMAGE_TYPE = "image/png";
-const DEFAULT_OG_LOCALE = "en_US";
-const DEFAULT_OG_LOCALE_ALTERNATES = ["de_DE"];
+const OG_IMAGE_WIDTH = '1200';
+const OG_IMAGE_HEIGHT = '630';
+const OG_IMAGE_TYPE = 'image/png';
+const DEFAULT_OG_LOCALE = 'en_US';
+const DEFAULT_OG_LOCALE_ALTERNATES = ['de_DE'];
 
-const STRUCTURED_DATA_ID = "ldoc-structured-data";
+const STRUCTURED_DATA_ID = 'ldoc-structured-data';
 
 const resolvePublicUrl = (pathOrUrl: string): string => {
   try {
@@ -45,14 +46,14 @@ const resolvePublicUrl = (pathOrUrl: string): string => {
   }
 };
 
-const defaultImage = (): string => resolvePublicUrl("/og-image.png");
+const defaultImage = (): string => resolvePublicUrl('/og-image.png');
 
 const upsertMeta = (selector: string, attributes: Record<string, string>) => {
   const head = document.head;
   let element = head.querySelector<HTMLMetaElement>(selector);
 
   if (!element) {
-    element = document.createElement("meta");
+    element = document.createElement('meta');
     head.appendChild(element);
   }
 
@@ -70,7 +71,7 @@ const upsertLink = (selector: string, attributes: Record<string, string>) => {
   let element = head.querySelector<HTMLLinkElement>(selector);
 
   if (!element) {
-    element = document.createElement("link");
+    element = document.createElement('link');
     head.appendChild(element);
   }
 
@@ -84,9 +85,9 @@ const upsertJsonLd = (id: string, data: Record<string, unknown>) => {
   let script = head.querySelector<HTMLScriptElement>(`script#${id}`);
 
   if (!script) {
-    script = document.createElement("script");
+    script = document.createElement('script');
     script.id = id;
-    script.type = "application/ld+json";
+    script.type = 'application/ld+json';
     head.appendChild(script);
   }
 
@@ -102,95 +103,108 @@ const syncAlternates = (alternates: HreflangAlternate[]) => {
     ]),
   );
 
-  head
-    .querySelectorAll<HTMLLinkElement>('link[rel="alternate"][hreflang]')
-    .forEach((element) => {
-      const hreflang = (element.getAttribute("hreflang") ?? "").toLowerCase();
-      const expected = wanted.get(hreflang);
-      if (expected === undefined || element.getAttribute("href") !== expected) {
-        element.remove();
-      } else {
-        // Already correct — keep it and drop from the insert set.
-        wanted.delete(hreflang);
-      }
-    });
+  head.querySelectorAll<HTMLLinkElement>('link[rel="alternate"][hreflang]').forEach((element) => {
+    const hreflang = (element.getAttribute('hreflang') ?? '').toLowerCase();
+    const expected = wanted.get(hreflang);
+    if (expected === undefined || element.getAttribute('href') !== expected) {
+      element.remove();
+    } else {
+      // Already correct — keep it and drop from the insert set.
+      wanted.delete(hreflang);
+    }
+  });
 
   wanted.forEach((href, hreflang) => {
-    const element = document.createElement("link");
-    element.setAttribute("rel", "alternate");
-    element.setAttribute("hreflang", hreflang);
-    element.setAttribute("href", href);
+    const element = document.createElement('link');
+    element.setAttribute('rel', 'alternate');
+    element.setAttribute('hreflang', hreflang);
+    element.setAttribute('href', href);
     head.appendChild(element);
   });
 };
 
 export const useSEO = ({
   title,
+  language,
   description,
-  canonicalPath = "/",
+  canonicalPath,
   noIndex = false,
-  ogType = "website",
+  ogType = 'website',
   structuredData,
   alternates = [],
   ogLocale = DEFAULT_OG_LOCALE,
   ogLocaleAlternates = DEFAULT_OG_LOCALE_ALTERNATES,
-  imageAlt = "LWrite – free private online rich text editor",
+  imageAlt = 'LWrite – free private online rich text editor',
   modifiedTime,
   publishedTime,
 }: SeoConfig) => {
   useEffect(() => {
-    // Resolve against the configured public site URL so the canonical/og:url
-    // reflect the documented domain even on preview or alternate-origin
-    // deployments. `siteConfig.siteUrl` falls back to the current origin when
-    // unconfigured, preserving previous behaviour for the default deployment.
-    const canonicalUrl = resolvePublicUrl(canonicalPath);
+    // Runtime metadata follows the current host; static build metadata uses
+    // the deployment origin configured in build/staticPages.ts.
+    const canonicalUrl = resolvePublicUrl(canonicalPath ?? '/');
     const imageUrl = defaultImage();
 
     document.title = title;
+    if (language) {
+      document.documentElement.lang = language;
+      document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+    }
+    document.head
+      .querySelectorAll('meta[property="og:locale:alternate"]')
+      .forEach((element) => element.remove());
 
-    upsertMeta('meta[name="description"]', { name: "description", content: description });
+    upsertMeta('meta[name="description"]', { name: 'description', content: description });
     upsertMeta('meta[name="robots"]', {
-      name: "robots",
-      content: noIndex ? "noindex,nofollow" : "index,follow",
+      name: 'robots',
+      content: noIndex ? 'noindex,nofollow' : 'index,follow',
     });
 
-    upsertMeta('meta[property="og:site_name"]', { property: "og:site_name", content: SITE_NAME });
-    upsertMeta('meta[property="og:type"]', { property: "og:type", content: ogType });
-    upsertMeta('meta[property="og:locale"]', { property: "og:locale", content: ogLocale });
+    upsertMeta('meta[property="og:site_name"]', { property: 'og:site_name', content: SITE_NAME });
+    upsertMeta('meta[property="og:type"]', { property: 'og:type', content: ogType });
+    upsertMeta('meta[property="og:locale"]', { property: 'og:locale', content: ogLocale });
     for (const alternate of ogLocaleAlternates) {
       upsertMeta(`meta[property="og:locale:alternate"][content="${alternate}"]`, {
-        property: "og:locale:alternate",
+        property: 'og:locale:alternate',
         content: alternate,
       });
     }
-    upsertMeta('meta[property="og:title"]', { property: "og:title", content: title });
-    upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
-    upsertMeta('meta[property="og:url"]', { property: "og:url", content: canonicalUrl });
-    upsertMeta('meta[property="og:image"]', { property: "og:image", content: imageUrl });
+    upsertMeta('meta[property="og:title"]', { property: 'og:title', content: title });
+    upsertMeta('meta[property="og:description"]', {
+      property: 'og:description',
+      content: description,
+    });
+    upsertMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
+    upsertMeta('meta[property="og:image"]', { property: 'og:image', content: imageUrl });
     upsertMeta('meta[property="og:image:width"]', {
-      property: "og:image:width",
+      property: 'og:image:width',
       content: OG_IMAGE_WIDTH,
     });
     upsertMeta('meta[property="og:image:height"]', {
-      property: "og:image:height",
+      property: 'og:image:height',
       content: OG_IMAGE_HEIGHT,
     });
-    upsertMeta('meta[property="og:image:alt"]', { property: "og:image:alt", content: imageAlt });
+    upsertMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: imageAlt });
     upsertMeta('meta[property="og:image:type"]', {
-      property: "og:image:type",
+      property: 'og:image:type',
       content: OG_IMAGE_TYPE,
     });
 
-    upsertMeta('meta[name="twitter:card"]', { name: "twitter:card", content: "summary_large_image" });
-    upsertMeta('meta[name="twitter:title"]', { name: "twitter:title", content: title });
-    upsertMeta('meta[name="twitter:description"]', { name: "twitter:description", content: description });
-    upsertMeta('meta[name="twitter:image"]', { name: "twitter:image", content: imageUrl });
-    upsertMeta('meta[name="twitter:image:alt"]', { name: "twitter:image:alt", content: imageAlt });
+    upsertMeta('meta[name="twitter:card"]', {
+      name: 'twitter:card',
+      content: 'summary_large_image',
+    });
+    upsertMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: title });
+    upsertMeta('meta[name="twitter:description"]', {
+      name: 'twitter:description',
+      content: description,
+    });
+    upsertMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: imageUrl });
+    upsertMeta('meta[name="twitter:image:alt"]', { name: 'twitter:image:alt', content: imageAlt });
 
-    if (ogType === "article") {
+    if (ogType === 'article') {
       if (publishedTime) {
         upsertMeta('meta[property="article:published_time"]', {
-          property: "article:published_time",
+          property: 'article:published_time',
           content: publishedTime,
         });
       } else {
@@ -198,7 +212,7 @@ export const useSEO = ({
       }
       if (modifiedTime) {
         upsertMeta('meta[property="article:modified_time"]', {
-          property: "article:modified_time",
+          property: 'article:modified_time',
           content: modifiedTime,
         });
       } else {
@@ -209,7 +223,12 @@ export const useSEO = ({
       removeMeta('meta[property="article:modified_time"]');
     }
 
-    upsertLink('link[rel="canonical"]', { rel: "canonical", href: canonicalUrl });
+    if (noIndex && !canonicalPath) {
+      document.head.querySelector('link[rel="canonical"]')?.remove();
+      removeMeta('meta[property="og:url"]');
+    } else {
+      upsertLink('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
+    }
 
     syncAlternates(alternates);
 
@@ -226,6 +245,7 @@ export const useSEO = ({
     canonicalPath,
     description,
     imageAlt,
+    language,
     modifiedTime,
     noIndex,
     ogLocale,

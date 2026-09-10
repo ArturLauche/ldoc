@@ -170,3 +170,101 @@ describe('versionHistory', () => {
     expect(safety.kind).toBe('safety');
   });
 });
+
+it('recognizes image-only documents as meaningful versions', () => {
+  expect(isTrivialVersionContent('<img src="data:image/png;base64,YWJj" alt="Diagram">')).toBe(
+    false,
+  );
+});
+
+it('ignores malformed dates on reads and preserves them on failed writes', () => {
+  const raw = JSON.stringify([
+    {
+      id: 'bad',
+      documentId: 'doc-1',
+      content: '<p>Draft</p>',
+      name: 'Bad date',
+      timestamp: 'invalid',
+    },
+  ]);
+  localStorage.setItem('lwrite-document-versions', raw);
+  expect(getDocumentVersions('doc-1')).toEqual([]);
+  expect(() =>
+    saveDocumentVersion({ documentId: 'doc-1', content: '<p>New</p>', name: 'New' }),
+  ).toThrow();
+  expect(localStorage.getItem('lwrite-document-versions')).toBe(raw);
+  localStorage.clear();
+});
+
+describe('legacy history migration', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+  const legacy = (id: string) => ({
+    id,
+    name: id,
+    content: `<p>${id}</p>`,
+    timestamp: '2026-09-01T12:00:00Z',
+  });
+
+  it('migrates both legacy keys before removing either source', () => {
+    localStorage.setItem('lwrite-versions', JSON.stringify([legacy('one')]));
+    localStorage.setItem('floatwrite-versions', JSON.stringify([legacy('two')]));
+    expect(getDocumentVersions('draft', { strict: true }).map((version) => version.id)).toEqual([
+      'one',
+      'two',
+    ]);
+    expect(localStorage.getItem('lwrite-versions')).toBeNull();
+    expect(localStorage.getItem('floatwrite-versions')).toBeNull();
+  });
+
+  it('retries a partially completed migration without duplicating snapshots', () => {
+    localStorage.setItem('lwrite-versions', JSON.stringify([legacy('one')]));
+    const setItem = Storage.prototype.setItem;
+    const failing = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key,
+      value,
+    ) {
+      if (key === 'lwrite-document-versions-migrated')
+        throw new DOMException('Full', 'QuotaExceededError');
+      setItem.call(this, key, value);
+    });
+    expect(() => getDocumentVersions('draft', { strict: true })).toThrow();
+    expect(localStorage.getItem('lwrite-versions')).not.toBeNull();
+    failing.mockRestore();
+    expect(getDocumentVersions('draft', { strict: true })).toHaveLength(1);
+    expect(localStorage.getItem('lwrite-document-versions-migrated')).toBe('true');
+  });
+
+  it('applies the per-document cap during migration and preserves malformed source data', () => {
+    localStorage.setItem(
+      'lwrite-versions',
+      JSON.stringify(Array.from({ length: 25 }, (_, i) => legacy(String(i)))),
+    );
+    expect(getDocumentVersions('draft', { strict: true })).toHaveLength(20);
+    localStorage.clear();
+    localStorage.setItem('lwrite-versions', '{broken');
+    expect(() => getDocumentVersions('draft', { strict: true })).toThrow();
+    expect(localStorage.getItem('lwrite-versions')).toBe('{broken');
+    expect(localStorage.getItem('lwrite-document-versions-migrated')).toBeNull();
+  });
+});
+
+it('rejects duplicate history ids before a mutation can delete multiple records', () => {
+  localStorage.clear();
+  const version = {
+    id: 'duplicate',
+    documentId: 'draft',
+    name: 'First',
+    content: '<p>First</p>',
+    timestamp: '2026-09-01T12:00:00Z',
+  };
+  const raw = JSON.stringify([version, { ...version, name: 'Second' }]);
+  localStorage.setItem('lwrite-document-versions', raw);
+  expect(() => deleteDocumentVersion('duplicate')).toThrow();
+  expect(localStorage.getItem('lwrite-document-versions')).toBe(raw);
+  localStorage.clear();
+});

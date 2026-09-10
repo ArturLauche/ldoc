@@ -1,67 +1,79 @@
 # LWrite
 
-LWrite is a browser-based rich text editor built with React and TipTap. It provides a focused writing experience with theming, autosave, version snapshots, import/export utilities, and lightweight document stats. The app runs entirely in the browser and stores documents locally in `localStorage`.【F:src/components/Editor/RichTextEditor.tsx†L25-L244】
+[LWrite](https://write.leunos.com) is a local-first rich-text editor built with React and TipTap. Documents stay in this browser's storage. No account or application backend is required.
 
 ## Features
 
-- **Rich text editing** with headings, lists, links, highlights, alignment, inline styles, and images powered by TipTap and its extensions.【F:src/components/Editor/RichTextEditor.tsx†L6-L113】
-- **Autosave + manual save** with visual save status indicators and keyboard shortcuts (`⌘/Ctrl+S`).【F:src/components/Editor/RichTextEditor.tsx†L25-L194】
-- **Version history** with up to 20 snapshots, preview, restore, and delete actions.【F:src/components/Editor/VersionHistory.tsx†L12-L167】
-- **Import documents** from TXT, HTML, RTF, DOCX, ODT/OTT, and FODT formats.【F:src/components/Editor/DocumentImporter.ts†L3-L183】
-- **Export documents** to TXT, HTML, RTF, DOCX, ODT, and PDF formats.【F:src/components/Editor/FileMenu.tsx†L146-L276】
-- **Searchable local document library** for quickly finding and reopening documents by title or content.【F:src/components/Editor/FileMenu.tsx†L83-L91】【F:src/components/Editor/FileMenu.tsx†L404-L451】
-- **Unified library backup/restore** to export or import all documents in a single `.json` format.【F:src/components/Editor/FileMenu.tsx†L129-L162】【F:src/lib/documentLibrary.ts†L119-L166】
-- **Word/character counts** and document naming for quick status at a glance.【F:src/components/Editor/RichTextEditor.tsx†L57-L244】
-- **Light/dark/system themes** with a quick toggle in the header.【F:src/components/Editor/RichTextEditor.tsx†L63-L187】
+- Rich text, headings, nested lists, links, tables, images, and editable graphics.
+- Self-hosted font choices, light/dark themes, and eleven interface languages.
+- Autosave after three seconds of inactivity, with a fifteen-second maximum wait during continuous editing, manual save, and visible storage errors.
+- Document library with text search, rename, duplication, deletion, and JSON backup/import.
+- Up to twenty versions per document, previews, restore, and safety snapshots before replacing a document.
+- Cross-tab conflict detection with actions to reload the saved document or save a separate copy.
+- Find/replace, word/character counts, and document-only printing.
+- Import TXT, HTML, RTF, DOCX, ODT/OTT, and FODT. Export TXT, HTML, RTF, DOCX, ODT, and PDF. Exports report unsupported content rather than silently claiming a perfect conversion.
 
-## Tech stack
+## Development
 
-- **Vite + React + TypeScript** for the client application.【F:package.json†L1-L19】
-- **TipTap** for rich text editing.【F:src/components/Editor/RichTextEditor.tsx†L1-L13】
-- **Tailwind CSS + shadcn/ui** for styling and UI primitives.【F:package.json†L45-L88】
-
-## Getting started
-
-### Prerequisites
-
-- Node.js (recommended: install via [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
-- npm (ships with Node.js)
-
-### Installation
+Use Node.js 22.13+ (or Node.js 24 LTS) and **npm 10.9.2**. `package-lock.json` is authoritative; the historical `bun.lock` is not used by the build.
 
 ```sh
-npm install
-```
-
-### Run locally
-
-```sh
+npm ci --progress=false
 npm run dev
 ```
 
-Then open the local URL printed by Vite (typically http://localhost:5173).
-
-## Scripts
+Open the URL Vite prints (normally `http://127.0.0.1:8080`).
 
 ```sh
-npm run dev      # Start the dev server
-npm run build    # Build for production
-npm run preview  # Preview the production build
-npm run lint     # Run ESLint
+npm run lint          # ESLint
+npm run typecheck     # Strict TypeScript
+npm run test -- --run # Unit and component tests
+npm run build         # Production assets plus HTML/metadata verification
+npm run check:build   # Recheck an existing dist directory
+npm run preview       # Local Vite production preview
+npm run validate      # All required checks
 ```
 
-## Project structure
+Keep Vite 5 with Vitest 2.1.x. Major build-tool upgrades require a separate compatibility review. See [AGENTS.md](AGENTS.md) for repository boundaries and [the quality review](docs/quality-review.md) for audit findings, implementation decisions, measurements, and remaining advisories.
 
-```text
-src/
-  components/Editor/   # Editor UI, toolbar, menus, import/export, version history
-  pages/               # Route-level pages (Index mounts the editor)
-```
+## Persistence and recovery
 
-## Data storage
+The current draft, library, versions, locale, and theme use browser storage. Autosave also attempts to flush when the page becomes hidden or closes. When a write fails, the draft remains in memory and the interface offers retry; an exit confirmation is requested if unsaved changes remain. These events cannot guarantee recovery after a browser or operating-system crash.
 
-Documents, document snapshots, and version history are stored in the browser's `localStorage`. LWrite now keeps a dedicated document library for safer local persistence and supports exporting/importing that library for backups or migration between browsers/devices.【F:src/lib/documentLibrary.ts†L1-L166】【F:src/components/Editor/RichTextEditor.tsx†L125-L186】【F:src/components/Editor/VersionHistory.tsx†L12-L167】
+Clearing site data, using another browser/profile, or changing the origin gives a separate library. Private browsing and storage quotas can prevent persistence. Export a library backup before moving domains or clearing browser data. Backups are local downloads; no cloud copy is created.
+
+Document input is limited to 20 MB and uploaded images to 10 MB. Actual browser storage capacity can be lower. Imports, saves, previews, restores, and exports use the shared HTML sanitizer. Remote images still contact the image server; offline availability and cross-origin export permission depend on that server. Fonts are served from `public/fonts`, without Google Fonts requests.
+
+The application has no service worker. An already loaded editor can work without a connection, but a fresh offline visit is not guaranteed. Concurrent tabs receive conflict warnings, but localStorage does not provide database transactions or atomic compare-and-swap.
+
+## Cloudflare Pages
+
+Use `npm run build`, output directory `dist`, and a clean `npm ci` installation. No server functions or Wrangler configuration are required.
+
+- Runtime links and metadata detect `window.location.origin` automatically.
+- Static metadata needs a build-time origin because there is no server executing per request. `VITE_SITE_URL` overrides it; otherwise Cloudflare preview builds use `CF_PAGES_URL` and production defaults to `https://write.leunos.com`.
+- The build emits complete static legal pages for `/privacy`, `/terms`, `/datenschutz`, and `/nutzung`, plus `404.html`, `robots.txt`, and `sitemap.xml`. Cloudflare Pages serves matching HTML files and uses the custom 404 for unknown paths. Vite preview's SPA fallback is not an accurate test of the edge's 404 status.
+- German legal URLs select German content, language, and alternate links. Legal text remains readable without JavaScript; the editor requires JavaScript.
+- Only fingerprinted `/assets/*` files receive immutable caching. Fonts and other stable public paths can revalidate. Production source maps are disabled.
+
+Copy [.env.example](.env.example) to `.env.local` or configure the public values in Cloudflare Pages. Every `VITE_*` value is included in public build output. Configure a real `VITE_LEGAL_CONTACT_EMAIL` **or** `VITE_LEGAL_CONTACT_URL`; the operator has not yet supplied that contact. The app does not invent an address when configuration is missing.
+
+## Architecture
+
+| Location                                                       | Responsibility                                                      |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/App.tsx`, `src/pages/`                                    | Existing editor, legal, and not-found routes                        |
+| `src/components/Editor/RichTextEditor.tsx`                     | Editor shell and chrome                                             |
+| `src/components/Editor/useDocumentSession.ts`                  | Persistence lifecycle, document transitions, conflicts, shortcuts   |
+| `src/components/Editor/useDocumentStats.ts`                    | Coalesced document counts and font discovery                        |
+| `src/components/Editor/editorExtensions.ts`                    | TipTap schema and extensions                                        |
+| `src/lib/storage.ts`, `currentDocument.ts`                     | Typed browser storage and current-record validation                 |
+| `src/lib/documentLibrary.ts`, `versionHistory.ts`              | Library, backup/migration, and version retention                    |
+| `src/lib/sanitizeDocumentHtml.ts`                              | One document HTML sanitation boundary                               |
+| `src/lib/export/`, `src/components/Editor/DocumentImporter.ts` | Format conversion; heavy parsers/exporters load on demand           |
+| `src/lib/siteMetadata.ts`, `build/staticPages.ts`              | Shared browser/build metadata and static public output              |
+| `src/index.css`, `src/components/ui/`                          | Semantic tokens, document styling, reusable Radix/shadcn primitives |
 
 ## License
 
-This project is currently unlicensed. Add a license if you plan to distribute it.
+No license has been selected for this repository.

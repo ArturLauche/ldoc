@@ -16,7 +16,11 @@ describe('importDocument', () => {
 
   it('sanitizes imported HTML', async () => {
     const result = await importDocument(
-      textFile('<h1>Title</h1><p onclick="alert(1)" style="color: red; position: fixed">Safe</p>', 'page.html', 'text/html'),
+      textFile(
+        '<h1>Title</h1><p onclick="alert(1)" style="color: red; position: fixed">Safe</p>',
+        'page.html',
+        'text/html',
+      ),
     );
 
     expect(result.content).toContain('<h1>Title</h1>');
@@ -26,7 +30,9 @@ describe('importDocument', () => {
   });
 
   it('imports RTF unicode escapes and line breaks', async () => {
-    const result = await importDocument(textFile(String.raw`{\rtf1 Hallo \u252?\line Welt}`, 'unicode.rtf', 'application/rtf'));
+    const result = await importDocument(
+      textFile(String.raw`{\rtf1 Hallo \u252?\line Welt}`, 'unicode.rtf', 'application/rtf'),
+    );
 
     expect(result.content).toBe('<p>Hallo ü</p><p>Welt</p>');
   });
@@ -47,7 +53,9 @@ describe('importDocument', () => {
         </office:body>
       </office:document>`;
 
-    const result = await importDocument(textFile(fodt, 'open.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'));
+    const result = await importDocument(
+      textFile(fodt, 'open.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'),
+    );
 
     expect(result.content).toContain('<h1>Heading</h1>');
     expect(result.content).toContain('<a href="https://example.com">Example</a>');
@@ -71,10 +79,38 @@ describe('importDocument', () => {
       </office:document-content>`,
     );
     zip.file('Pictures/dot.png', 'abc');
-    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.oasis.opendocument.text' });
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      mimeType: 'application/vnd.oasis.opendocument.text',
+    });
 
-    const result = await importDocument(new File([blob], 'image.odt', { type: 'application/vnd.oasis.opendocument.text' }));
+    const result = await importDocument(
+      new File([blob], 'image.odt', { type: 'application/vnd.oasis.opendocument.text' }),
+    );
 
     expect(result.content).toContain('<img src="data:image/png;base64,YWJj" alt="Dot">');
   });
+});
+
+it.each(['odt', 'fodt'])(
+  'rejects malformed %s documents instead of reporting successful text imports',
+  async (extension) => {
+    await expect(
+      importDocument(new File(['binary garbage'], `invalid.${extension}`)),
+    ).rejects.toThrow();
+  },
+);
+
+it('rejects oversized files before reading them', async () => {
+  const file = new File(['tiny'], 'huge.txt');
+  Object.defineProperty(file, 'size', { value: 20 * 1024 * 1024 + 1 });
+  await expect(importDocument(file)).rejects.toThrow('too large');
+});
+
+it('preserves common bold and italic tags from imported HTML', async () => {
+  const result = await importDocument(
+    new File(['<p><b>Bold</b> <i>Italic</i></p>'], 'document.html'),
+  );
+  expect(result.content).toContain('<b>Bold</b>');
+  expect(result.content).toContain('<i>Italic</i>');
 });

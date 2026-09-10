@@ -23,7 +23,36 @@ export const localeNames: Record<Locale, string> = {
  */
 const en = {
   // App shell
-  placeholder: 'Start writing something amazing...',
+  appLoadFailed: 'LWrite could not open',
+  appLoadFailedHint: 'Try reloading the page. Your saved browser data has not been cleared.',
+  reloadApp: 'Reload LWrite',
+  placeholder: 'Start writing…',
+  savedLocally: 'Saved on this device',
+  localOnly: 'On this device',
+  loadFailed: 'Your saved draft could not be read. Existing browser data has been left intact.',
+  unreadableDraftConfirm:
+    'The saved draft could not be read. Replacing it will overwrite that browser record. Continue only if you have a backup.',
+  safetyVersionFailed:
+    'A safety copy could not be saved. Your current document has been kept open.',
+  externalChanges:
+    'This document changed in another tab. Keep your edits as a copy, or open the saved version.',
+  externalDocumentMissing:
+    'The saved document was deleted in another tab. Save your edits as a copy.',
+  reloadSaved: 'Open saved version',
+  saveAsCopy: 'Save as a copy',
+  retrySave: 'Try saving again',
+  moreFormatting: 'More formatting',
+  lessFormatting: 'Less formatting',
+  formattingToolbar: 'Document formatting',
+  libraryEmpty: 'Your documents will appear here',
+  libraryEmptyHint: 'Start writing or import a document. Changes are saved on this device.',
+  libraryReadFailed:
+    'The document library could not be read. Your stored data has not been changed.',
+  currentDocument: 'Open document',
+  versionActionFailed:
+    'The version could not be saved or deleted. Your existing history has been kept.',
+  versionReadFailed: 'Version history could not be read. Your stored data has not been changed.',
+  linkInvalid: 'Enter an http, https, email, or relative link.',
   skipToEditor: 'Skip to editor',
   untitledDocument: 'Untitled Document',
   saveSuccess: 'Document saved',
@@ -87,7 +116,7 @@ const en = {
 
   // Document library
   documentLibrary: 'Document Library',
-  documentLibraryDescription: 'Search and open your safely stored local documents.',
+  documentLibraryDescription: 'Find documents saved in this browser.',
   searchDocuments: 'Search Documents',
   searchByTitleOrContent: 'Search by title or content...',
   searchSavedDocumentsAria: 'Search saved documents',
@@ -271,7 +300,7 @@ const en = {
 
   // Version history
   versionHistoryTitle: 'Version History',
-  versionHistorySavedCount: '{count} saved versions',
+  versionHistorySavedCount: 'Saved versions: {count}',
   versionHistorySaveCurrent: 'Save Current Version',
   versionHistoryCloseAria: 'Close version history',
   versionHistoryEmptyTitle: 'No saved versions yet',
@@ -317,10 +346,11 @@ export type TranslationKey = keyof typeof en;
 type TranslationCatalog = Partial<Record<TranslationKey, string>>;
 
 const es: TranslationCatalog = {
-  placeholder: 'Empieza a escribir algo increíble...',
+  placeholder: 'Empieza a escribir…',
   untitledDocument: 'Documento sin título',
   saveSuccess: 'Documento guardado',
-  saveFailed: 'No se pudo guardar el documento localmente. Exporta una copia antes de cerrar esta pestaña.',
+  saveFailed:
+    'No se pudo guardar el documento localmente. Exporta una copia antes de cerrar esta pestaña.',
   toggleTheme: 'Cambiar modo oscuro',
   unsavedChanges: 'Cambios sin guardar',
   saved: 'Guardado',
@@ -346,7 +376,8 @@ const es: TranslationCatalog = {
   unsavedConfirm: 'Tienes cambios sin guardar. ¿Crear un documento nuevo de todos modos?',
   discardUnsavedChanges: '¿Descartar los cambios sin guardar y abrir este documento?',
   confirmDeleteDocumentTitle: '¿Eliminar documento?',
-  confirmDeleteDocumentBody: '¿Eliminar «{name}» de tu biblioteca local? Esta acción no se puede deshacer.',
+  confirmDeleteDocumentBody:
+    '¿Eliminar «{name}» de tu biblioteca local? Esta acción no se puede deshacer.',
   fileMenuLabel: 'Archivo',
   fileMenuNewDocument: 'Nuevo documento',
   fileMenuOpen: 'Abrir...',
@@ -397,10 +428,11 @@ const es: TranslationCatalog = {
 };
 
 const fr: TranslationCatalog = {
-  placeholder: 'Commencez à écrire quelque chose d’incroyable...',
+  placeholder: 'Commencez à écrire…',
   untitledDocument: 'Document sans titre',
   saveSuccess: 'Document enregistré',
-  saveFailed: 'Le document n’a pas pu être enregistré localement. Exportez une sauvegarde avant de fermer cet onglet.',
+  saveFailed:
+    'Le document n’a pas pu être enregistré localement. Exportez une sauvegarde avant de fermer cet onglet.',
   toggleTheme: 'Basculer le mode sombre',
   unsavedChanges: 'Modifications non enregistrées',
   saved: 'Enregistré',
@@ -423,10 +455,12 @@ const fr: TranslationCatalog = {
   remove: 'Retirer',
   confirmContinue: 'Continuer',
   unsavedConfirmTitle: 'Modifications non enregistrées',
-  unsavedConfirm: 'Vous avez des modifications non enregistrées. Créer un nouveau document quand même ?',
+  unsavedConfirm:
+    'Vous avez des modifications non enregistrées. Créer un nouveau document quand même ?',
   discardUnsavedChanges: 'Abandonner les modifications non enregistrées et ouvrir ce document ?',
   confirmDeleteDocumentTitle: 'Supprimer le document ?',
-  confirmDeleteDocumentBody: 'Supprimer « {name} » de votre bibliothèque locale ? Cette action est irréversible.',
+  confirmDeleteDocumentBody:
+    'Supprimer « {name} » de votre bibliothèque locale ? Cette action est irréversible.',
   fileMenuLabel: 'Fichier',
   fileMenuNewDocument: 'Nouveau document',
   fileMenuOpen: 'Ouvrir...',
@@ -442,7 +476,8 @@ const fr: TranslationCatalog = {
   openedFileToast: 'Ouvert : {name}',
   exportSuccess: 'Exporté comme',
   documentLibrary: 'Bibliothèque de documents',
-  documentLibraryDescription: 'Recherchez et ouvrez vos documents locaux enregistrés en toute sécurité.',
+  documentLibraryDescription:
+    'Recherchez et ouvrez vos documents locaux enregistrés en toute sécurité.',
   searchDocuments: 'Rechercher des documents',
   searchByTitleOrContent: 'Rechercher par titre ou contenu...',
   noMatchingDocuments: 'Aucun document correspondant.',
@@ -477,11 +512,41 @@ const fr: TranslationCatalog = {
 };
 
 const de: TranslationCatalog = {
-  placeholder: 'Schreibe etwas Großartiges...',
+  savedLocally: 'Auf diesem Gerät gespeichert',
+  localOnly: 'Auf diesem Gerät',
+  loadFailed:
+    'Dein gespeichertes Dokument konnte nicht gelesen werden. Die Browserdaten bleiben erhalten.',
+  unreadableDraftConfirm:
+    'Das gespeicherte Dokument ist nicht lesbar und wird beim Fortfahren ersetzt. Fahre nur fort, wenn du eine Sicherung hast.',
+  safetyVersionFailed:
+    'Die Sicherheitskopie konnte nicht gespeichert werden. Dein Dokument bleibt geöffnet.',
+  externalChanges:
+    'Dieses Dokument wurde in einem anderen Tab geändert. Speichere deine Änderungen als Kopie oder öffne die gespeicherte Version.',
+  externalDocumentMissing:
+    'Das Dokument wurde in einem anderen Tab gelöscht. Speichere deine Änderungen als Kopie.',
+  reloadSaved: 'Gespeicherte Version öffnen',
+  saveAsCopy: 'Als Kopie speichern',
+  retrySave: 'Erneut speichern',
+  moreFormatting: 'Weitere Formatierung',
+  lessFormatting: 'Weniger Formatierung',
+  formattingToolbar: 'Dokumentformatierung',
+  libraryEmpty: 'Hier erscheinen deine Dokumente',
+  libraryEmptyHint:
+    'Schreibe los oder importiere ein Dokument. Änderungen werden auf diesem Gerät gespeichert.',
+  libraryReadFailed:
+    'Die Dokumentbibliothek konnte nicht gelesen werden. Deine Daten bleiben erhalten.',
+  currentDocument: 'Geöffnetes Dokument',
+  versionActionFailed:
+    'Die Version konnte nicht gespeichert oder gelöscht werden. Dein Verlauf bleibt erhalten.',
+  versionReadFailed:
+    'Der Versionsverlauf konnte nicht gelesen werden. Deine Daten bleiben erhalten.',
+  linkInvalid: 'Gib einen HTTP-, HTTPS-, E-Mail- oder relativen Link ein.',
+  placeholder: 'Beginne zu schreiben…',
   skipToEditor: 'Zum Editor springen',
   untitledDocument: 'Unbenanntes Dokument',
   saveSuccess: 'Dokument gespeichert',
-  saveFailed: 'Das Dokument konnte nicht lokal gespeichert werden. Exportiere ein Backup, bevor du diesen Tab schließt.',
+  saveFailed:
+    'Das Dokument konnte nicht lokal gespeichert werden. Exportiere ein Backup, bevor du diesen Tab schließt.',
   toggleTheme: 'Dunkelmodus umschalten',
   unsavedChanges: 'Ungespeicherte Änderungen',
   saved: 'Gespeichert',
@@ -507,7 +572,8 @@ const de: TranslationCatalog = {
   unsavedConfirm: 'Du hast ungespeicherte Änderungen. Trotzdem ein neues Dokument erstellen?',
   discardUnsavedChanges: 'Ungespeicherte Änderungen verwerfen und dieses Dokument öffnen?',
   confirmDeleteDocumentTitle: 'Dokument löschen?',
-  confirmDeleteDocumentBody: '„{name}“ aus deiner lokalen Bibliothek löschen? Das kann nicht rückgängig gemacht werden.',
+  confirmDeleteDocumentBody:
+    '„{name}“ aus deiner lokalen Bibliothek löschen? Das kann nicht rückgängig gemacht werden.',
   fileMenuLabel: 'Datei',
   fileMenuNewDocument: 'Neues Dokument',
   fileMenuOpen: 'Öffnen...',
@@ -526,7 +592,7 @@ const de: TranslationCatalog = {
   exportWarningSingle: 'Export mit einer Warnung abgeschlossen: {message}',
   exportWarningMany: 'Export mit {count} Warnungen abgeschlossen: {message}',
   documentLibrary: 'Dokumentenbibliothek',
-  documentLibraryDescription: 'Durchsuche und öffne sicher lokal gespeicherte Dokumente.',
+  documentLibraryDescription: 'Finde Dokumente, die in diesem Browser gespeichert sind.',
   searchDocuments: 'Dokumente durchsuchen',
   searchByTitleOrContent: 'Nach Titel oder Inhalt suchen...',
   searchSavedDocumentsAria: 'Gespeicherte Dokumente durchsuchen',
@@ -553,7 +619,8 @@ const de: TranslationCatalog = {
   importSingleDoc: 'Einzelne Dateien importieren',
   invalidLibraryFile: 'Ungültige Bibliotheksdatei',
   exportedLibraryToast: '{count} Dokumente exportiert',
-  importedLibraryToast: 'Bibliotheksimport abgeschlossen: {imported} importiert, {skipped} übersprungen',
+  importedLibraryToast:
+    'Bibliotheksimport abgeschlossen: {imported} importiert, {skipped} übersprungen',
   importedSingleDocToast: 'Dokument in deine Bibliothek importiert',
   exportLibraryFailed: 'Deine Dokumentenbibliothek konnte nicht exportiert werden',
   toolbarUndo: 'Rückgängig',
@@ -696,7 +763,7 @@ const de: TranslationCatalog = {
   imageErrorInvalidProtocol: 'Bitte eine gültige HTTP- oder HTTPS-URL eingeben',
   imageErrorInvalidUrl: 'Bitte eine gültige URL eingeben',
   versionHistoryTitle: 'Versionsverlauf',
-  versionHistorySavedCount: '{count} gespeicherte Versionen',
+  versionHistorySavedCount: 'Gespeicherte Versionen: {count}',
   versionHistorySaveCurrent: 'Aktuelle Version speichern',
   versionHistoryCloseAria: 'Versionsverlauf schließen',
   versionHistoryEmptyTitle: 'Noch keine gespeicherten Versionen',
@@ -742,7 +809,7 @@ const de: TranslationCatalog = {
 };
 
 const it: TranslationCatalog = {
-  placeholder: 'Inizia a scrivere qualcosa di fantastico...',
+  placeholder: 'Inizia a scrivere…',
   untitledDocument: 'Documento senza titolo',
   saveSuccess: 'Documento salvato',
   unsavedConfirm: 'Hai modifiche non salvate. Vuoi comunque creare un nuovo documento?',
@@ -760,7 +827,7 @@ const it: TranslationCatalog = {
 };
 
 const pt: TranslationCatalog = {
-  placeholder: 'Comece a escrever algo incrível...',
+  placeholder: 'Comece a escrever…',
   untitledDocument: 'Documento sem título',
   saveSuccess: 'Documento salvo',
   unsavedConfirm: 'Você tem alterações não salvas. Criar um novo documento mesmo assim?',
@@ -778,7 +845,7 @@ const pt: TranslationCatalog = {
 };
 
 const nl: TranslationCatalog = {
-  placeholder: 'Begin met iets geweldigs te schrijven...',
+  placeholder: 'Begin met schrijven…',
   untitledDocument: 'Naamloos document',
   saveSuccess: 'Document opgeslagen',
   unsavedConfirm: 'Je hebt niet-opgeslagen wijzigingen. Toch een nieuw document maken?',
@@ -796,7 +863,7 @@ const nl: TranslationCatalog = {
 };
 
 const ja: TranslationCatalog = {
-  placeholder: 'すばらしい文章を書き始めましょう...',
+  placeholder: 'ここから書き始めましょう…',
   untitledDocument: '無題のドキュメント',
   saveSuccess: 'ドキュメントを保存しました',
   unsavedConfirm: '未保存の変更があります。それでも新しいドキュメントを作成しますか？',
@@ -814,7 +881,7 @@ const ja: TranslationCatalog = {
 };
 
 const zh: TranslationCatalog = {
-  placeholder: '开始写点精彩内容吧…',
+  placeholder: '开始写作…',
   untitledDocument: '未命名文档',
   saveSuccess: '文档已保存',
   unsavedConfirm: '你有未保存的更改。仍要创建新文档吗？',
@@ -832,7 +899,7 @@ const zh: TranslationCatalog = {
 };
 
 const ar: TranslationCatalog = {
-  placeholder: 'ابدأ بكتابة شيء رائع...',
+  placeholder: 'ابدأ الكتابة…',
   untitledDocument: 'مستند بدون عنوان',
   saveSuccess: 'تم حفظ المستند',
   unsavedConfirm: 'لديك تغييرات غير محفوظة. هل تريد إنشاء مستند جديد على أي حال؟',
@@ -850,7 +917,7 @@ const ar: TranslationCatalog = {
 };
 
 const ru: TranslationCatalog = {
-  placeholder: 'Начните писать что-нибудь потрясающее...',
+  placeholder: 'Начните писать…',
   untitledDocument: 'Документ без названия',
   saveSuccess: 'Документ сохранён',
   unsavedConfirm: 'У вас есть несохранённые изменения. Всё равно создать новый документ?',
@@ -895,9 +962,10 @@ const normalizeToSupportedLocale = (languageTag: string): Locale | null => {
 export const getBrowserLocale = (): Locale => {
   if (typeof window === 'undefined') return defaultLocale;
 
-  const browserLocales = window.navigator.languages.length > 0
-    ? window.navigator.languages
-    : [window.navigator.language];
+  const browserLocales =
+    window.navigator.languages.length > 0
+      ? window.navigator.languages
+      : [window.navigator.language];
 
   for (const browserLocale of browserLocales) {
     const matchedLocale = normalizeToSupportedLocale(browserLocale);

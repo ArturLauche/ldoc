@@ -1,13 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useLocale } from '@/hooks/useLocale';
+import { FONT_FAMILIES, loadFont } from '@/lib/fonts';
 import { cn } from '@/lib/utils';
 
 interface FontPickerProps {
@@ -15,95 +13,11 @@ interface FontPickerProps {
   onChange: (font: string) => void;
 }
 
-// Curated font list. These originate from Google Fonts, but LWrite self-hosts
-// them under public/fonts and serves them from its own origin (see
-// scripts/fetch-fonts.mjs), so picking a font makes no third-party request.
-const GOOGLE_FONTS = [
-  // Sans-serif
-  { name: 'Inter', category: 'sans-serif' },
-  { name: 'Roboto', category: 'sans-serif' },
-  { name: 'Open Sans', category: 'sans-serif' },
-  { name: 'Lato', category: 'sans-serif' },
-  { name: 'Montserrat', category: 'sans-serif' },
-  { name: 'Poppins', category: 'sans-serif' },
-  { name: 'Nunito', category: 'sans-serif' },
-  { name: 'Raleway', category: 'sans-serif' },
-  { name: 'Ubuntu', category: 'sans-serif' },
-  { name: 'Work Sans', category: 'sans-serif' },
-  { name: 'Mulish', category: 'sans-serif' },
-  { name: 'Quicksand', category: 'sans-serif' },
-  { name: 'Rubik', category: 'sans-serif' },
-  { name: 'Josefin Sans', category: 'sans-serif' },
-  { name: 'DM Sans', category: 'sans-serif' },
-  // Serif
-  { name: 'Playfair Display', category: 'serif' },
-  { name: 'Merriweather', category: 'serif' },
-  { name: 'Lora', category: 'serif' },
-  { name: 'Libre Baskerville', category: 'serif' },
-  { name: 'PT Serif', category: 'serif' },
-  { name: 'Crimson Text', category: 'serif' },
-  { name: 'Noto Serif', category: 'serif' },
-  { name: 'EB Garamond', category: 'serif' },
-  { name: 'Bitter', category: 'serif' },
-  { name: 'Cormorant Garamond', category: 'serif' },
-  // Monospace
-  { name: 'Fira Code', category: 'monospace' },
-  { name: 'Source Code Pro', category: 'monospace' },
-  { name: 'JetBrains Mono', category: 'monospace' },
-  { name: 'IBM Plex Mono', category: 'monospace' },
-  { name: 'Roboto Mono', category: 'monospace' },
-  // Display
-  { name: 'Abril Fatface', category: 'display' },
-  { name: 'Lobster', category: 'display' },
-  { name: 'Pacifico', category: 'display' },
-  { name: 'Dancing Script', category: 'display' },
-  { name: 'Caveat', category: 'display' },
-  { name: 'Satisfy', category: 'display' },
-  { name: 'Great Vibes', category: 'display' },
-  // System fonts
-  { name: 'Arial', category: 'system' },
-  { name: 'Times New Roman', category: 'system' },
-  { name: 'Georgia', category: 'system' },
-  { name: 'Verdana', category: 'system' },
-  { name: 'Courier New', category: 'system' },
-];
-
-// Fonts that need no stylesheet injection: OS system fonts, plus the interface
-// fonts already loaded globally in index.html.
-const PRELOADED_FONTS = new Set([
-  'Arial',
-  'Times New Roman',
-  'Georgia',
-  'Verdana',
-  'Courier New',
-  'DM Sans',
-]);
-
-// Families whose self-hosted stylesheet has already been injected this session.
-const loadedFonts = new Set<string>();
-
-function fontSlug(fontName: string) {
-  return fontName.toLowerCase().replace(/\s+/g, '-');
-}
-
-// Load a font from LWrite's own origin (see public/fonts). No request is made to
-// a third party such as Google Fonts.
-function loadFont(fontName: string) {
-  if (loadedFonts.has(fontName) || PRELOADED_FONTS.has(fontName)) {
-    return;
-  }
-
-  const link = document.createElement('link');
-  link.href = `/fonts/${fontSlug(fontName)}.css`;
-  link.rel = 'stylesheet';
-  document.head.appendChild(link);
-  loadedFonts.add(fontName);
-}
-
 export const FontPicker = ({ value, onChange }: FontPickerProps) => {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  
+
   // Load current font
   useEffect(() => {
     if (value) {
@@ -111,20 +25,21 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
       loadFont(fontName);
     }
   }, [value]);
-  
+
   // Filter fonts based on search
   const filteredFonts = useMemo(() => {
-    if (!search) return GOOGLE_FONTS;
+    if (!search) return FONT_FAMILIES;
     const searchLower = search.toLowerCase();
-    return GOOGLE_FONTS.filter(font => 
-      font.name.toLowerCase().includes(searchLower) ||
-      font.category.toLowerCase().includes(searchLower)
+    return FONT_FAMILIES.filter(
+      (font) =>
+        font.name.toLowerCase().includes(searchLower) ||
+        font.category.toLowerCase().includes(searchLower),
     );
   }, [search]);
-  
+
   // Group fonts by category
   const groupedFonts = useMemo(() => {
-    const groups: Record<string, typeof GOOGLE_FONTS> = {};
+    const groups: Record<string, typeof FONT_FAMILIES> = {};
     for (const font of filteredFonts) {
       if (!groups[font.category]) {
         groups[font.category] = [];
@@ -133,50 +48,55 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
     }
     return groups;
   }, [filteredFonts]);
-  
-  const currentFontName = value ? value.split(',')[0].replace(/['"]/g, '').trim() : 'Default';
-  
+
+  const currentFontName = value
+    ? value.split(',')[0].replace(/['"]/g, '').trim()
+    : t('fontDefault');
+
   const handleSelectFont = (fontName: string) => {
     loadFont(fontName);
-    
+
     // Get the font category for fallback
-    const font = GOOGLE_FONTS.find(f => f.name === fontName);
+    const font = FONT_FAMILIES.find((f) => f.name === fontName);
     let fallback = 'sans-serif';
-    if (font?.category === 'serif') fallback = 'serif';
-    else if (font?.category === 'monospace') fallback = 'monospace';
+    if (font?.category === 'serif' || ['Times New Roman', 'Georgia'].includes(fontName))
+      fallback = 'serif';
+    else if (font?.category === 'monospace' || fontName === 'Courier New') fallback = 'monospace';
     else if (font?.category === 'display') fallback = 'cursive';
-    
+
     onChange(`"${fontName}", ${fallback}`);
     setOpen(false);
     setSearch('');
   };
-  
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button 
-          variant="outline" 
-          className="w-36 h-8 justify-between text-xs font-medium bg-background/50 border-border/50"
-          aria-label="Select font"
+        <Button
+          variant="outline"
+          className="w-28 h-9 justify-between text-xs font-medium bg-card border-border"
+          aria-label={t('toolbarFontFamily')}
         >
-          <span 
-            className="truncate" 
-            style={{ fontFamily: value || 'inherit' }}
-          >
+          <span className="truncate" style={{ fontFamily: value || 'inherit' }}>
             {currentFontName}
           </span>
           <Search className="h-3 w-3 ml-1 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0 bg-popover border border-border shadow-lg z-50" align="start">
+      <PopoverContent
+        aria-label={t('toolbarFontFamily')}
+        className="w-64 p-0 bg-popover border border-border shadow-lg z-50"
+        align="start"
+      >
         <div className="p-2 border-b border-border/50">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search fonts..."
+              placeholder={t('fontSearchPlaceholder')}
+              aria-label={t('fontSearchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm bg-background/50"
+              className="pl-8 h-9 text-sm bg-card"
               autoFocus
             />
           </div>
@@ -188,16 +108,17 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
               onClick={() => {
                 onChange('');
                 setOpen(false);
+                setSearch('');
               }}
               className={cn(
-                "w-full flex items-center justify-between px-2 py-1.5 text-sm rounded-md hover:bg-accent/50 transition-colors",
-                !value && "bg-accent"
+                'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors',
+                !value && 'bg-accent',
               )}
             >
-              <span>Default</span>
+              <span>{t('fontDefault')}</span>
               {!value && <Check className="h-4 w-4" />}
             </button>
-            
+
             {/* Grouped fonts */}
             {Object.entries(groupedFonts).map(([category, fonts]) => (
               <div key={category}>
@@ -207,15 +128,16 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
                 {fonts.map((font) => {
                   // Preload font on hover
                   const handleMouseEnter = () => loadFont(font.name);
-                  
+
                   return (
                     <button
                       key={font.name}
                       onClick={() => handleSelectFont(font.name)}
                       onMouseEnter={handleMouseEnter}
+                      onFocus={handleMouseEnter}
                       className={cn(
-                        "w-full flex items-center justify-between px-2 py-1.5 text-sm rounded-md hover:bg-accent/50 transition-colors",
-                        currentFontName === font.name && "bg-accent"
+                        'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors',
+                        currentFontName === font.name && 'bg-accent',
                       )}
                       style={{ fontFamily: `"${font.name}", ${font.category}` }}
                     >
@@ -226,10 +148,10 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
                 })}
               </div>
             ))}
-            
+
             {filteredFonts.length === 0 && (
               <div className="px-2 py-8 text-center text-sm text-muted-foreground">
-                No fonts found
+                {t('fontNoResults')}
               </div>
             )}
           </div>

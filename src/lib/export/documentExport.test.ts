@@ -31,8 +31,14 @@ next()</code></pre>
       type: 'paragraph',
       runs: expect.arrayContaining([
         expect.objectContaining({ text: 'Bold', marks: expect.objectContaining({ bold: true }) }),
-        expect.objectContaining({ text: 'Link', link: expect.objectContaining({ href: 'https://example.com' }) }),
-        expect.objectContaining({ text: 'Marked', marks: expect.objectContaining({ highlight: expect.any(String) }) }),
+        expect.objectContaining({
+          text: 'Link',
+          link: expect.objectContaining({ href: 'https://example.com' }),
+        }),
+        expect.objectContaining({
+          text: 'Marked',
+          marks: expect.objectContaining({ highlight: expect.any(String) }),
+        }),
       ]),
     });
     expect(model.blocks.some((block) => block.type === 'blockquote')).toBe(true);
@@ -41,7 +47,10 @@ next()</code></pre>
         expect.objectContaining({
           type: 'paragraph',
           runs: expect.arrayContaining([
-            expect.objectContaining({ text: expect.stringContaining('const x'), marks: expect.objectContaining({ fontFamily: 'Courier New' }) }),
+            expect.objectContaining({
+              text: expect.stringContaining('const x'),
+              marks: expect.objectContaining({ fontFamily: 'Courier New' }),
+            }),
           ]),
         }),
       ]),
@@ -53,9 +62,7 @@ next()</code></pre>
       expect.arrayContaining([
         expect.objectContaining({
           type: 'paragraph',
-          runs: expect.arrayContaining([
-            expect.objectContaining({ text: 'Plan: A -> B' }),
-          ]),
+          runs: expect.arrayContaining([expect.objectContaining({ text: 'Plan: A -> B' })]),
         }),
       ]),
     );
@@ -220,8 +227,12 @@ describe('exportDocument', () => {
           expect.arrayContaining(['Table']),
         ]),
       );
-      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Large')?.[1]).toMatchObject({ size: 22 });
-      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Table')?.[1]).toMatchObject({ size: 10 });
+      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Large')?.[1]).toMatchObject({
+        size: 22,
+      });
+      expect(drawTextSpy.mock.calls.find(([text]) => text === 'Table')?.[1]).toMatchObject({
+        size: 10,
+      });
     } finally {
       drawTextSpy.mockRestore();
     }
@@ -359,4 +370,18 @@ describe('exportDocument', () => {
       }),
     ).rejects.toThrow('too large');
   });
+});
+
+it('escapes document-level HTML attributes as well as document content', async () => {
+  const result = await exportDocument({
+    html: '<p>Safe</p>',
+    name: '<script>bad</script>',
+    locale: 'en" onclick="bad()' as 'en',
+    format: 'html',
+  });
+  const doc = new DOMParser().parseFromString(await result.blob.text(), 'text/html');
+  expect(doc.documentElement.hasAttribute('onclick')).toBe(false);
+  expect(doc.querySelector('script')).toBeNull();
+  expect(doc.title).toBe('<script>bad</script>');
+  expect(result.blob.type).toBe('text/html');
 });
