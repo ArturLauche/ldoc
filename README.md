@@ -58,6 +58,8 @@ Use `npm run build`, output directory `dist`, and a clean `npm ci` installation.
 
 Copy [.env.example](.env.example) to `.env.local` or configure the public values in Cloudflare Pages. Every `VITE_*` value is included in public build output. Configure a real `VITE_LEGAL_CONTACT_EMAIL` **or** `VITE_LEGAL_CONTACT_URL`; the operator has not yet supplied that contact. The app does not invent an address when configuration is missing.
 
+Disable Cloudflare Web Analytics for this Pages project to match the existing no-analytics privacy text. The repository does not include a beacon, but the deployed PR preview received a hosting-injected Cloudflare beacon with CORS failures. This setting requires Cloudflare account access; it cannot be disabled by changing a `VITE_*` value. See [Cloudflare's Pages analytics configuration](https://developers.cloudflare.com/pages/how-to/web-analytics/).
+
 ## Architecture
 
 | Location                                                       | Responsibility                                                      |

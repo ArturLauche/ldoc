@@ -205,6 +205,31 @@ Vite's size warning and is only requested when that export is used.
   artifacts. This verifies the files and intended serving rules; it is not a
   claim that the PR is already deployed on Cloudflare.
 
+### Cloudflare preview follow-up
+
+Cloudflare successfully deployed application commit `67a80cd` at
+[the PR preview](https://5e0e6d97.ldoc.pages.dev). Direct HTTP checks confirmed all
+five public routes return 200, an unknown route returns 404, German pages have
+`lang="de"`, and raw canonicals/sitemap use the preview's own origin. Cloudflare
+also supplies `X-Robots-Tag: noindex` on preview responses. Chromium verified
+editor startup, save/reload and German legal rendering without application
+JavaScript exceptions or detected WCAG A/AA violations in those checked states.
+
+The deployed console check did identify repeated CORS failures from an injected
+`cloudflareinsights.com/cdn-cgi/rum` beacon. That script is absent from local
+`dist` output. This is a hosting setting: Pages can
+[inject its analytics snippet automatically](https://developers.cloudflare.com/pages/how-to/web-analytics/).
+Cloudflare's [analytics FAQ](https://developers.cloudflare.com/web-analytics/faq/)
+identifies a hostname mismatch as a common cause of this CORS error; the account
+configuration was unavailable, so that specific cause has not been confirmed.
+
+Disable Web Analytics for the Pages project before release to match the existing
+no-analytics privacy text. No Cloudflare account tool or API credentials were
+available in this workspace. The PR therefore does **not** claim a clean deployed
+console or complete production configuration. The repository-built app's local
+browser flow had no console errors or warnings; this preview finding is kept
+separate rather than hidden by a client-side workaround.
+
 ## Remaining deployment inputs and risks
 
 **Legal contact remains unconfigured.** The operator confirmed the production
