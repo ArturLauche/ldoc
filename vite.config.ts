@@ -1,21 +1,21 @@
 /// <reference types="vitest" />
 import { loadEnv } from 'vite';
-import { staticPages } from './build/staticPages';
+import { staticPages } from './build/staticPages.ts';
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react-swc';
-import path from 'path';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: '127.0.0.1',
     port: 8080,
   },
-  plugins: [react(), staticPages(loadEnv(mode, process.cwd(), ''))],
+  plugins: [react(), tailwindcss(), staticPages(loadEnv(mode, process.cwd(), ''))],
   build: { sourcemap: false },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   test: {

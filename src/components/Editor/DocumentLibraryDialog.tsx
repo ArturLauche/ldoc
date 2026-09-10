@@ -20,7 +20,7 @@ import type { StoredDocument } from '@/lib/documentLibrary';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 
 interface Props {
-  returnFocusRef?: RefObject<HTMLButtonElement>;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   documents: StoredDocument[];

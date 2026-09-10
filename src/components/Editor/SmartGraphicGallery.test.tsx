@@ -143,4 +143,35 @@ describe('smart graphic insert and editing', () => {
     expect(editor.getText()).toContain('Counted');
     expect(editor.getText()).toContain('Title');
   });
+
+  it('selects an item without changing document history or mutating a can() check', () => {
+    editor = createTestEditor();
+    editor.commands.insertSmartGraphic('list-block');
+    const id = graphicFromEditor(editor).items[0].id;
+    const content = editor.getHTML();
+    expect(editor.can().selectSmartGraphicItem(id)).toBe(true);
+    expect(editor.storage.smartGraphic.activeItemId).toBeNull();
+    editor.commands.selectSmartGraphicItem(id);
+    expect(editor.storage.smartGraphic.activeItemId).toBe(id);
+    expect(editor.getHTML()).toBe(content);
+    editor.commands.undo();
+    expect(editor.getJSON().content?.some((node) => node.type === 'smartGraphic')).toBe(false);
+  });
+
+  it('updates the localized placeholder without document changes or an extra undo step', () => {
+    editor = createTestEditor();
+    expect(editor.view.dom.querySelector('[data-placeholder]')?.getAttribute('data-placeholder'))
+      .toBe('Start writing...');
+    editor.commands.setEditorPlaceholder('Beginne zu schreiben…');
+    expect(editor.view.dom.querySelector('[data-placeholder]')?.getAttribute('data-placeholder'))
+      .toBe('Beginne zu schreiben…');
+    expect(editor.can().undo()).toBe(false);
+    editor.commands.insertContent('A draft');
+    editor.commands.setEditorPlaceholder('Commencez à écrire…');
+    expect(editor.getText()).toBe('A draft');
+    editor.commands.undo();
+    expect(editor.isEmpty).toBe(true);
+    expect(editor.view.dom.querySelector('[data-placeholder]')?.getAttribute('data-placeholder'))
+      .toBe('Commencez à écrire…');
+  });
 });

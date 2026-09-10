@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type RefObject } from 'react';
+import { useState, useCallback, useMemo, type RefObject } from 'react';
 import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,8 +20,16 @@ import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 
+function readVersions(documentId: string) {
+  try {
+    return { versions: getDocumentVersions(documentId, { strict: true }), readError: false };
+  } catch {
+    return { versions: [] as StoredVersion[], readError: true };
+  }
+}
+
 interface VersionHistoryProps {
-  returnFocusRef?: RefObject<HTMLButtonElement>;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   isOpen: boolean;
   onClose: () => void;
   onRestore: (content: string) => Promise<boolean>;
@@ -41,9 +49,9 @@ export const VersionHistory = ({
 }: VersionHistoryProps) => {
   const { t, locale } = useLocale();
   const confirm = useConfirm();
-  const [versions, setVersions] = useState<StoredVersion[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(null);
-  const [readError, setReadError] = useState(false);
+  // Mounted on opening and keyed by document id: load once, without an empty first frame.
+  const [{ versions, readError }, setHistory] = useState(() => readVersions(documentId));
+  const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(versions[0] ?? null);
   const [restoring, setRestoring] = useState(false);
   const dateTimeFormat = useMemo(
     () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
@@ -55,21 +63,12 @@ export const VersionHistory = ({
   );
 
   const loadVersions = useCallback(() => {
-    try {
-      const next = getDocumentVersions(documentId, { strict: true });
-      setVersions(next);
-      setSelectedVersion(
-        (selected) => next.find((item) => item.id === selected?.id) ?? next[0] ?? null,
-      );
-      setReadError(false);
-    } catch {
-      setReadError(true);
-    }
+    const next = readVersions(documentId);
+    setHistory(next);
+    setSelectedVersion(
+      (selected) => next.versions.find((item) => item.id === selected?.id) ?? next.versions[0] ?? null,
+    );
   }, [documentId]);
-
-  useEffect(() => {
-    if (isOpen) loadVersions();
-  }, [isOpen, loadVersions]);
 
   const saveVersion = () => {
     try {

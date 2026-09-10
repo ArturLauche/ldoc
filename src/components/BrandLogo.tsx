@@ -21,7 +21,7 @@ export const BrandLogo = ({ className, title = 'LWrite' }: BrandLogoProps) => {
       viewBox="0 0 64 64"
       role="img"
       aria-label={title}
-      className={cn('h-5 w-5 flex-shrink-0 rounded-[0.35rem]', className)}
+      className={cn('h-5 w-5 shrink-0 rounded-[0.35rem]', className)}
     >
       <defs>
         <linearGradient id={bgId} x1="0" y1="0" x2="1" y2="1">

@@ -182,7 +182,7 @@ function GraphicShape({
           value={item.label}
           onChange={(event) => shapeProps.onChangeLabel?.(item.id, event.target.value)}
           onFocus={() => shapeProps.onSelectItem?.(item.id)}
-          className="w-full min-w-0 bg-transparent text-center outline-none placeholder:text-current/60"
+          className="w-full min-w-0 bg-transparent text-center outline-hidden placeholder:text-current/60"
           aria-label={
             item.label ||
             translate(readStoredLocale() ?? getBrowserLocale(), 'graphicItemPlaceholder')

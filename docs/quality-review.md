@@ -238,15 +238,18 @@ domain but has not supplied a public contact email or contact-page URL. Configur
 pages as complete. No email or responsible-party identity was invented, and the
 existing legal wording has not been presented as a legal compliance assessment.
 
-**Seven audit findings remain: five moderate, one high and one critical.** The
-affected packages are Vite, esbuild, Vitest, vite-node, @vitest/mocker,
-react-router and react-router-dom. The repository explicitly requires Vite 5
-with Vitest 2.1. A forced audit fix would cross those major-version boundaries;
-Router's remaining fixes also require a major upgrade. This PR does not suppress
-the audit or describe the pinned toolchain as vulnerability-free.
+**Resolved by the subsequent [major-version compatibility work](dependency-upgrade.md):**
+the current lockfile reports zero npm audit findings, and ESLint 10 replaces the
+unsupported ESLint 9 line. The following records the earlier review's constraints
+and findings for comparison; it is not the current dependency status.
 
-The clean install also reports ESLint 9's end-of-support deprecation. Its next
-major version and plugin peer requirements need a coordinated tooling update.
+Before that migration, seven audit findings remained: five moderate, one high and one critical. The
+affected packages are Vite, esbuild, Vitest, vite-node, @vitest/mocker,
+react-router and react-router-dom. The repository previously required Vite 5
+with Vitest 2.1. Resolving those findings and Router's remaining advisories needed
+the coordinated major upgrade subsequently authorized by the user.
+
+That earlier clean install also reported ESLint 9's end-of-support deprecation.
 
 - Vitest's critical advisory concerns exposed UI/API servers and Windows
   UI/Browser mode. This repository validates using `vitest --run`, does not

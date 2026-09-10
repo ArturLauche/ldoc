@@ -89,7 +89,7 @@ export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
                       <button
                         key={layout.id}
                         type="button"
-                        className="rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary focus:outline-hidden focus:ring-2 focus:ring-ring"
                         onClick={() => insertLayout(layout.id)}
                         aria-label={t(GRAPHIC_LAYOUT_KEYS[layout.id])}
                       >

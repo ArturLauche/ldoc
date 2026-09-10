@@ -1,5 +1,5 @@
-import { siteConfig } from './siteConfig';
-import { formatMessage, type Locale } from './translations';
+import { siteConfig } from './siteConfig.ts';
+import { formatMessage, type Locale } from './translations.ts';
 
 export interface LegalBlock {
   heading: string;

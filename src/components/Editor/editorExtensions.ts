@@ -8,12 +8,41 @@ import Link from '@tiptap/extension-link';
 import Superscript from '@tiptap/extension-superscript';
 import Subscript from '@tiptap/extension-subscript';
 import FontFamily from '@tiptap/extension-font-family';
-import Placeholder from '@tiptap/extension-placeholder';
+import Placeholder, { type PlaceholderOptions } from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { mergeAttributes, type Extensions } from '@tiptap/core';
 import { FindReplace } from './findReplaceExtension';
 import { SmartGraphic } from './smartGraphicExtension';
 import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    editorPlaceholder: {
+      setEditorPlaceholder: (text: string) => ReturnType;
+    };
+  }
+  interface Storage {
+    placeholder: { text: string | null };
+  }
+}
+
+const EditorPlaceholder = Placeholder.extend<PlaceholderOptions, { text: string | null }>({
+  addStorage() {
+    return { text: null };
+  },
+  addCommands() {
+    return {
+      setEditorPlaceholder: (text) => ({ tr, dispatch }) => {
+        if (dispatch) {
+          this.storage.text = text;
+          // Refresh decorations without changing content or creating an undo step.
+          tr.setMeta('editorPlaceholder', text);
+        }
+        return true;
+      },
+    };
+  },
+});
 
 const EnhancedImage = Image.extend({
   addAttributes() {
@@ -75,8 +104,8 @@ const EnhancedTextStyle = TextStyle.extend({
 });
 
 /**
- * Builds the TipTap extension set. The placeholder is provided as a callback
- * so the active locale can change without recreating the editor.
+ * Builds the TipTap extension set with an initial placeholder. Later locale
+ * changes use setEditorPlaceholder without rebuilding the editor or its history.
  */
 export function createEditorExtensions(getPlaceholder: () => string): Extensions {
   return [
@@ -110,8 +139,8 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     Superscript,
     Subscript,
     FontFamily,
-    Placeholder.configure({
-      placeholder: () => getPlaceholder(),
+    EditorPlaceholder.configure({
+      placeholder: ({ editor }) => editor.storage.placeholder.text ?? getPlaceholder(),
     }),
     EnhancedImage.configure({
       inline: false,

@@ -71,6 +71,20 @@ describe('table insert and tools', () => {
     expect(editor.getHTML().match(/<th/g)?.length).toBe(3);
   });
 
+  it('resets the grid selection when reopened after dismissal', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<TableGridPicker editor={editor} />);
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    screen.getByRole('grid').focus();
+    await user.keyboard('{ArrowRight}{ArrowDown}{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('1 × 1 table');
+    expect(screen.getByRole('grid')).toHaveAttribute(
+      'aria-activedescendant', screen.getByTestId('table-picker-cell-1-1').id,
+    );
+  });
+
   it('inserts a rounded custom size and ignores empty custom fields', async () => {
     const user = userEvent.setup();
     editor = createTestEditor();

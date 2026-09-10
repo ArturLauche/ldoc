@@ -98,8 +98,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
   };
 
   const selectItem = (id: string) => {
-    editor.storage.smartGraphic.activeItemId = id;
-    editor.view.dispatch(editor.state.tr.setMeta('smartGraphicActiveId', id));
+    editor.commands.selectSmartGraphicItem(id);
   };
 
   const graphic = graphicState.graphic;

@@ -15,7 +15,7 @@ import { RichTextEditor } from './RichTextEditor';
 
 function renderEditor() {
   return render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter>
       <ThemeProvider attribute="class" defaultTheme="light">
         <LocaleProvider>
           <ConfirmProvider>

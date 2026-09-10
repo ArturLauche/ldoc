@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
@@ -64,7 +64,7 @@ import {
 const SUPPORTED_IMPORT_FORMATS = '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
 
 interface FileMenuProps {
-  menuTriggerRef?: RefObject<HTMLButtonElement>;
+  menuTriggerRef?: RefObject<HTMLButtonElement | null>;
   editor: Editor | null;
   documentId: string;
   documentName: string;
@@ -98,7 +98,6 @@ export const FileMenu = ({
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [libraryError, setLibraryError] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
 
   const refreshLibraryDocuments = useCallback(() => {
@@ -110,10 +109,10 @@ export const FileMenu = ({
     }
   }, []);
 
-  useEffect(() => {
-    if (!libraryOpen) return;
-    refreshLibraryDocuments();
-  }, [refreshKey, libraryOpen, refreshLibraryDocuments]);
+  const handleLibraryOpenChange = (open: boolean) => {
+    if (open) refreshLibraryDocuments();
+    setLibraryOpen(open);
+  };
 
   const handleNewDocument = async () => {
     if (!editor) return;
@@ -143,7 +142,7 @@ export const FileMenu = ({
             toast.dismiss('import');
             return;
           }
-          setRefreshKey((value) => value + 1);
+          refreshLibraryDocuments();
           toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
           logError('Import error', error);
@@ -162,7 +161,7 @@ export const FileMenu = ({
 
   const handleSave = () => {
     onSaveDocument();
-    setRefreshKey((value) => value + 1);
+    refreshLibraryDocuments();
   };
 
   const handleExportLibrary = () => {
@@ -193,7 +192,7 @@ export const FileMenu = ({
         assertDocumentSize(file);
         const raw = await file.text();
         const result = importUnifiedLibraryFile(raw);
-        setRefreshKey((value) => value + 1);
+        refreshLibraryDocuments();
         toast.success(
           formatMessage(t('importedLibraryToast'), {
             imported: result.imported,
@@ -251,7 +250,7 @@ export const FileMenu = ({
         }
       }
 
-      setRefreshKey((value) => value + 1);
+      refreshLibraryDocuments();
       setIsImporting(false);
       toast.dismiss('import-single');
 
@@ -285,7 +284,7 @@ export const FileMenu = ({
   const handleDuplicateLibraryDocument = (doc: StoredDocument) => {
     try {
       const duplicated = duplicateLibraryDocument(doc.id);
-      setRefreshKey((value) => value + 1);
+      refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDuplicatedToast'), { name: duplicated.name }));
     } catch (error) {
       logError('Document duplicate failed', error);
@@ -305,7 +304,7 @@ export const FileMenu = ({
     try {
       if (doc.id === documentId && !(await onCreateNewDocument())) return;
       deleteLibraryDocument(doc.id);
-      setRefreshKey((value) => value + 1);
+      refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDeletedToast'), { name: doc.name }));
     } catch (error) {
       logError('Document delete failed', error);
@@ -394,7 +393,7 @@ export const FileMenu = ({
             {t('fileMenuSave')}
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
+          <DropdownMenuItem onClick={() => handleLibraryOpenChange(true)}>
             <Search className="h-4 w-4 mr-2" />
             {t('searchDocuments')}
           </DropdownMenuItem>
@@ -511,7 +510,7 @@ export const FileMenu = ({
       <DocumentLibraryDialog
         returnFocusRef={triggerRef}
         open={libraryOpen}
-        onOpenChange={setLibraryOpen}
+        onOpenChange={handleLibraryOpenChange}
         documents={libraryDocuments}
         currentId={documentId}
         error={libraryError}

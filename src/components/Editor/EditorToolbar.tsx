@@ -412,7 +412,7 @@ export const EditorToolbar = memo(function EditorToolbar({ editor }: EditorToolb
                 <button
                   key={color}
                   onClick={() => editor.chain().focus().setColor(color).run()}
-                  className="h-8 w-8 rounded-sm border border-border transition-colors hover:ring-2 hover:ring-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-8 w-8 rounded-sm border border-border transition-colors hover:ring-2 hover:ring-ring focus:outline-hidden focus:ring-2 focus:ring-ring"
                   style={{ backgroundColor: color }}
                   aria-label={formatMessage(t('toolbarSetTextColor'), { color })}
                 />
@@ -449,7 +449,7 @@ export const EditorToolbar = memo(function EditorToolbar({ editor }: EditorToolb
                     }
                   }}
                   className={cn(
-                    'h-8 w-8 rounded-sm border border-border transition-colors hover:ring-2 hover:ring-ring focus:outline-none focus:ring-2 focus:ring-ring',
+                    'h-8 w-8 rounded-sm border border-border transition-colors hover:ring-2 hover:ring-ring focus:outline-hidden focus:ring-2 focus:ring-ring',
                     color === REMOVE_HIGHLIGHT &&
                       "bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground",
                   )}

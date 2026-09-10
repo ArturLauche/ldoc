@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { EditorState } from '@tiptap/pm/state';
 import { toast } from 'sonner';
@@ -55,13 +55,16 @@ export function useDocumentSession(editor: Editor | null) {
   }));
   const sessionRef = useRef(session);
   const tRef = useRef(t);
-  tRef.current = t;
+  useLayoutEffect(() => {
+    tRef.current = t;
+  }, [t]);
   const baselineRef = useRef<Pick<StoredDocument, 'name' | 'content'> | null>(null);
   const invalidStartupRef = useRef(false);
-  const lastEditAtRef = useRef(Date.now());
-  const firstUnsavedAtRef = useRef(Date.now());
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
-  const versionTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [startedAt] = useState(() => Date.now());
+  const lastEditAtRef = useRef(startedAt);
+  const firstUnsavedAtRef = useRef(startedAt);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const versionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const saveRef = useRef<(options?: SaveOptions) => boolean>(() => false);
   const replacingRef = useRef(false);
   const stats = useDocumentStats(editor);
@@ -133,7 +136,9 @@ export function useDocumentSession(editor: Editor | null) {
     },
     [automaticVersion, editor, updateSession],
   );
-  saveRef.current = saveDocument;
+  useLayoutEffect(() => {
+    saveRef.current = saveDocument;
+  }, [saveDocument]);
 
   const markEdited = useCallback(() => {
     lastEditAtRef.current = Date.now();

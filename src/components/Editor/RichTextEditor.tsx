@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from '@tiptap/react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { Check, Circle, HardDrive, Languages, Moon, Search, Sun, AlertCircle } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Link } from 'react-router-dom';
@@ -32,7 +32,7 @@ const FindReplaceBar = lazy(() =>
 );
 
 const FileMenuFallback = () => (
-  <div aria-hidden="true" className="h-8 w-[5.25rem] flex-shrink-0 rounded-md bg-transparent" />
+  <div aria-hidden="true" className="h-8 w-[5.25rem] shrink-0 rounded-md bg-transparent" />
 );
 
 const ToolbarFallback = () => <div aria-hidden="true" className="h-10" />;
@@ -44,13 +44,8 @@ export const RichTextEditor = () => {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
-  // The extension list is created once; the placeholder reads the latest
-  // translation through a ref so switching languages never rebuilds the editor.
-  const tRef = useRef(t);
-  useEffect(() => {
-    tRef.current = t;
-  }, [t]);
-  const extensions = useMemo(() => createEditorExtensions(() => tRef.current('placeholder')), []);
+  // The schema stays stable. Locale changes update decorations through a command.
+  const [extensions] = useState(() => createEditorExtensions(() => t('placeholder')));
 
   const editor = useEditor({
     extensions,
@@ -61,7 +56,7 @@ export const RichTextEditor = () => {
     shouldRerenderOnTransaction: false,
     editorProps: {
       attributes: {
-        class: 'prose max-w-none focus:outline-none',
+        class: 'prose max-w-none focus:outline-hidden',
         role: 'textbox',
         dir: 'auto',
         'aria-multiline': 'true',
@@ -94,12 +89,10 @@ export const RichTextEditor = () => {
   }, [editor]);
   const handleSave = useCallback(() => saveDocument({ showToast: true }), [saveDocument]);
 
-  // An empty transaction makes decorations (the placeholder text) recompute
-  // so a language switch is reflected without document changes.
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    editor.view.dispatch(editor.state.tr);
-  }, [editor, locale]);
+    editor.commands.setEditorPlaceholder(t('placeholder'));
+  }, [editor, t]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -135,7 +128,7 @@ export const RichTextEditor = () => {
         <div className="app-bar">
           <div className="flex items-center justify-between gap-2 px-3 h-12 sm:px-5">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <BrandLogo />
                 <span className="hidden sm:inline font-semibold text-sm tracking-tight">
                   LWrite
@@ -163,13 +156,13 @@ export const RichTextEditor = () => {
                 type="text"
                 value={documentName}
                 onChange={(e) => renameDocument(e.target.value)}
-                className="h-9 rounded-sm px-2 text-sm font-medium bg-transparent border border-transparent outline-none min-w-0 w-full max-w-[22rem] hover:border-border/50 focus:border-border focus:bg-card placeholder:text-muted-foreground truncate transition-colors"
+                className="h-9 rounded-sm px-2 text-sm font-medium bg-transparent border border-transparent outline-hidden min-w-0 w-full max-w-[22rem] hover:border-border/50 focus:border-border focus:bg-card placeholder:text-muted-foreground truncate transition-colors"
                 placeholder={t('untitledDocument')}
                 aria-label={t('documentName')}
               />
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <div
                 role="status"
                 className="hidden items-center gap-1.5 pr-2 text-xs text-muted-foreground md:flex"
@@ -344,6 +337,7 @@ export const RichTextEditor = () => {
       {showVersionHistory ? (
         <Suspense fallback={null}>
           <VersionHistory
+            key={documentId}
             returnFocusRef={menuTriggerRef}
             isOpen={showVersionHistory}
             onClose={() => setShowVersionHistory(false)}

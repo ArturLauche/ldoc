@@ -1,11 +1,11 @@
 import type { Plugin } from 'vite';
-import { createLegalCopies, type LegalCopy } from '../src/lib/legalContent';
+import { createLegalCopies, type LegalCopy } from '../src/lib/legalContent.ts';
 import {
   DEFAULT_SITE_URL,
   PUBLIC_PATHS,
   pageMetadata,
   safeSiteOrigin,
-} from '../src/lib/siteMetadata';
+} from '../src/lib/siteMetadata.ts';
 
 const escape = (value: string) =>
   value.replace(

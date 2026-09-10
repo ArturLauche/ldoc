@@ -19,7 +19,7 @@
  *   sufficient for a public production deployment.
  */
 
-import { DEFAULT_SITE_URL } from './siteMetadata';
+import { DEFAULT_SITE_URL } from './siteMetadata.ts';
 
 const env = import.meta.env ?? {};
 

@@ -70,11 +70,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
   const [customCols, setCustomCols] = useState('3');
 
   useEffect(() => {
-    if (!open) {
-      setHoverRows(1);
-      setHoverCols(1);
-      return;
-    }
+    if (!open) return;
     const frame = window.requestAnimationFrame(() => {
       gridRef.current?.focus();
     });
@@ -104,7 +100,13 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
   const gridPx = TABLE_PICKER_MAX * TABLE_PICKER_HIT_PX;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(nextOpen) => {
+      if (nextOpen) {
+        setHoverRows(1);
+        setHoverCols(1);
+      }
+      setOpen(nextOpen);
+    }}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -135,7 +137,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             tabIndex={0}
             aria-label={sizeLabel}
             aria-activedescendant={activeCellId}
-            className="outline-none"
+            className="outline-hidden"
             style={{
               width: gridPx,
               display: 'grid',

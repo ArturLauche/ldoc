@@ -216,7 +216,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                   <button
                     key={color}
                     type="button"
-                    className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-ring"
                     style={{ backgroundColor: color }}
                     aria-label={formatMessage(t('tableSetCellFill'), { color })}
                     onClick={() =>

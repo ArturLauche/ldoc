@@ -15,7 +15,7 @@
 
 ## Development
 
-Use Node.js 22.13+ (or Node.js 24 LTS) and **npm 10.9.2**. `package-lock.json` is authoritative; the historical `bun.lock` is not used by the build.
+Use **Node.js 24.21.0** (pinned in `.node-version`) and **npm 10.9.2**. The supported Node ranges are `^22.22.2 || ^24.15.0 || >=26.0.0`; older versions do not meet the test environment's requirements. `package-lock.json` is authoritative; the historical `bun.lock` is not used by the build.
 
 ```sh
 npm ci --progress=false
@@ -32,9 +32,12 @@ npm run build         # Production assets plus HTML/metadata verification
 npm run check:build   # Recheck an existing dist directory
 npm run preview       # Local Vite production preview
 npm run validate      # All required checks
+npm run audit         # Runtime and development dependency advisories
 ```
 
-Keep Vite 5 with Vitest 2.1.x. Major build-tool upgrades require a separate compatibility review. See [AGENTS.md](AGENTS.md) for repository boundaries and [the quality review](docs/quality-review.md) for audit findings, implementation decisions, measurements, and remaining advisories.
+The supported stack is React 19, Router 7, Vite 8, Vitest 5, Tailwind 4, and ESLint 10. TypeScript 6.0.3 is held on its compatible minor because typescript-eslint currently requires TypeScript below 6.1. See [the major-version review](docs/dependency-upgrade.md) for compatibility decisions and verification, [AGENTS.md](AGENTS.md) for repository boundaries, and [the quality review](docs/quality-review.md) for the broader implementation.
+
+Supported browser floors are Chrome/Edge 111, Firefox 128, and Safari 16.4, following [Tailwind 4's CSS requirements](https://tailwindcss.com/docs/upgrade-guide#browser-requirements). Use a current browser for supported security updates. Theme tokens, font stacks, and Tailwind source paths live in `src/index.css`.
 
 ## Persistence and recovery
 
@@ -48,7 +51,7 @@ The application has no service worker. An already loaded editor can work without
 
 ## Cloudflare Pages
 
-Use `npm run build`, output directory `dist`, and a clean `npm ci` installation. No server functions or Wrangler configuration are required.
+Use `npm run build`, output directory `dist`, and a clean `npm ci` installation. Cloudflare supports the committed `.node-version`; if the project has an explicit `NODE_VERSION` override, align it with `24.21.0`. No server functions or Wrangler configuration are required.
 
 - Runtime links and metadata detect `window.location.origin` automatically.
 - Static metadata needs a build-time origin because there is no server executing per request. `VITE_SITE_URL` overrides it; otherwise Cloudflare preview builds use `CF_PAGES_URL` and production defaults to `https://write.leunos.com`.
