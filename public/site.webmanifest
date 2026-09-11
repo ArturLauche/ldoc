@@ -1,12 +1,12 @@
 {
-  "name": "LWrite – Free Online Rich Text Editor",
+  "name": "LWrite \u2013 Free Online Rich Text Editor",
   "short_name": "LWrite",
-  "description": "Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT — no sign-up, with autosave and version history.",
+  "description": "Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT \u2014 no sign-up, with autosave and version history.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#f3f4f6",
+  "theme_color": "#f3f4f6",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -17,12 +17,6 @@
     {
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/og-image.png",
-      "sizes": "1200x630",
       "type": "image/png",
       "purpose": "any"
     }

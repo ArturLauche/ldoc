@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
@@ -17,8 +17,7 @@ import {
   Search,
   Files,
   Upload,
-  Copy,
-  Trash2,
+  Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,17 +40,19 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { DocumentLibraryDialog } from './DocumentLibraryDialog';
+import { assertDocumentSize } from '@/lib/documentLimits';
 import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/download';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
 import { formatMessage } from '@/lib/translations';
-import { useLocale } from '@/components/locale-provider';
-import { useConfirm } from '@/components/confirm-provider';
+import { useLocale } from '@/hooks/useLocale';
+import { useConfirm } from '@/hooks/useConfirm';
 import { logError } from '@/lib/logger';
 import {
   addImportedDocumentToLibrary,
+  createLibraryBackup,
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
@@ -64,18 +65,20 @@ import {
 const SUPPORTED_IMPORT_FORMATS = '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
 
 interface FileMenuProps {
+  menuTriggerRef?: RefObject<HTMLButtonElement | null>;
   editor: Editor | null;
   documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
-  onSaveDocument: () => void;
-  onLoadDocument: (doc: StoredDocument) => void;
-  onCreateNewDocument: () => void;
+  onSaveDocument: () => boolean | Promise<boolean>;
+  onLoadDocument: (doc: StoredDocument) => Promise<boolean>;
+  onCreateNewDocument: () => Promise<boolean>;
+  onImportDocument: (content: string, name: string) => Promise<boolean>;
   onShowVersionHistory: () => void;
-  hasUnsavedChanges: boolean;
 }
 
 export const FileMenu = ({
+  menuTriggerRef,
   editor,
   documentId,
   documentName,
@@ -84,8 +87,10 @@ export const FileMenu = ({
   onLoadDocument,
   onCreateNewDocument,
   onShowVersionHistory,
-  hasUnsavedChanges,
+  onImportDocument,
 }: FileMenuProps) => {
+  const fallbackTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = menuTriggerRef ?? fallbackTriggerRef;
   const { t, locale } = useLocale();
   const confirm = useConfirm();
   const [renameOpen, setRenameOpen] = useState(false);
@@ -93,58 +98,35 @@ export const FileMenu = ({
   const [newName, setNewName] = useState(documentName);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [libraryError, setLibraryError] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
 
-  const refreshLibraryDocuments = useCallback(() => {
-    setLibraryDocuments(getLibraryDocuments());
+  const refreshLibraryDocuments = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      setLibraryDocuments(await getLibraryDocuments({ strict: true }));
+      setLibraryError(false);
+    } catch {
+      setLibraryError(true);
+    } finally {
+      setLibraryLoading(false);
+    }
   }, []);
 
-  useEffect(() => {
-    if (!libraryOpen) return;
-    refreshLibraryDocuments();
-  }, [refreshKey, libraryOpen, refreshLibraryDocuments]);
-
-  const filteredDocuments = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return libraryDocuments;
-    return libraryDocuments.filter(
-      (doc) =>
-        doc.name.toLowerCase().includes(query) || doc.content.toLowerCase().includes(query),
-    );
-  }, [libraryDocuments, searchQuery]);
-
-  const confirmDiscardUnsavedChanges = useCallback(
-    () =>
-      confirm({
-        title: t('unsavedConfirmTitle'),
-        description: t('discardUnsavedChanges'),
-        destructive: true,
-      }),
-    [confirm, t],
-  );
+  const handleLibraryOpenChange = (open: boolean) => {
+    if (open) refreshLibraryDocuments();
+    setLibraryOpen(open);
+  };
 
   const handleNewDocument = async () => {
     if (!editor) return;
 
-    if (hasUnsavedChanges) {
-      const confirmed = await confirm({
-        title: t('unsavedConfirmTitle'),
-        description: t('unsavedConfirm'),
-      });
-      if (!confirmed) return;
-    }
-
-    onCreateNewDocument();
-    toast.success(t('newDocumentCreated'));
+    if (await onCreateNewDocument()) toast.success(t('newDocumentCreated'));
   };
 
   const handleOpenFile = async () => {
     if (!editor) return;
-    if (hasUnsavedChanges && !(await confirmDiscardUnsavedChanges())) {
-      return;
-    }
 
     try {
       const input = document.createElement('input');
@@ -161,10 +143,11 @@ export const FileMenu = ({
         try {
           const { importDocument } = await import('./DocumentImporter');
           const result = await importDocument(file);
-          onCreateNewDocument();
-          editor.commands.setContent(result.content);
-          setDocumentName(result.fileName);
-          setRefreshKey((value) => value + 1);
+          if (!(await onImportDocument(result.content, result.fileName))) {
+            toast.dismiss('import');
+            return;
+          }
+          refreshLibraryDocuments();
           toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
         } catch (error) {
           logError('Import error', error);
@@ -181,24 +164,33 @@ export const FileMenu = ({
     }
   };
 
-  const handleSave = () => {
-    onSaveDocument();
-    setRefreshKey((value) => value + 1);
+  const handleSave = async () => {
+    await onSaveDocument();
+    await refreshLibraryDocuments();
   };
 
-  const handleExportLibrary = () => {
+  const handleExportLibrary = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
     try {
-      const documents = getLibraryDocuments();
-      const payload = exportLibraryDocumentsFile(documents);
+      const { payload, count, includesDraft } = await createLibraryBackup(
+        {
+          id: documentId,
+          name: documentName,
+          content: editor?.getHTML() ?? '<p></p>',
+        },
+        t('backupDraftSuffix'),
+      );
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
-      toast.success(
-        formatMessage(t('exportedLibraryToast'), { count: documents.length }),
-      );
+      toast.success(formatMessage(t('exportedLibraryToast'), { count }));
+      if (includesDraft) toast.info(t('backupIncludesDraft'));
     } catch (error) {
       logError('Library export failed', error);
       toast.error(t('exportLibraryFailed'));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -210,10 +202,12 @@ export const FileMenu = ({
       const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
+      setIsImporting(true);
       try {
+        assertDocumentSize(file);
         const raw = await file.text();
-        const result = importUnifiedLibraryFile(raw);
-        setRefreshKey((value) => value + 1);
+        const result = await importUnifiedLibraryFile(raw);
+        refreshLibraryDocuments();
         toast.success(
           formatMessage(t('importedLibraryToast'), {
             imported: result.imported,
@@ -223,6 +217,8 @@ export const FileMenu = ({
       } catch (error) {
         logError('Library import failed', error);
         toast.error(t('invalidLibraryFile'));
+      } finally {
+        setIsImporting(false);
       }
     };
     input.click();
@@ -251,14 +247,15 @@ export const FileMenu = ({
 
       for (const file of files) {
         try {
+          assertDocumentSize(file);
           const isLibraryFile = /\.json$/i.test(file.name) || file.type === 'application/json';
           if (isLibraryFile) {
-            const doc = importSingleLibraryDocument(await file.text());
+            const doc = await importSingleLibraryDocument(await file.text());
             lastName = doc.name;
           } else {
             const { importDocument } = await import('./DocumentImporter');
             const result = await importDocument(file);
-            const doc = addImportedDocumentToLibrary(result.fileName, result.content);
+            const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
             lastName = doc.name;
           }
           imported += 1;
@@ -268,7 +265,7 @@ export const FileMenu = ({
         }
       }
 
-      setRefreshKey((value) => value + 1);
+      refreshLibraryDocuments();
       setIsImporting(false);
       toast.dismiss('import-single');
 
@@ -286,7 +283,6 @@ export const FileMenu = ({
     input.click();
   };
 
-
   const handleExportLibraryDocument = (doc: StoredDocument) => {
     try {
       const payload = exportLibraryDocumentsFile([doc]);
@@ -300,10 +296,10 @@ export const FileMenu = ({
     }
   };
 
-  const handleDuplicateLibraryDocument = (doc: StoredDocument) => {
+  const handleDuplicateLibraryDocument = async (doc: StoredDocument) => {
     try {
-      const duplicated = duplicateLibraryDocument(doc.id);
-      setRefreshKey((value) => value + 1);
+      const duplicated = await duplicateLibraryDocument(doc.id);
+      refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDuplicatedToast'), { name: duplicated.name }));
     } catch (error) {
       logError('Document duplicate failed', error);
@@ -314,15 +310,18 @@ export const FileMenu = ({
   const handleDeleteLibraryDocument = async (doc: StoredDocument) => {
     const confirmed = await confirm({
       title: t('confirmDeleteDocumentTitle'),
-      description: formatMessage(t('confirmDeleteDocumentBody'), { name: doc.name }),
+      description: formatMessage(t('confirmDeleteDocumentBody'), {
+        name: doc.name,
+      }),
       confirmLabel: t('delete'),
       destructive: true,
     });
     if (!confirmed) return;
 
     try {
-      deleteLibraryDocument(doc.id);
-      setRefreshKey((value) => value + 1);
+      if (doc.id === documentId && !(await onCreateNewDocument())) return;
+      await deleteLibraryDocument(doc.id);
+      refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDeletedToast'), { name: doc.name }));
     } catch (error) {
       logError('Document delete failed', error);
@@ -331,10 +330,7 @@ export const FileMenu = ({
   };
 
   const handleOpenLibraryDocument = async (doc: StoredDocument) => {
-    if (hasUnsavedChanges && !(await confirmDiscardUnsavedChanges())) {
-      return;
-    }
-    onLoadDocument(doc);
+    if (!(await onLoadDocument(doc))) return;
     setLibraryOpen(false);
     toast.success(formatMessage(t('openedDocumentToast'), { name: doc.name }));
   };
@@ -356,7 +352,9 @@ export const FileMenu = ({
       if (warnings.length) {
         const summary =
           warnings.length === 1
-            ? formatMessage(t('exportWarningSingle'), { message: warnings[0].message })
+            ? formatMessage(t('exportWarningSingle'), {
+                message: warnings[0].message,
+              })
             : formatMessage(t('exportWarningMany'), {
                 count: warnings.length,
                 message: warnings[0].message,
@@ -382,15 +380,23 @@ export const FileMenu = ({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 px-2.5 gap-1.5 text-sm font-medium">
+          <Button
+            ref={triggerRef}
+            variant="ghost"
+            className="h-9 px-2.5 gap-1.5 text-sm font-medium"
+          >
             <Folder className="h-4 w-4" />
             {t('fileMenuLabel')}
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 bg-popover border border-border shadow-lg z-50" align="start">
+        <DropdownMenuContent
+          aria-label={t('fileMenuLabel')}
+          className="w-56 bg-popover border border-border shadow-lg z-50"
+          align="start"
+        >
           <DropdownMenuItem onClick={() => void handleNewDocument()}>
             <FilePlus className="h-4 w-4 mr-2" />
             {t('fileMenuNewDocument')}
@@ -399,7 +405,6 @@ export const FileMenu = ({
           <DropdownMenuItem onClick={() => void handleOpenFile()} disabled={isImporting}>
             <FolderOpen className="h-4 w-4 mr-2" />
             {isImporting ? t('importInProgress') : t('fileMenuOpen')}
-            <span className="ml-auto text-xs text-muted-foreground">⌘O</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSave}>
@@ -407,7 +412,7 @@ export const FileMenu = ({
             {t('fileMenuSave')}
             <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
+          <DropdownMenuItem onClick={() => handleLibraryOpenChange(true)}>
             <Search className="h-4 w-4 mr-2" />
             {t('searchDocuments')}
           </DropdownMenuItem>
@@ -417,16 +422,16 @@ export const FileMenu = ({
               {t('libraryTransfer')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
-              <DropdownMenuItem onClick={handleExportLibrary}>
+              <DropdownMenuItem onClick={handleExportLibrary} disabled={isExporting}>
                 <Download className="h-4 w-4 mr-2" />
                 {t('exportAllDocs')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleImportLibrary}>
+              <DropdownMenuItem onClick={handleImportLibrary} disabled={isImporting}>
                 <Upload className="h-4 w-4 mr-2" />
                 {t('importAllDocs')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleImportSingleDocument}>
+              <DropdownMenuItem onClick={handleImportSingleDocument} disabled={isImporting}>
                 <Upload className="h-4 w-4 mr-2" />
                 {t('importSingleDoc')}
               </DropdownMenuItem>
@@ -473,6 +478,10 @@ export const FileMenu = ({
           >
             {t('fileMenuRename')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => requestAnimationFrame(() => window.print())}>
+            <Printer className="h-4 w-4 mr-2" />
+            {t('fileMenuPrint')}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onShowVersionHistory}>
             <History className="h-4 w-4 mr-2" />
             {t('fileMenuVersionHistory')}
@@ -481,7 +490,13 @@ export const FileMenu = ({
       </DropdownMenu>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
+          className="bg-background border border-border shadow-lg sm:max-w-md"
+        >
           <DialogHeader>
             <DialogTitle>{t('renameDocument')}</DialogTitle>
             <DialogDescription>{t('renameDocumentDescription')}</DialogDescription>
@@ -504,93 +519,28 @@ export const FileMenu = ({
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
               {t('cancel')}
             </Button>
-            <Button onClick={handleRename}>{t('save')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
-        <DialogContent className="bg-background border border-border shadow-lg sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('documentLibrary')}</DialogTitle>
-            <DialogDescription>
-              {t('documentLibraryDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              placeholder={t('searchByTitleOrContent')}
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label={t('searchSavedDocumentsAria')}
-            />
-            <ScrollArea className="h-[320px] border rounded-md">
-              <div className="p-2 space-y-2">
-                {filteredDocuments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">{t('noMatchingDocuments')}</p>
-                ) : (
-                  filteredDocuments.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className={`grid gap-2 rounded-md border p-3 transition hover:bg-accent ${
-                        doc.id === documentId ? 'border-primary bg-primary/5' : 'border-border'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="min-w-0 text-left"
-                        onClick={() => void handleOpenLibraryDocument(doc)}
-                      >
-                        <div className="truncate font-medium">{doc.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatMessage(t('librarySavedAt'), {
-                            date: new Date(doc.updatedAt).toLocaleString(locale),
-                          })}
-                        </div>
-                      </button>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleExportLibraryDocument(doc)}
-                        >
-                          <Download className="mr-1 h-3.5 w-3.5" />
-                          {t('exportDocumentBackup')}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDuplicateLibraryDocument(doc)}
-                        >
-                          <Copy className="mr-1 h-3.5 w-3.5" />
-                          {t('duplicateDocument')}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => void handleDeleteLibraryDocument(doc)}
-                        >
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          {t('deleteDocument')}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLibraryOpen(false)}>
-              {t('close')}
+            <Button onClick={handleRename} disabled={!newName.trim()}>
+              {t('save')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentLibraryDialog
+        returnFocusRef={triggerRef}
+        open={libraryOpen}
+        onOpenChange={handleLibraryOpenChange}
+        documents={libraryDocuments}
+        currentId={documentId}
+        error={libraryError}
+        loading={libraryLoading}
+        importing={isImporting}
+        onImport={handleImportSingleDocument}
+        onOpen={(doc) => void handleOpenLibraryDocument(doc)}
+        onExport={handleExportLibraryDocument}
+        onDuplicate={handleDuplicateLibraryDocument}
+        onDelete={(doc) => void handleDeleteLibraryDocument(doc)}
+      />
     </>
   );
 };

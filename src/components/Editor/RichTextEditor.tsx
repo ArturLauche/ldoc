@@ -1,6 +1,6 @@
 import { useEditor, EditorContent } from '@tiptap/react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Cloud, Languages, Moon, Search, Sun } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState, useCallback } from 'react';
+import { Check, Circle, HardDrive, Languages, Moon, Search, Sun, AlertCircle } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Link } from 'react-router-dom';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -13,62 +13,67 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { isSupportedLocale, localeNames, supportedLocales } from '@/lib/translations';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 import { createEditorExtensions } from './editorExtensions';
 import { useDocumentSession } from './useDocumentSession';
 
-const FileMenu = lazy(() =>
-  import('./FileMenu').then((module) => ({ default: module.FileMenu })),
-);
+const FileMenu = lazy(() => import('./FileMenu').then((module) => ({ default: module.FileMenu })));
 
 const EditorToolbar = lazy(() =>
-  import('./EditorToolbar').then((module) => ({ default: module.EditorToolbar })),
+  import('./EditorToolbar').then((module) => ({
+    default: module.EditorToolbar,
+  })),
 );
 
 const VersionHistory = lazy(() =>
-  import('./VersionHistory').then((module) => ({ default: module.VersionHistory })),
+  import('./VersionHistory').then((module) => ({
+    default: module.VersionHistory,
+  })),
 );
 
 const FindReplaceBar = lazy(() =>
-  import('./FindReplaceBar').then((module) => ({ default: module.FindReplaceBar })),
+  import('./FindReplaceBar').then((module) => ({
+    default: module.FindReplaceBar,
+  })),
 );
 
 const FileMenuFallback = () => (
-  <div aria-hidden="true" className="h-8 w-[5.25rem] flex-shrink-0 rounded-md bg-transparent" />
+  <div aria-hidden="true" className="h-8 w-[5.25rem] shrink-0 rounded-md bg-transparent" />
 );
 
-const ToolbarFallback = () => (
-  <div aria-hidden="true" className="floating-toolbar h-12 p-2" />
-);
+const ToolbarFallback = () => <div aria-hidden="true" className="h-10" />;
 
 export const RichTextEditor = () => {
   const { t, locale, setLocale } = useLocale();
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
-  // The extension list is created once; the placeholder reads the latest
-  // translation through a ref so switching languages never rebuilds the editor.
-  const tRef = useRef(t);
-  useEffect(() => {
-    tRef.current = t;
-  }, [t]);
-  const extensions = useMemo(
-    () => createEditorExtensions(() => tRef.current('placeholder')),
-    [],
-  );
+  // The schema stays stable. Locale changes update decorations through a command.
+  const [extensions] = useState(() => createEditorExtensions(() => t('placeholder')));
 
   const editor = useEditor({
     extensions,
     content: '<p></p>',
+    editable: false,
+    // Create the editor after commit so suspended/concurrent renders cannot
+    // expose an instance that TipTap has already disposed.
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     editorProps: {
       attributes: {
-        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-16 py-12',
+        class: 'prose max-w-none focus:outline-hidden',
+        role: 'textbox',
+        dir: 'auto',
+        'aria-multiline': 'true',
         'aria-label': 'Document editor',
       },
     },
   });
   const {
+    isLoading,
+    isTransitioning,
     documentId,
     documentName,
     lastSaved,
@@ -80,18 +85,28 @@ export const RichTextEditor = () => {
     createNewDocument,
     renameDocument,
     restoreVersion,
+    importDocument,
+    saveError,
+    hasExternalChanges,
+    saveConflictCopy,
+    reloadExternalDocument,
   } = useDocumentSession(editor);
 
-  // An empty transaction makes decorations (the placeholder text) recompute
-  // so a language switch is reflected without document changes.
+  const closeFindReplace = useCallback(() => {
+    setShowFindReplace(false);
+    editor?.commands.focus();
+  }, [editor]);
+  const handleSave = useCallback(() => saveDocument({ showToast: true }), [saveDocument]);
+
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    editor.view.dispatch(editor.state.tr);
-  }, [editor, locale]);
+    editor.commands.setEditorPlaceholder(t('placeholder'));
+  }, [editor, t]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
+        !document.querySelector('[role=dialog], [role=alertdialog]') &&
         (event.metaKey || event.ctrlKey) &&
         !event.shiftKey &&
         !event.altKey &&
@@ -99,6 +114,7 @@ export const RichTextEditor = () => {
       ) {
         event.preventDefault();
         setShowFindReplace(true);
+        document.querySelector<HTMLInputElement>('[data-find-input]')?.focus();
       }
     };
 
@@ -107,7 +123,7 @@ export const RichTextEditor = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col app-shell">
+    <div className="min-h-dvh bg-background flex flex-col app-shell">
       {/* Keyboard/assistive-tech skip link: visually hidden until focused,
           so the interface stays uncluttered while remaining navigable. */}
       <a
@@ -116,27 +132,30 @@ export const RichTextEditor = () => {
       >
         {t('skipToEditor')}
       </a>
-      <div className="sticky top-0 z-40">
+      <header inert={isLoading || isTransitioning} className="sticky top-0 z-40" data-editor-chrome>
         {/* Header */}
-        <header className="glass-bar">
-          <div className="flex items-center justify-between gap-2 px-3 h-10">
+        <div className="app-bar">
+          <div className="flex items-center justify-between gap-2 px-3 h-12 sm:px-5">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <BrandLogo />
-                <span className="hidden sm:inline font-semibold text-sm tracking-tight">LWrite</span>
+                <span className="hidden sm:inline font-semibold text-sm tracking-tight">
+                  LWrite
+                </span>
               </div>
 
               <Suspense fallback={<FileMenuFallback />}>
                 <FileMenu
+                  menuTriggerRef={menuTriggerRef}
                   editor={editor}
                   documentId={documentId}
                   documentName={documentName}
                   setDocumentName={renameDocument}
-                  onSaveDocument={() => saveDocument({ showToast: true })}
+                  onSaveDocument={handleSave}
                   onLoadDocument={loadDocument}
                   onCreateNewDocument={createNewDocument}
                   onShowVersionHistory={() => setShowVersionHistory(true)}
-                  hasUnsavedChanges={hasUnsavedChanges}
+                  onImportDocument={importDocument}
                 />
               </Suspense>
 
@@ -146,49 +165,61 @@ export const RichTextEditor = () => {
                 type="text"
                 value={documentName}
                 onChange={(e) => renameDocument(e.target.value)}
-                className="h-7 rounded-md px-2 text-sm font-medium bg-transparent border border-transparent outline-none min-w-0 w-full max-w-[16rem] hover:border-border/50 focus:border-border focus:bg-background/60 placeholder:text-muted-foreground/50 truncate transition-colors"
+                className="h-9 rounded-sm px-2 text-sm font-medium bg-transparent border border-transparent outline-hidden min-w-0 w-full max-w-[22rem] hover:border-border/50 focus:border-border focus:bg-card placeholder:text-muted-foreground truncate transition-colors"
                 placeholder={t('untitledDocument')}
                 aria-label={t('documentName')}
               />
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Save Status */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {hasUnsavedChanges ? (
-                  <>
-                    <div className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="hidden sm:inline">{t('unsavedChanges')}</span>
-                  </>
+            <div className="flex items-center gap-1 shrink-0">
+              <div
+                role="status"
+                className="hidden items-center gap-1.5 pr-2 text-xs text-muted-foreground md:flex"
+              >
+                {saveError || hasExternalChanges ? (
+                  <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                ) : hasUnsavedChanges ? (
+                  <Circle className="h-2 w-2 fill-current" />
                 ) : lastSaved ? (
-                  <>
-                    <Cloud className="h-3.5 w-3.5 text-emerald-500" />
-                    <span className="hidden sm:inline">{t('saved')}</span>
-                  </>
-                ) : null}
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <HardDrive className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {saveError
+                    ? t('unsavedChanges')
+                    : hasExternalChanges
+                      ? t('unsavedChanges')
+                      : hasUnsavedChanges
+                        ? t('unsavedChanges')
+                        : lastSaved
+                          ? t('savedLocally')
+                          : t('localOnly')}
+                </span>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-9 w-9"
                 onClick={() => setShowFindReplace((value) => !value)}
                 aria-label={t('findReplaceTitle')}
                 aria-pressed={showFindReplace}
               >
                 <Search className="h-4 w-4" />
               </Button>
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-9 w-9"
                     aria-label={t('languageSwitcherLabel')}
                   >
                     <Languages className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
+                  aria-label={t('languageSwitcherLabel')}
                   align="end"
                   className="w-40 bg-popover border border-border shadow-lg z-50"
                 >
@@ -209,7 +240,7 @@ export const RichTextEditor = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-9 w-9"
                 onClick={() => {
                   const activeTheme = theme === 'system' ? resolvedTheme : theme;
                   setTheme(activeTheme === 'dark' ? 'light' : 'dark');
@@ -224,10 +255,10 @@ export const RichTextEditor = () => {
               </Button>
             </div>
           </div>
-        </header>
+        </div>
 
         {/* Toolbar */}
-        <div className="px-3 py-1.5 glass-bar glass-bar--toolbar">
+        <div className="toolbar-bar px-3 py-2 sm:px-5">
           <Suspense fallback={<ToolbarFallback />}>
             <EditorToolbar editor={editor} />
           </Suspense>
@@ -235,37 +266,82 @@ export const RichTextEditor = () => {
 
         {showFindReplace ? (
           <Suspense fallback={null}>
-            <FindReplaceBar editor={editor} onClose={() => setShowFindReplace(false)} />
+            <FindReplaceBar key={documentId} editor={editor} onClose={closeFindReplace} />
           </Suspense>
         ) : null}
-      </div>
+      </header>
+
+      {hasExternalChanges ? (
+        <div role="alert" className="session-notice" data-editor-chrome>
+          <p>{t('externalChanges')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={isLoading || isTransitioning} onClick={saveConflictCopy}>
+              {t('saveAsCopy')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => void reloadExternalDocument()}>
+              {t('reloadSaved')}
+            </Button>
+          </div>
+        </div>
+      ) : saveError ? (
+        <div role="alert" className="session-notice" data-editor-chrome>
+          <p>{t(saveError === 'load' ? 'loadFailed' : 'saveFailed')}</p>
+          {saveError === 'save' && (
+            <Button variant="outline" size="sm" onClick={handleSave}>
+              {t('retrySave')}
+            </Button>
+          )}
+        </div>
+      ) : null}
 
       {/* Editor */}
-      <main id="lwrite-editor" tabIndex={-1} className="flex-1 max-w-4xl mx-auto w-full">
-        <div className="editor-container glass-card shadow-floating my-6 mx-4 overflow-hidden">
-          <EditorContent
-            editor={editor}
-            className="editor-content"
-          />
+      <main
+        id="lwrite-editor"
+        tabIndex={-1}
+        aria-busy={isLoading || isTransitioning}
+        className="editor-main flex-1 max-w-4xl mx-auto w-full min-w-0"
+      >
+        <h1 className="sr-only" lang="en">
+          LWrite – Private rich text editor
+        </h1>
+        <div className="editor-container my-5 mx-3 sm:my-8 sm:mx-6">
+          {(isLoading || isTransitioning) && (
+            <p role="status" className="px-6 pt-4 text-sm text-muted-foreground">
+              {t('loadingDocument')}
+            </p>
+          )}
+          <EditorContent editor={editor} className="editor-content" />
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-3 glass-bar glass-bar--footer">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          <div className="flex items-center gap-4">
-            <span>{wordCount} {t('words')}</span>
-            <span>{characterCount} {t('characters')}</span>
+      <footer className="app-footer px-4 py-3" data-editor-chrome>
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="tabular-nums">
+              {wordCount.toLocaleString(locale)} {t('words')}
+            </span>
+            <span className="tabular-nums">
+              {characterCount.toLocaleString(locale)} {t('characters')}
+            </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {lastSaved && (
-              <span>{t('lastSaved')}: {lastSaved.toLocaleTimeString(locale)}</span>
+              <span>
+                {t('lastSaved')}: {lastSaved.toLocaleTimeString(locale)}
+              </span>
             )}
             <nav className="flex items-center gap-3">
-              <Link to="/privacy" className="hover:text-foreground transition-colors">
+              <Link
+                to={locale === 'de' ? '/datenschutz' : '/privacy'}
+                className="hover:text-foreground transition-colors"
+              >
                 {t('privacyPolicy')}
               </Link>
-              <Link to="/terms" className="hover:text-foreground transition-colors">
+              <Link
+                to={locale === 'de' ? '/nutzung' : '/terms'}
+                className="hover:text-foreground transition-colors"
+              >
                 {t('termsOfUse')}
               </Link>
             </nav>
@@ -276,6 +352,8 @@ export const RichTextEditor = () => {
       {showVersionHistory ? (
         <Suspense fallback={null}>
           <VersionHistory
+            key={documentId}
+            returnFocusRef={menuTriggerRef}
             isOpen={showVersionHistory}
             onClose={() => setShowVersionHistory(false)}
             onRestore={restoreVersion}

@@ -1,29 +1,49 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { History, Clock, RotateCcw, Trash2, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, type RefObject } from 'react';
+import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
   deleteDocumentVersion,
   getDocumentVersions,
+  migrateLegacyVersionsToDocument,
   saveDocumentVersion,
   type StoredVersion,
 } from '@/lib/versionHistory';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 import { formatMessage } from '@/lib/translations';
-import { useLocale } from '@/components/locale-provider';
-import { useConfirm } from '@/components/confirm-provider';
+import { useLocale } from '@/hooks/useLocale';
+import { useConfirm } from '@/hooks/useConfirm';
+
+async function readVersions(documentId: string) {
+  try {
+    return {
+      versions: await getDocumentVersions(documentId, { strict: true }),
+      readError: false,
+    };
+  } catch {
+    return { versions: [] as StoredVersion[], readError: true };
+  }
+}
 
 interface VersionHistoryProps {
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   isOpen: boolean;
   onClose: () => void;
-  onRestore: (content: string) => void;
+  onRestore: (content: string) => Promise<boolean>;
   currentContent: string;
   documentName: string;
   documentId: string;
 }
 
 export const VersionHistory = ({
+  returnFocusRef,
   isOpen,
   onClose,
   onRestore,
@@ -33,197 +53,236 @@ export const VersionHistory = ({
 }: VersionHistoryProps) => {
   const { t, locale } = useLocale();
   const confirm = useConfirm();
-  const [versions, setVersions] = useState<StoredVersion[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(null);
-
-  const dateFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }),
-    [locale],
-  );
-  const timeFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { timeStyle: 'short' }),
-    [locale],
-  );
+  const [{ versions, readError }, setHistory] = useState<{
+    versions: StoredVersion[];
+    readError: boolean;
+  }>({ versions: [], readError: false });
+  const [loading, setLoading] = useState(true);
+  const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(versions[0] ?? null);
+  const [restoring, setRestoring] = useState(false);
   const dateTimeFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
     [locale],
   );
+  const preview = useMemo(
+    () => sanitizeDocumentHtml(selectedVersion?.content ?? ''),
+    [selectedVersion?.content],
+  );
 
-  const loadVersions = useCallback(() => {
-    setVersions(getDocumentVersions(documentId));
-  }, [documentId]);
+  const applyHistory = useCallback((next: { versions: StoredVersion[]; readError: boolean }) => {
+    setHistory(next);
+    setLoading(false);
+    setSelectedVersion(
+      (selected) =>
+        next.versions.find((item) => item.id === selected?.id) ?? next.versions[0] ?? null,
+    );
+  }, []);
+  const loadVersions = useCallback(async () => {
+    applyHistory(await readVersions(documentId));
+  }, [applyHistory, documentId]);
 
   useEffect(() => {
-    loadVersions();
-    setSelectedVersion(null);
-  }, [documentId, isOpen, loadVersions]);
+    let cancelled = false;
+    // Also supports legacy history when there was no current document at startup.
+    void migrateLegacyVersionsToDocument(documentId)
+      .then(() => readVersions(documentId))
+      .then(
+        (next) => {
+          if (!cancelled) applyHistory(next);
+        },
+        () => {
+          if (!cancelled) applyHistory({ versions: [], readError: true });
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [applyHistory, documentId]);
 
-  const saveVersion = () => {
-    saveDocumentVersion({
-      documentId,
-      name: documentName,
-      content: currentContent,
-      kind: 'manual',
-    });
-    loadVersions();
-    toast.success(t('versionSavedToast'));
+  const saveVersion = async () => {
+    try {
+      await saveDocumentVersion({
+        documentId,
+        name: documentName,
+        content: currentContent,
+        kind: 'manual',
+      });
+      await loadVersions();
+      toast.success(t('versionSavedToast'));
+    } catch {
+      toast.error(t('versionActionFailed'));
+    }
   };
 
-  const handleRestore = (version: StoredVersion) => {
-    saveDocumentVersion({
-      documentId,
-      name: `${documentName} ${t('versionBeforeRestoreSuffix')}`,
-      content: currentContent,
-      kind: 'safety',
-    });
-    onRestore(version.content);
-    toast.success(
-      formatMessage(t('versionRestoredToast'), {
-        date: dateTimeFormat.format(new Date(version.timestamp)),
-      }),
+  const handleRestore = async (version: StoredVersion) => {
+    setRestoring(true);
+    try {
+      if (!(await onRestore(version.content))) return;
+      toast.success(
+        formatMessage(t('versionRestoredToast'), {
+          date: dateTimeFormat.format(new Date(version.timestamp)),
+        }),
+      );
+      onClose();
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const versionKindLabel = (version: StoredVersion) =>
+    t(
+      version.kind === 'auto'
+        ? 'versionKindAutomatic'
+        : version.kind === 'safety'
+          ? 'versionKindSafety'
+          : 'versionKindManual',
     );
-    onClose();
-  };
-
-  const versionKindLabel = (version: StoredVersion) => {
-    if (version.kind === 'auto') return t('versionKindAutomatic');
-    if (version.kind === 'safety') return t('versionKindSafety');
-    return t('versionKindManual');
-  };
 
   const handleDelete = async (version: StoredVersion) => {
-    const confirmed = await confirm({
-      title: t('versionDeleteConfirmTitle'),
-      description: formatMessage(t('versionDeleteConfirmBody'), {
-        date: dateTimeFormat.format(new Date(version.timestamp)),
-      }),
-      confirmLabel: t('delete'),
-      destructive: true,
-    });
-    if (!confirmed) return;
-
-    deleteDocumentVersion(version.id);
-    loadVersions();
-    if (selectedVersion?.id === version.id) {
-      setSelectedVersion(null);
+    if (
+      !(await confirm({
+        title: t('versionDeleteConfirmTitle'),
+        description: formatMessage(t('versionDeleteConfirmBody'), {
+          date: dateTimeFormat.format(new Date(version.timestamp)),
+        }),
+        confirmLabel: t('delete'),
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      await deleteDocumentVersion(version.id);
+      await loadVersions();
+      toast.success(t('versionDeletedToast'));
+    } catch {
+      toast.error(t('versionActionFailed'));
     }
-    toast.success(t('versionDeletedToast'));
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-      <div className="bg-background border border-border w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl shadow-lg overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <History className="h-5 w-5 text-primary" />
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef?.current?.focus();
+        }}
+        className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+      >
+        <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left">
+          <DialogTitle>{t('versionHistoryTitle')}</DialogTitle>
+          <DialogDescription>
+            {documentName} ·{' '}
+            {formatMessage(t('versionHistorySavedCount'), {
+              count: versions.length,
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <aside className="flex max-h-[32%] shrink-0 flex-col border-b border-border sm:max-h-none sm:w-60 sm:border-b-0 sm:border-r">
+            <div className="p-3">
+              <Button
+                onClick={saveVersion}
+                size="sm"
+                variant="outline"
+                className="w-full"
+                disabled={readError || loading}
+              >
+                {t('versionHistorySaveCurrent')}
+              </Button>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold">{t('versionHistoryTitle')}</h2>
-              <p className="text-sm text-muted-foreground">
-                {formatMessage(t('versionHistorySavedCount'), { count: versions.length })}
-              </p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+              {loading ? (
+                <p role="status" className="p-3 text-sm text-muted-foreground">
+                  {t('loadingDocument')}
+                </p>
+              ) : readError ? (
+                <p role="alert" className="p-3 text-sm text-destructive">
+                  {t('versionReadFailed')}
+                </p>
+              ) : versions.length ? (
+                <ul>
+                  {versions.map((version) => (
+                    <li key={version.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVersion(version)}
+                        aria-pressed={selectedVersion?.id === version.id}
+                        className="w-full rounded-sm px-3 py-2.5 text-left hover:bg-accent aria-pressed:bg-accent"
+                      >
+                        <span className="block truncate text-sm font-medium">{version.name}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {versionKindLabel(version)}
+                        </span>
+                        <time
+                          dateTime={version.timestamp}
+                          className="block text-xs text-muted-foreground"
+                        >
+                          {dateTimeFormat.format(new Date(version.timestamp))}
+                        </time>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  {t('versionHistoryEmptyTitle')}
+                </p>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={saveVersion} size="sm">
-              {t('versionHistorySaveCurrent')}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('versionHistoryCloseAria')}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Version List */}
-          <div className="w-72 border-r border-border/50 flex flex-col">
-            <ScrollArea className="flex-1">
-              <div className="p-2 space-y-1">
-                {versions.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Clock className="h-8 w-8 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">{t('versionHistoryEmptyTitle')}</p>
-                    <p className="text-xs mt-1">{t('versionHistoryEmptyHint')}</p>
-                  </div>
-                ) : (
-                  versions.map((version) => (
-                    <button
-                      key={version.id}
-                      onClick={() => setSelectedVersion(version)}
-                      className={`w-full p-3 rounded-xl text-left transition-all duration-200 ${
-                        selectedVersion?.id === version.id
-                          ? 'bg-primary/10 border border-primary/20'
-                          : 'hover:bg-accent/50 border border-transparent'
-                      }`}
-                    >
-                      <div className="font-medium text-sm truncate">{version.name}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {versionKindLabel(version)}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {dateFormat.format(new Date(version.timestamp))}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {timeFormat.format(new Date(version.timestamp))}
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          {/* Preview */}
-          <div className="flex-1 flex flex-col">
-            {selectedVersion ? (
+          </aside>
+          <section
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            aria-label={t('versionHistorySelectPrompt')}
+          >
+            {selectedVersion && !readError ? (
               <>
-                <div className="p-4 border-b border-border/50 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">{selectedVersion.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {versionKindLabel(selectedVersion)} ·{' '}
-                      {dateTimeFormat.format(new Date(selectedVersion.timestamp))}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <span className="min-w-0 truncate text-sm font-medium">
+                    {versionKindLabel(selectedVersion)}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      disabled={restoring}
                       onClick={() => void handleDelete(selectedVersion)}
                       className="text-destructive hover:text-destructive"
                     >
-                      <Trash2 className="h-4 w-4 mr-1" />
+                      <Trash2 className="mr-1.5 h-4 w-4" />
                       {t('delete')}
                     </Button>
-                    <Button size="sm" onClick={() => handleRestore(selectedVersion)}>
-                      <RotateCcw className="h-4 w-4 mr-1" />
+                    <Button
+                      size="sm"
+                      disabled={restoring}
+                      onClick={() => void handleRestore(selectedVersion)}
+                    >
+                      <RotateCcw className="mr-1.5 h-4 w-4" />
                       {t('restore')}
                     </Button>
                   </div>
                 </div>
-                <ScrollArea className="flex-1 p-4">
+                <div className="min-h-0 flex-1 overflow-auto bg-card p-5 sm:p-8">
                   <div
-                    className="document-preview prose prose-sm max-w-none text-foreground"
-                    dangerouslySetInnerHTML={{ __html: sanitizeDocumentHtml(selectedVersion.content) }}
+                    className="document-preview prose prose-sm dark:prose-invert max-w-none break-words text-foreground"
+                    dangerouslySetInnerHTML={{ __html: preview }}
                   />
-                </ScrollArea>
+                </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>{t('versionHistorySelectPrompt')}</p>
-                </div>
+              <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+                <History aria-hidden="true" className="mb-4 h-7 w-7 text-muted-foreground" />
+                <p className="max-w-xs text-sm text-muted-foreground">
+                  {t(versions.length ? 'versionHistorySelectPrompt' : 'versionHistoryEmptyHint')}
+                </p>
               </div>
             )}
-          </div>
+          </section>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };

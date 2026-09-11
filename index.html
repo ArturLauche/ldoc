@@ -3,108 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LWrite – Free Online Rich Text Editor | Private, No Sign-up</title>
+    <!-- route-head:start -->
+    <title>LWrite – Private rich text editor</title>
     <meta
       name="description"
-      content="Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT — no sign-up, with autosave and version history."
+      content="Write and export documents in your browser, with local autosave and version history."
     />
-    <meta name="author" content="LWrite" />
+    <!-- route-head:end -->
     <meta name="application-name" content="LWrite" />
-    <meta name="robots" content="index,follow" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f5f9" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f172a" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141921" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="LWrite" />
     <meta name="format-detection" content="telephone=no" />
 
-    <link rel="canonical" href="https://lwrite.app/" />
     <!-- Self-hosted interface fonts (no third-party requests). See public/fonts/. -->
-    <link rel="preload" href="/fonts/files/dm-sans-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/files/crimson-pro-400-normal-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link
+      rel="preload"
+      href="/fonts/files/dm-sans-400-normal-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="stylesheet" href="/fonts/dm-sans.css" />
     <link rel="stylesheet" href="/fonts/crimson-pro.css" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-
-    <meta property="og:site_name" content="LWrite" />
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="en_US" />
-    <meta property="og:locale:alternate" content="de_DE" />
-    <meta property="og:title" content="LWrite – Free Online Rich Text Editor | Private, No Sign-up" />
-    <meta
-      property="og:description"
-      content="Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT — no sign-up, with autosave and version history."
-    />
-    <meta property="og:url" content="https://lwrite.app/" />
-    <meta property="og:image" content="https://lwrite.app/og-image.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="LWrite – free private online rich text editor" />
-    <meta property="og:image:type" content="image/png" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@LWrite" />
-    <meta name="twitter:title" content="LWrite – Free Online Rich Text Editor | Private, No Sign-up" />
-    <meta
-      name="twitter:description"
-      content="Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT — no sign-up, with autosave and version history."
-    />
-    <meta name="twitter:image" content="https://lwrite.app/og-image.png" />
-    <meta name="twitter:image:alt" content="LWrite – free private online rich text editor" />
-
-    <!-- Static structured data for crawlers without JS. The SPA useSEO hook
-         keeps an identical @graph in sync during client-side navigation. -->
-    <script type="application/ld+json" id="ldoc-structured-data">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "WebApplication",
-            "name": "LWrite",
-            "url": "https://lwrite.app/",
-            "applicationCategory": "BusinessApplication",
-            "applicationSubCategory": "Rich Text Editor",
-            "operatingSystem": "Web browser",
-            "browserRequirements": "Requires JavaScript. Requires HTML5.",
-            "description": "Free private online rich text editor in your browser. Write, format & export DOCX, PDF, ODT — no sign-up, with autosave and version history.",
-            "isAccessibleForFree": true,
-            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-            "featureList": "Rich text editing, autosave, version history, document library, DOCX/PDF/ODT/RTF/HTML/TXT export, offline-first local storage",
-            "inLanguage": ["en", "de", "es", "fr", "it", "pt", "nl", "ja", "zh", "ar", "ru"]
-          },
-          {
-            "@type": "WebSite",
-            "name": "LWrite",
-            "url": "https://lwrite.app/",
-            "inLanguage": ["en", "de"]
-          }
-        ]
-      }
-    </script>
   </head>
 
   <body>
+    <!-- route-body:start -->
     <div id="root"></div>
-    <noscript>
-      <main>
-        <h1>LWrite – Free Online Rich Text Editor</h1>
-        <p>
-          LWrite is a free, private online rich text editor that runs entirely in
-          your browser. Write, format and export to DOCX, PDF, ODT, RTF, HTML or
-          TXT — no sign-up, with autosave and version history. Your documents stay
-          on your device.
-        </p>
-        <nav>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/terms">Terms of Use</a>
-        </nav>
-      </main>
-    </noscript>
+    <noscript
+      ><main>
+        <h1>LWrite</h1>
+        <p>Enable JavaScript to use the editor. Documents stay in your browser.</p>
+      </main></noscript
+    >
+    <!-- route-body:end -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

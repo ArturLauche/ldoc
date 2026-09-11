@@ -1,3 +1,4 @@
+import { storedItem } from '@/test/documentStorage';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -51,9 +52,10 @@ describe('RichTextEditor', () => {
       expect(screen.getByLabelText('Document name')).toHaveValue('Loaded Document');
     });
     expect(screen.getByLabelText('Document editor')).toHaveTextContent('Saved body');
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Insert table' })).toBeInTheDocument();
-    });
+    // The real lazy toolbar also needs its first module transform on a cold test run.
+    expect(
+      await screen.findByRole('button', { name: 'Insert table' }, { timeout: 3000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
   });
@@ -76,7 +78,8 @@ describe('RichTextEditor', () => {
     });
 
     expect(localStorage.getItem(LIBRARY_STORAGE_KEY)).toBeNull();
-    const storedCurrent = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+    await waitFor(() => expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false'));
+    const storedCurrent = JSON.parse((await storedItem(STORAGE_KEY)) ?? '{}') as {
       content?: string;
     };
     expect(storedCurrent.content).toBe('<p>Already migrated</p>');
@@ -99,17 +102,18 @@ describe('RichTextEditor', () => {
     });
 
     expect(screen.getByLabelText('Document editor')).toHaveTextContent('Legacy body');
-    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+    await waitFor(async () => expect(await storedItem(LEGACY_STORAGE_KEY)).toBeNull());
 
-    await waitFor(() => {
-      expect(getLibraryDocuments()).toHaveLength(1);
+    await waitFor(async () => {
+      expect(await getLibraryDocuments()).toHaveLength(1);
     });
 
-    const storedCurrent = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+    await waitFor(() => expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false'));
+    const storedCurrent = JSON.parse((await storedItem(STORAGE_KEY)) ?? '{}') as {
       id?: string;
       content?: string;
     };
-    const libraryDocument = getLibraryDocuments()[0];
+    const libraryDocument = (await getLibraryDocuments())[0];
     expect(storedCurrent.id).toBe(libraryDocument.id);
     expect(storedCurrent.content).toBe('<p>Legacy body</p>');
     expect(libraryDocument.content).toBe('<p>Legacy body</p>');
@@ -131,14 +135,14 @@ describe('RichTextEditor', () => {
       expect(screen.getByLabelText('Document name')).toHaveValue('No Id Document');
     });
 
-    await waitFor(() => {
-      expect(getLibraryDocuments()).toHaveLength(1);
+    await waitFor(async () => {
+      expect(await getLibraryDocuments()).toHaveLength(1);
     });
 
-    const storedCurrent = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+    await waitFor(() => expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false'));
+    const storedCurrent = JSON.parse((await storedItem(STORAGE_KEY)) ?? '{}') as {
       id?: string;
     };
-    expect(storedCurrent.id).toBe(getLibraryDocuments()[0].id);
+    expect(storedCurrent.id).toBe((await getLibraryDocuments())[0].id);
   });
 });
-

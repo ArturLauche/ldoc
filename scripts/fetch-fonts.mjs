@@ -20,6 +20,7 @@
 import { mkdir, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deduplicateFontSources } from './dedupe-fonts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'public', 'fonts');
@@ -247,6 +248,10 @@ async function run() {
       .join('\n') +
     '\n';
   await writeFile(path.join(LICENSE_DIR, 'README.md'), indexBody);
+
+  // Variable-font responses can reuse the same bytes for several weights.
+  // One source URL lets the browser reuse the download across those faces.
+  await deduplicateFontSources(OUT_DIR);
 
   console.log(
     `\nDone. ${FONTS.length} families, ${totalFiles} woff2 files, ` +

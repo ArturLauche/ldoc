@@ -34,7 +34,7 @@ describe('FileMenu startup', () => {
             onLoadDocument={vi.fn()}
             onCreateNewDocument={vi.fn()}
             onShowVersionHistory={vi.fn()}
-            hasUnsavedChanges={false}
+            onImportDocument={vi.fn()}
           />
         </ConfirmProvider>
       </LocaleProvider>,
@@ -56,7 +56,7 @@ describe('FileMenu startup', () => {
             onLoadDocument={vi.fn()}
             onCreateNewDocument={vi.fn()}
             onShowVersionHistory={vi.fn()}
-            hasUnsavedChanges={false}
+            onImportDocument={vi.fn()}
           />
         </ConfirmProvider>
       </LocaleProvider>,

@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
 
 describe('sanitizeDocumentHtml', () => {
+  it('rejects control-obfuscated executable URLs while preserving image data and Unicode links', () => {
+    for (const code of [1, 9, 10, 13, 31, 32, 127]) {
+      const html = sanitizeDocumentHtml(
+        `<a href="java${String.fromCharCode(code)}script:alert(1)">Link</a>`,
+      );
+      expect(html).toBe('<a>Link</a>');
+    }
+    const safe =
+      '<a href="https://example.org/\u00e9/\ud83c\udf0d">Unicode</a><img src="data:image/png;base64,YWJj" alt="Image">';
+    expect(sanitizeDocumentHtml(safe)).toBe(safe);
+  });
+
   it('removes executable content and unsafe URLs', () => {
     const sanitized = sanitizeDocumentHtml(`
       <p onclick="alert(1)">Hello</p>
@@ -118,4 +130,3 @@ describe('sanitizeDocumentHtml', () => {
     expect(oversized).not.toContain('x'.repeat(50));
   });
 });
-

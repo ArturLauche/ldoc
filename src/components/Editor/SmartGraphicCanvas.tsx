@@ -29,7 +29,7 @@ function getGraphicPalette(colorSet: SmartGraphicColorSet): GraphicPalette {
     return {
       fills: [
         'hsl(var(--primary))',
-        'hsl(var(--secondary))',
+        'hsl(var(--chart-1))',
         'hsl(var(--chart-3))',
         'hsl(var(--chart-4))',
         'hsl(var(--chart-5))',
@@ -88,20 +88,45 @@ export function SmartGraphicCanvas({
       data-compact={compact ? 'true' : 'false'}
     >
       {graphic.title ? (
-        <p className={cn('mb-3 text-center font-semibold text-foreground', compact && 'mb-1 text-[10px]')}>
+        <p
+          className={cn(
+            'mb-3 text-center font-semibold text-foreground',
+            compact && 'mb-1 text-[10px]',
+          )}
+        >
           {graphic.title}
         </p>
       ) : null}
-      {graphic.layoutId === 'list-block' ? <BlockList items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'list-horizontal' ? <HorizontalList items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'process-chevron' ? <ChevronProcess items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'process-steps' ? <StepProcess items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'cycle-basic' ? <CycleLayout items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'hierarchy-org' ? <OrgLayout items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'relationship-opposing' ? <OpposingLayout items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'relationship-radial' ? <RadialLayout items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'matrix-grid' ? <MatrixLayout items={items} shapeProps={shapeProps} /> : null}
-      {graphic.layoutId === 'pyramid-basic' ? <PyramidLayout items={items} shapeProps={shapeProps} /> : null}
+      {graphic.layoutId === 'list-block' ? (
+        <BlockList items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'list-horizontal' ? (
+        <HorizontalList items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'process-chevron' ? (
+        <ChevronProcess items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'process-steps' ? (
+        <StepProcess items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'cycle-basic' ? (
+        <CycleLayout items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'hierarchy-org' ? (
+        <OrgLayout items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'relationship-opposing' ? (
+        <OpposingLayout items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'relationship-radial' ? (
+        <RadialLayout items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'matrix-grid' ? (
+        <MatrixLayout items={items} shapeProps={shapeProps} />
+      ) : null}
+      {graphic.layoutId === 'pyramid-basic' ? (
+        <PyramidLayout items={items} shapeProps={shapeProps} />
+      ) : null}
     </div>
   );
 }
@@ -157,22 +182,32 @@ function GraphicShape({
           value={item.label}
           onChange={(event) => shapeProps.onChangeLabel?.(item.id, event.target.value)}
           onFocus={() => shapeProps.onSelectItem?.(item.id)}
-          className="w-full min-w-0 bg-transparent text-center outline-none placeholder:text-current/60"
-          aria-label={item.label || translate(readStoredLocale() ?? getBrowserLocale(), 'graphicItemPlaceholder')}
+          className="w-full min-w-0 bg-transparent text-center outline-hidden placeholder:text-current/60"
+          aria-label={
+            item.label ||
+            translate(readStoredLocale() ?? getBrowserLocale(), 'graphicItemPlaceholder')
+          }
         />
       ) : (
-        <span className={cn('min-w-0', shapeProps.compact ? 'truncate' : 'break-words')}>{item.label}</span>
+        <span className={cn('min-w-0', shapeProps.compact ? 'truncate' : 'break-words')}>
+          {item.label}
+        </span>
       )}
     </div>
   );
 }
 
-function shapeStyle(style: SmartGraphicStyle, fill: string, palette: GraphicPalette): CSSProperties {
+function shapeStyle(
+  style: SmartGraphicStyle,
+  fill: string,
+  palette: GraphicPalette,
+): CSSProperties {
+  const filledText = readableFillText(fill, palette.textOnFill);
   switch (style) {
     case 'outline':
       return {
         backgroundColor: 'transparent',
-        color: fill,
+        color: palette.textOnSubtle,
         border: `2px solid ${fill}`,
       };
     case 'subtle':
@@ -184,15 +219,26 @@ function shapeStyle(style: SmartGraphicStyle, fill: string, palette: GraphicPale
     case 'intense':
       return {
         backgroundColor: fill,
-        color: palette.textOnFill,
+        color: filledText,
         boxShadow: '0 10px 24px -12px hsl(var(--foreground) / 0.45)',
       };
     default:
       return {
         backgroundColor: fill,
-        color: palette.textOnFill,
+        color: filledText,
       };
   }
+}
+
+/** Choose readable text for the actual named fill, including pale palette steps. */
+function readableFillText(fill: string, fallback: string): string {
+  if (!/^#[\da-f]{6}$/i.test(fill)) return fallback;
+  const channels = [1, 3, 5].map((offset) => {
+    const channel = parseInt(fill.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  return luminance > 0.179 ? '#000000' : '#ffffff';
 }
 
 function BlockList({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
@@ -205,7 +251,13 @@ function BlockList({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProp
   );
 }
 
-function HorizontalList({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function HorizontalList({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   return (
     <div className={cn('flex', shapeProps.compact ? 'flex-nowrap gap-1' : 'flex-wrap gap-2')}>
       {items.map((item, index) => (
@@ -221,14 +273,22 @@ function HorizontalList({ items, shapeProps }: { items: SmartGraphicItem[]; shap
   );
 }
 
-function ChevronProcess({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function ChevronProcess({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   const notch = shapeProps.compact ? 8 : 12;
   return (
     <div
       data-testid="graphic-layout-process-chevron"
       className={cn(
         'flex items-stretch',
-        shapeProps.compact ? 'flex-nowrap gap-0 overflow-hidden' : 'flex-nowrap gap-1 overflow-x-auto',
+        shapeProps.compact
+          ? 'flex-nowrap gap-0 overflow-hidden'
+          : 'flex-nowrap gap-1 overflow-x-auto',
       )}
     >
       {items.map((item, index) => (
@@ -263,7 +323,10 @@ function StepProcess({ items, shapeProps }: { items: SmartGraphicItem[]; shapePr
       )}
     >
       <div
-        className={cn('absolute h-px bg-border', compact ? 'left-4 right-4 top-2.5' : 'left-6 right-6 top-4')}
+        className={cn(
+          'absolute h-px bg-border',
+          compact ? 'left-4 right-4 top-2.5' : 'left-6 right-6 top-4',
+        )}
         style={{ backgroundColor: shapeProps.palette.connector }}
         aria-hidden="true"
       />
@@ -321,7 +384,10 @@ function CycleLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapePr
           return (
             <div
               key={item.id}
-              className={cn('absolute -translate-x-1/2 -translate-y-1/2', compact ? 'w-[28%]' : 'w-[30%]')}
+              className={cn(
+                'absolute -translate-x-1/2 -translate-y-1/2',
+                compact ? 'w-[28%]' : 'w-[30%]',
+              )}
               style={{ left: `${x}%`, top: `${y}%` }}
             >
               <GraphicShape item={item} index={index} shapeProps={shapeProps} />
@@ -363,7 +429,9 @@ function OrgNode({
 }) {
   const compact = shapeProps.compact;
   return (
-    <div className={cn('flex flex-col items-center', compact ? 'min-w-0 w-[4.5rem]' : 'min-w-[7rem]')}>
+    <div
+      className={cn('flex flex-col items-center', compact ? 'min-w-0 w-[4.5rem]' : 'min-w-[7rem]')}
+    >
       <GraphicShape
         item={item}
         index={index + offset}
@@ -377,7 +445,9 @@ function OrgNode({
             style={{ backgroundColor: shapeProps.palette.connector }}
             aria-hidden="true"
           />
-          <div className={cn('flex justify-center', compact ? 'flex-nowrap gap-1' : 'flex-wrap gap-3')}>
+          <div
+            className={cn('flex justify-center', compact ? 'flex-nowrap gap-1' : 'flex-wrap gap-3')}
+          >
             {item.children.map((child, childIndex) => (
               <OrgNode
                 key={child.id}
@@ -394,7 +464,13 @@ function OrgNode({
   );
 }
 
-function OpposingLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function OpposingLayout({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   const mid = Math.ceil(items.length / 2);
   const left = items.slice(0, mid);
   const right = items.slice(mid);
@@ -404,7 +480,9 @@ function OpposingLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shap
       data-testid="graphic-layout-relationship-opposing"
       className={cn(
         'grid items-stretch',
-        compact ? 'grid-cols-[1fr_auto_1fr] gap-1' : 'grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr]',
+        compact
+          ? 'grid-cols-[1fr_auto_1fr] gap-1'
+          : 'grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr]',
       )}
     >
       <div className={cn('flex flex-col', compact ? 'gap-1' : 'gap-2')}>
@@ -422,14 +500,25 @@ function OpposingLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shap
       </div>
       <div className={cn('flex flex-col', compact ? 'gap-1' : 'gap-2')}>
         {right.map((item, index) => (
-          <GraphicShape key={item.id} item={item} index={index + left.length} shapeProps={shapeProps} />
+          <GraphicShape
+            key={item.id}
+            item={item}
+            index={index + left.length}
+            shapeProps={shapeProps}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function RadialLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function RadialLayout({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   const [center, ...rest] = items;
   if (!center) return null;
   const compact = shapeProps.compact;
@@ -443,7 +532,12 @@ function RadialLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeP
           compact ? 'h-[7.5rem] w-[7.5rem] max-h-full max-w-full' : 'min-h-[16rem] w-full max-w-lg',
         )}
       >
-        <div className={cn('absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2', compact ? 'w-[36%]' : 'w-[42%]')}>
+        <div
+          className={cn(
+            'absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2',
+            compact ? 'w-[36%]' : 'w-[42%]',
+          )}
+        >
           <GraphicShape
             item={center}
             index={0}
@@ -458,7 +552,10 @@ function RadialLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeP
           return (
             <div
               key={item.id}
-              className={cn('absolute -translate-x-1/2 -translate-y-1/2', compact ? 'w-[26%]' : 'w-[28%]')}
+              className={cn(
+                'absolute -translate-x-1/2 -translate-y-1/2',
+                compact ? 'w-[26%]' : 'w-[28%]',
+              )}
               style={{ left: `${x}%`, top: `${y}%` }}
             >
               <GraphicShape item={item} index={index + 1} shapeProps={shapeProps} />
@@ -470,10 +567,19 @@ function RadialLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeP
   );
 }
 
-function MatrixLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function MatrixLayout({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   const compact = shapeProps.compact;
   return (
-    <div data-testid="graphic-layout-matrix-grid" className={cn('grid grid-cols-2', compact ? 'gap-1' : 'gap-2')}>
+    <div
+      data-testid="graphic-layout-matrix-grid"
+      className={cn('grid grid-cols-2', compact ? 'gap-1' : 'gap-2')}
+    >
       {items.slice(0, 4).map((item, index) => (
         <GraphicShape
           key={item.id}
@@ -487,7 +593,13 @@ function MatrixLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeP
   );
 }
 
-function PyramidLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shapeProps: ShapeProps }) {
+function PyramidLayout({
+  items,
+  shapeProps,
+}: {
+  items: SmartGraphicItem[];
+  shapeProps: ShapeProps;
+}) {
   const compact = shapeProps.compact;
   return (
     <div
@@ -497,7 +609,11 @@ function PyramidLayout({ items, shapeProps }: { items: SmartGraphicItem[]; shape
       {items.map((item, index) => {
         const width = 46 + ((index + 1) / items.length) * 54;
         return (
-          <div key={item.id} style={{ width: `${width}%` }} className={compact ? 'min-w-0' : 'min-w-[8rem]'}>
+          <div
+            key={item.id}
+            style={{ width: `${width}%` }}
+            className={compact ? 'min-w-0' : 'min-w-[8rem]'}
+          >
             <GraphicShape item={item} index={index} shapeProps={shapeProps} />
           </div>
         );

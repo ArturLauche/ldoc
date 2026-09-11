@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatMessage } from '@/lib/translations';
-import { useLocale } from '@/components/locale-provider';
+import { useLocale } from '@/hooks/useLocale';
 import { getSearchState } from './findReplaceExtension';
 
 interface FindReplaceBarProps {
@@ -54,7 +54,11 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role=dialog], [role=alertdialog]')
+      ) {
         event.preventDefault();
         onClose();
       }
@@ -99,17 +103,18 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
     <div
       role="search"
       aria-label={t('findReplaceTitle')}
-      className="glass-bar flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border/20"
+      className="app-bar flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border/20"
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <Input
           ref={findInputRef}
+          data-find-input
           value={query}
           onChange={(event) => handleQueryChange(event.target.value)}
           onKeyDown={handleFindKeyDown}
           placeholder={t('findPlaceholder')}
           aria-label={t('findPlaceholder')}
-          className="h-8 w-44 text-sm"
+          className="h-9 w-36 min-w-0 text-sm sm:w-44"
         />
         <span className="min-w-16 text-xs text-muted-foreground tabular-nums" aria-live="polite">
           {query
@@ -123,7 +128,7 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
             <Button
               variant="ghost"
               size="sm"
-              className={cn('h-8 w-8 p-0', caseSensitive && 'bg-primary/10 text-primary')}
+              className={cn('h-9 w-9 p-0', caseSensitive && 'bg-primary/10 text-primary')}
               onClick={handleCaseSensitiveToggle}
               aria-label={t('matchCase')}
               aria-pressed={caseSensitive}
@@ -138,7 +143,7 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-9 w-9 p-0"
               onClick={() => editor?.commands.findPreviousMatch()}
               disabled={!matchCount}
               aria-label={t('findPrevious')}
@@ -153,7 +158,7 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-9 w-9 p-0"
               onClick={() => editor?.commands.findNextMatch()}
               disabled={!matchCount}
               aria-label={t('findNext')}
@@ -165,18 +170,18 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
         </Tooltip>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <Input
           value={replacement}
           onChange={(event) => setReplacement(event.target.value)}
           placeholder={t('replacePlaceholder')}
           aria-label={t('replacePlaceholder')}
-          className="h-8 w-44 text-sm"
+          className="h-9 w-36 min-w-0 text-sm sm:w-44"
         />
         <Button
           variant="outline"
           size="sm"
-          className="h-8"
+          className="h-9"
           onClick={() => editor?.commands.replaceCurrentMatch(replacement)}
           disabled={!matchCount}
         >
@@ -185,7 +190,7 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
         <Button
           variant="outline"
           size="sm"
-          className="h-8"
+          className="h-9"
           onClick={handleReplaceAll}
           disabled={!matchCount}
         >
@@ -196,7 +201,7 @@ export const FindReplaceBar = ({ editor, onClose }: FindReplaceBarProps) => {
       <Button
         variant="ghost"
         size="sm"
-        className="ml-auto h-8 w-8 p-0"
+        className="ml-auto h-9 w-9 p-0"
         onClick={onClose}
         aria-label={t('findCloseAria')}
       >

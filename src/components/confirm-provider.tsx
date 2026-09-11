@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,19 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useLocale } from '@/components/locale-provider';
-
-export interface ConfirmOptions {
-  title: string;
-  description?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-}
-
-type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
-
-const ConfirmContext = createContext<ConfirmFn | null>(null);
+import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from '@/hooks/useConfirm';
+import { useLocale } from '@/hooks/useLocale';
 
 interface PendingConfirm {
   options: ConfirmOptions;
@@ -35,12 +24,16 @@ interface PendingConfirm {
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const { t } = useLocale();
   const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const pendingRef = useRef<PendingConfirm | null>(null);
 
   const confirm = useCallback<ConfirmFn>((options) => {
     return new Promise<boolean>((resolve) => {
       // A second request while one is open cancels the first one.
       pendingRef.current?.resolve(false);
+      if (!pendingRef.current)
+        returnFocusRef.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const next = { options, resolve };
       pendingRef.current = next;
       setPending(next);
@@ -57,7 +50,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && settle(false)}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            requestAnimationFrame(() => {
+              if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
+            });
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>{pending?.options.title}</AlertDialogTitle>
             {pending?.options.description ? (
@@ -83,12 +83,4 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       </AlertDialog>
     </ConfirmContext.Provider>
   );
-}
-
-export function useConfirm(): ConfirmFn {
-  const context = useContext(ConfirmContext);
-  if (!context) {
-    throw new Error('useConfirm must be used within a ConfirmProvider');
-  }
-  return context;
 }

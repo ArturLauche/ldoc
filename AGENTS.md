@@ -5,20 +5,28 @@
 LWrite is a browser-only, local-first rich-text editor (React + TipTap); there is no backend.
 
 - Package manager: `npm@10.9.2` (`package-lock.json` is authoritative; ignore `bun.lock`).
-- Stack (locked in `package-lock.json`): Vite `5.4.21`, React `18.3.1`,
-  TypeScript `5.8.3`, TipTap React/StarterKit `3.15.3`, Tailwind `3.4.17`,
-  react-router-dom `6.30.3`, Vitest `2.1.9`, ESLint `9.32.0`.
-- Keep Vite 5 with Vitest `2.1.x`; Vitest 4 breaks clean installs.
+- Node.js `24.21.0` is pinned in `.node-version` for development and Cloudflare.
+  Supported engines: `^22.22.2 || ^24.15.0 || >=26.0.0` (jsdom 30's requirement).
+- Stack (locked in `package-lock.json`): Vite `8.3.0`, React `19.3.0`,
+  TypeScript `6.0.3`, TipTap React/StarterKit `3.31.3`, Tailwind `4.3.3`,
+  react-router-dom `7.18.3`, Vitest `5.0.0`, ESLint `10.10.0`.
+- The authorized major-version migration replaces the former Vite 5 / Vitest 2
+  restriction. TypeScript stays on `~6.0.3` until typescript-eslint supports 7;
+  never bypass incompatible peers with `--force` or `--legacy-peer-deps`.
+- Tailwind 4 uses `@tailwindcss/vite`; tokens and source paths live in
+  `src/index.css`. Do not reintroduce a Tailwind 3 / PostCSS configuration.
 - Cloudflare Pages: build `npm run build`, output `dist`, clean `npm ci` must pass.
 
 ```sh
 npm install              # install
-npm run dev              # dev server (Vite prints URL, typically http://localhost:5173)
+npm run dev              # dev server (Vite prints URL, normally http://127.0.0.1:8080)
 npm run lint             # ESLint
-npm run typecheck        # tsc -p tsconfig.app.json --noEmit
+npm run typecheck        # strict app + build configuration TypeScript
 npm run test -- --run    # Vitest, single run
-npm run build            # production build
+npm run build            # production build + HTML/metadata verification
 npm run validate         # lint + typecheck + test --run + build (full gate)
+npm run audit            # all runtime + development dependency advisories
+npm run test:browser -- --project=chromium # production persistence regressions (build first)
 ```
 
 ## Setup and test instructions
@@ -30,14 +38,16 @@ npm run validate         # lint + typecheck + test --run + build (full gate)
    Only the known shadcn Fast Refresh and Browserslist/Bluebird/JSZip/chunk-size
    build warnings may stay warnings.
 4. After dependency changes: `npm install`, then `npm ci --progress=false`, then
-   `npm run validate`. Keep `package.json` and `package-lock.json` in sync.
+   `npm run validate` and `npm run audit`. Keep `package.json` and
+   `package-lock.json` in sync. Verify the peer graph with `npm ls --all`.
 
 ## Code style (repo-specific)
 
 - Strict TS (`strict`, `noUnusedLocals/Parameters`): no `any`; narrow with unions,
   type guards, and `unknown` validation for external data.
 - Path alias `@/*` maps to `./src/*`; use `@/lib/...`, `@/components/...`.
-- All localStorage goes through `src/lib/storage.ts`; never call
+- Documents/library/history use the async `src/lib/documentDatabase.ts` IndexedDB transaction boundary. Await transaction completion before reporting a save. Keep current record + library saves atomic, with a baseline conflict check. Reads must also work when storage writes fail.
+- Preferences and legacy ingress: all localStorage goes through `src/lib/storage.ts`; never call
   `window.localStorage` in new code. Handle its typed result:
 - All document HTML (read, import, restore, persist, preview, export) goes through
   `sanitizeDocumentHtml` in `src/lib/sanitizeDocumentHtml.ts`; never add a second sanitizer.
@@ -76,7 +86,7 @@ export type DocumentStorageResult<T> =
 - Branch off `main`, open a PR back to `main` (history: `cursor/*`, `claude/*` branches,
   squash/merge as `#48`–`#50`); keep the diff focused and the route surface intentional.
 - For this task type docs-only change: commit `AGENTS.md` directly and push to `main`.
-- No `.github/workflows` in repo; the deploy gate is Cloudflare Pages clean install + build.
+- `.github/workflows/validate.yml` runs clean install, peer graph, full validation, audit, and Chromium persistence checks. Cloudflare Pages independently builds the preview. Browser tests use the production `dist` build; install browsers with `npx playwright install chromium` (or `chromium firefox webkit` for full local checks).
 
 ## Boundaries
 

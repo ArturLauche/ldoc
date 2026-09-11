@@ -1,25 +1,26 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import { useLocale } from '@/components/locale-provider';
+import { t as translate, type TranslationKey } from '@/lib/translations';
 import { ObfuscatedEmail } from '@/components/ObfuscatedEmail';
 import { siteConfig, hasControllerContact } from '@/lib/siteConfig';
 import type { LegalCopy } from '@/lib/legalContent';
 
 interface LegalPageLayoutProps {
   copy: LegalCopy;
+  locale: 'en' | 'de';
 }
 
 /**
  * Shared chrome for the public legal pages (privacy / terms). Defined once so
  * both pages share the same header, contact card, typography and footer links.
  */
-export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
-  const { t } = useLocale();
+export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
+  const t = (key: TranslationKey) => translate(locale, key);
 
   return (
     <div className="min-h-screen bg-background flex flex-col app-shell">
-      <header className="glass-bar sticky top-0 z-40">
+      <header className="app-bar sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 h-12 max-w-3xl mx-auto w-full">
           <Link to="/" className="flex items-center gap-2 min-w-0">
             <BrandLogo title={siteConfig.siteName} />
@@ -30,7 +31,7 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
           <Link
             to="/"
             aria-label={t('legalBackToEditor')}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex min-h-9 min-w-9 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('legalBackToEditor')}</span>
@@ -38,8 +39,8 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-10">
-        <article className="prose prose-neutral dark:prose-invert max-w-none">
+      <main className="flex-1 w-full max-w-3xl mx-auto px-5 py-10 sm:py-14">
+        <article className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h1:tracking-tight">
           <h1>{copy.title}</h1>
           <p className="text-sm text-muted-foreground">
             {copy.lastUpdatedLabel}: {siteConfig.lastUpdated}
@@ -51,7 +52,7 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
               src/lib/siteConfig.ts). A single contact email is enough.
               Production deployments MUST configure at least one contact;
               otherwise a neutral placeholder (plus a dev-only hint) is shown. */}
-          <section className="not-prose my-6 rounded-xl border border-border bg-card p-4 text-card-foreground">
+          <section className="not-prose my-6 border-y border-border py-5 text-card-foreground">
             <h2 className="text-base font-semibold mb-2">{copy.contactHeading}</h2>
             {hasControllerContact ? (
               <ul className="space-y-1 text-sm">
@@ -118,15 +119,21 @@ export const LegalPageLayout = ({ copy }: LegalPageLayoutProps) => {
         </article>
       </main>
 
-      <footer className="px-4 py-4 glass-bar glass-bar--footer">
+      <footer className="px-4 py-4 app-footer">
         <nav className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <Link to="/" className="hover:text-foreground transition-colors">
             {siteConfig.siteName}
           </Link>
-          <Link to="/privacy" className="hover:text-foreground transition-colors">
+          <Link
+            to={locale === 'de' ? '/datenschutz' : '/privacy'}
+            className="hover:text-foreground transition-colors"
+          >
             {t('privacyPolicy')}
           </Link>
-          <Link to="/terms" className="hover:text-foreground transition-colors">
+          <Link
+            to={locale === 'de' ? '/nutzung' : '/terms'}
+            className="hover:text-foreground transition-colors"
+          >
             {t('termsOfUse')}
           </Link>
         </nav>

@@ -1,6 +1,10 @@
 export type DocumentStorageResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: 'quota' | 'unavailable' | 'invalid-data'; error: unknown };
+  | {
+      ok: false;
+      code: 'quota' | 'unavailable' | 'invalid-data';
+      error: unknown;
+    };
 
 export class DocumentStorageError extends Error {
   constructor(
@@ -16,7 +20,10 @@ function storageUnavailable(error: unknown): DocumentStorageResult<never> {
   return { ok: false, code: 'unavailable', error };
 }
 
-function detectStorageError(error: unknown): DocumentStorageResult<never> {
+export function detectStorageError(error: unknown): DocumentStorageResult<never> {
+  if (error instanceof DocumentStorageError) {
+    return { ok: false, code: error.code, error: error.cause };
+  }
   if (error instanceof DOMException) {
     if (
       error.name === 'QuotaExceededError' ||
@@ -89,7 +96,11 @@ export function readStorageJson<T>(
   try {
     const parsed = JSON.parse(raw.value);
     if (!validate(parsed)) {
-      return { ok: false, code: 'invalid-data', error: new Error(`Invalid storage data for ${key}.`) };
+      return {
+        ok: false,
+        code: 'invalid-data',
+        error: new Error(`Invalid storage data for ${key}.`),
+      };
     }
 
     return { ok: true, value: parsed };
@@ -99,7 +110,13 @@ export function readStorageJson<T>(
 }
 
 export function writeStorageJson<T>(key: string, value: T): DocumentStorageResult<void> {
-  return writeStorageItem(key, JSON.stringify(value));
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) throw new Error('Value is not JSON serializable.');
+    return writeStorageItem(key, serialized);
+  } catch (error) {
+    return { ok: false, code: 'invalid-data', error };
+  }
 }
 
 export function throwIfStorageFailed<T>(result: DocumentStorageResult<T>): T {
@@ -109,4 +126,3 @@ export function throwIfStorageFailed<T>(result: DocumentStorageResult<T>): T {
 
   return result.value;
 }
-

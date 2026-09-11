@@ -21,10 +21,9 @@ export function SmartGraphicView({
     : null;
 
   const selectItem = (id: string) => {
-    editor.storage.smartGraphic.activeItemId = id;
     const pos = typeof getPos === 'function' ? getPos() : getPos;
     if (typeof pos === 'number') {
-      editor.commands.setNodeSelection(pos);
+      editor.chain().setNodeSelection(pos).selectSmartGraphicItem(id).run();
     }
   };
 

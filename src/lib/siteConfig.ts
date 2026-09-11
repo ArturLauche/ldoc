@@ -19,7 +19,9 @@
  *   sufficient for a public production deployment.
  */
 
-const env = import.meta.env;
+import { DEFAULT_SITE_URL } from './siteMetadata.ts';
+
+const env = import.meta.env ?? {};
 
 const cleaned = (value: string | undefined): string =>
   typeof value === 'string' ? value.trim() : '';
@@ -33,7 +35,7 @@ const runtimeOrigin = (): string => {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
-  return 'http://localhost:8080';
+  return DEFAULT_SITE_URL;
 };
 
 // Only accept http(s) URLs so a misconfigured (or malicious) value such as
@@ -53,8 +55,8 @@ const safeHttpUrl = (value: string | undefined): string => {
 export const siteConfig = {
   /** Public project name. */
   siteName: withFallback(env.VITE_SITE_NAME, 'LWrite'),
-  /** Canonical public site URL. Falls back to the current origin in dev. */
-  siteUrl: withFallback(env.VITE_SITE_URL, runtimeOrigin()),
+  /** Current public origin. VITE_SITE_URL controls static build metadata only. */
+  siteUrl: runtimeOrigin(),
   /** Responsible person/entity (data controller). Empty until configured. */
   controllerName: cleaned(env.VITE_LEGAL_CONTROLLER_NAME),
   /** Public contact email the operator intentionally exposes. Empty until configured. */
@@ -77,15 +79,3 @@ export const siteConfig = {
  */
 export const hasControllerContact =
   siteConfig.contactEmail.length > 0 || siteConfig.contactUrl.length > 0;
-
-// Non-fatal signal for production deployments that forgot to configure a
-// reachable contact. We deliberately do not fail the build (an existing
-// deployment may not have set these yet), but we surface it in the console so
-// the misconfiguration is visible; the pages fall back to the placeholder.
-if (import.meta.env.PROD && !hasControllerContact) {
-  console.warn(
-    '[siteConfig] No reachable legal contact is configured. Set VITE_LEGAL_CONTACT_EMAIL ' +
-      '(or VITE_LEGAL_CONTACT_URL) so the privacy/terms pages show a real contact instead ' +
-      'of a placeholder.',
-  );
-}

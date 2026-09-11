@@ -20,6 +20,7 @@ declare module '@tiptap/core' {
     smartGraphic: {
       insertSmartGraphic: (layoutId?: SmartGraphicLayoutId) => ReturnType;
       updateSmartGraphic: (graphic: SmartGraphicModel) => ReturnType;
+      selectSmartGraphicItem: (id: string | null) => ReturnType;
       deleteSmartGraphic: () => ReturnType;
     };
   }
@@ -104,6 +105,15 @@ export const SmartGraphic = Node.create({
 
   addCommands() {
     return {
+      selectSmartGraphicItem:
+        (id) =>
+        ({ tr, dispatch }) => {
+          if (dispatch) {
+            this.storage.activeItemId = id;
+            tr.setMeta('smartGraphicActiveId', id);
+          }
+          return true;
+        },
       insertSmartGraphic:
         (layoutId) =>
         ({ chain, state }) => {

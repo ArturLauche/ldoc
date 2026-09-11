@@ -25,3 +25,9 @@ describe('storage facade', () => {
   });
 });
 
+it('classifies JSON serialization failures without throwing outside the facade', async () => {
+  const { writeStorageJson } = await import('./storage');
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  expect(writeStorageJson('circular', circular)).toMatchObject({ ok: false, code: 'invalid-data' });
+});

@@ -1,3 +1,4 @@
+import { IMAGE_DATA_URL_PATTERN } from './media';
 import { logError } from './logger';
 import {
   MAX_GRAPHIC_JSON_LENGTH,
@@ -9,16 +10,19 @@ import {
 
 const BLOCKED_ELEMENTS = 'script, style, iframe, object, embed, link, meta, base';
 const URI_ATTRIBUTES = new Set(['href', 'src', 'xlink:href', 'formaction']);
-const SAFE_DATA_URI_PATTERN = /^data:image\/(?:png|gif|jpeg|jpg|webp|svg\+xml);base64,/i;
 const ALLOWED_ELEMENTS = new Set([
   'a',
   'blockquote',
+  'b',
   'br',
   'code',
   'col',
   'colgroup',
   'div',
   'em',
+  'i',
+  'del',
+  'strike',
   'h1',
   'h2',
   'h3',
@@ -97,7 +101,8 @@ const ALLOWED_STYLE_PROPERTIES = new Set([
   'width',
 ]);
 const COLWIDTH_PATTERN = /^\d{1,4}(?:,\d{1,4}){0,32}$/;
-const FORBIDDEN_STYLE_PATTERN = /expression\s*\(|url\s*\(|@import|-moz-binding|behavior\s*:|var\s*\(/i;
+const FORBIDDEN_STYLE_PATTERN =
+  /expression\s*\(|url\s*\(|@import|-moz-binding|behavior\s*:|var\s*\(/i;
 const CSS_SIZE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)$/i;
 const CSS_LENGTH_PATTERN = /^(?:0|[1-9]\d{0,4})(?:\.\d+)?(?:px|pt|em|rem|%)$/i;
 const CSS_NUMBER_OR_SIZE_PATTERN = /^(?:normal|(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)?)$/i;
@@ -105,12 +110,10 @@ const CSS_PERCENT_PATTERN = /^(?:0|[1-9]\d?|100)(?:\.\d+)?%$/;
 const FONT_FAMILY_PATTERN = /^[a-z0-9\s"',._-]+$/i;
 
 function removeControlAndWhitespace(value: string): string {
-  return Array.from(value)
-    .filter((character) => {
-      const code = character.charCodeAt(0);
-      return code > 0x20 && code !== 0x7f;
-    })
-    .join('');
+  // Match exactly the ASCII controls/whitespace excluded by URI checks.
+  // Embedded images can contain megabytes of base64; avoid per-character arrays.
+  // eslint-disable-next-line no-control-regex -- Intentionally strip URL-obfuscating controls.
+  return value.replace(/[\u0000-\u0020\u007f]/g, '');
 }
 
 function isUnsafeUri(attributeName: string, value: string): boolean {
@@ -124,7 +127,12 @@ function isUnsafeUri(attributeName: string, value: string): boolean {
   if (!trimmed) return false;
   if (normalized.startsWith('javascript:')) return true;
   if (normalized.startsWith('vbscript:')) return true;
-  if (normalized.startsWith('data:') && !SAFE_DATA_URI_PATTERN.test(trimmed)) return true;
+  // Embedded images are valid only as image sources, never as executable links.
+  if (
+    normalized.startsWith('data:') &&
+    (attributeName !== 'src' || !IMAGE_DATA_URL_PATTERN.test(trimmed))
+  )
+    return true;
 
   return false;
 }
@@ -133,10 +141,18 @@ function isSafeColorValue(value: string): boolean {
   const trimmed = value.trim();
   if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) return true;
   if (/^[a-z]+$/i.test(trimmed)) return true;
-  if (/^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(trimmed)) {
+  if (
+    /^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(
+      trimmed,
+    )
+  ) {
     return true;
   }
-  if (/^hsla?\(\s*\d{1,3}(?:deg|rad|turn)?\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(trimmed)) {
+  if (
+    /^hsla?\(\s*\d{1,3}(?:deg|rad|turn)?\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%(?:\s*,\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)$/i.test(
+      trimmed,
+    )
+  ) {
     return true;
   }
   return false;
@@ -167,13 +183,17 @@ function isSafeStyleDeclaration(property: string, value: string): boolean {
       return /^(top|middle|bottom|baseline)$/i.test(value);
     case 'text-decoration':
     case 'text-decoration-line':
-      return /^(none|underline|line-through|underline line-through|line-through underline)$/i.test(value);
+      return /^(none|underline|line-through|underline line-through|line-through underline)$/i.test(
+        value,
+      );
     case 'height':
       return /^auto$/i.test(value);
     case 'max-width':
     case 'min-width':
     case 'width':
-      return /^auto$/i.test(value) || CSS_PERCENT_PATTERN.test(value) || CSS_LENGTH_PATTERN.test(value);
+      return (
+        /^auto$/i.test(value) || CSS_PERCENT_PATTERN.test(value) || CSS_LENGTH_PATTERN.test(value)
+      );
     default:
       return false;
   }
