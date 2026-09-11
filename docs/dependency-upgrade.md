@@ -1,6 +1,6 @@
 # Major-version compatibility review
 
-Reviewed on 2026-09-10, following the explicit authorization to replace the former
+Reviewed on 2026-09-10–11, following the explicit authorization to replace the former
 Vite 5 / Vitest 2 restriction. This continues the [quality review](quality-review.md).
 
 The npm lockfile reports **zero known vulnerabilities**, including development
@@ -73,6 +73,7 @@ measurements, not a claim about real-world network latency.
 | Home startup JavaScript | 329,835 bytes / 10 requests | 353,379 bytes / 18 requests |
 | Privacy route JavaScript | 128,308 bytes / 5 requests | 122,617 bytes / 6 requests |
 | Shared CSS | 12,561 bytes | 13,833 bytes |
+| Home font files (sum of file sizes) | 158,996 bytes / 4 requests | 36,932 bytes / 1 request |
 | npm audit findings | 7 | 0 |
 
 The initial upgraded build loaded 158,826 bytes of JavaScript on the privacy
@@ -81,6 +82,16 @@ editor route reduced that to 122,617 bytes (about 23% less), without removing an
 editor controls. Home JavaScript is about 7% larger than the pre-upgrade build;
 the supported frameworks and complete functionality take priority over hiding
 that increase. No eager all-vendor bundle or speculative chunk merging was added.
+
+Live font inspection found that the 400, 500, and 600 DM Sans files were identical
+but downloaded under separate URLs. The offline font maintenance script now
+shares URLs for 62 duplicate sources across the catalog. All 149 face descriptors
+and referenced font bytes were compared with the originals; weights, styles,
+Unicode ranges, font choices, and old URLs remain intact. The generator applies
+the same deduplication on refresh. Removing the unused Crimson Pro preload and
+sharing DM Sans sources saves 122,064 bytes of font payload at startup. Bold DM
+Sans and Crimson Pro still load correctly on demand. Font figures above are
+file sizes for the observed requests; HTTP compression can change transfer bytes.
 
 Vite builds completed in approximately 1–3 seconds on the review machine with
 the Oxc plugin. This is an observed local range, not a controlled speedup claim.
@@ -109,6 +120,11 @@ loaded only when PDF export is requested.
   and a single H1. An unknown URL serves the custom 404 artifact with status 404.
 - The Vite development server and Oxc Fast Refresh preserve an edited document
   without reloading the page.
+- Cloudflare successfully built commit `5388e35`; the deployed preview passed
+  save/reload, all six downloads, mobile WCAG/overflow checks, German metadata,
+  legal-route responses, sitemap/robots, and the real custom 404. The review bot
+  timed out without providing findings. Hosting-injected analytics still causes
+  CORS errors; there were no application JavaScript exceptions.
 
 The three existing shadcn Fast Refresh lint warnings and lazy PDF chunk-size
 warning remain visible. Firefox's scroll-linked positioning advisory reproduces

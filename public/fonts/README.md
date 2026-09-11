@@ -27,6 +27,13 @@ files; this README is hand-maintained and left untouched. Only the `latin` and
 back to system fonts — the same behaviour as when a browser blocks external
 fonts. Do not edit the generated files by hand; re-run the script instead.
 
+The generator shares source URLs when SHA-256 hashes prove the binaries are
+identical. All `@font-face` weights, styles, and Unicode ranges stay intact, and
+the old binary filenames remain available for cached stylesheets. To apply only
+this optimization to the committed catalog without network access, run
+`node scripts/dedupe-fonts.mjs`. Only the interface's DM Sans regular font is
+preloaded; other faces load when used.
+
 ## Origin and licensing
 
 The fonts originate from [Google Fonts](https://fonts.google.com) and remain
