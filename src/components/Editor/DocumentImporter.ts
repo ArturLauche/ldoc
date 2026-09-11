@@ -1,5 +1,6 @@
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
-import { assertDocumentSize } from '@/lib/documentLimits';
+import { assertDocumentSize, MAX_DOCUMENT_BYTES } from '@/lib/documentLimits';
+import { openDocumentArchive } from '@/lib/documentArchive';
 
 export type SupportedFormat = 'txt' | 'html' | 'htm' | 'rtf' | 'docx' | 'odt' | 'ott' | 'fodt';
 
@@ -61,7 +62,13 @@ function detectFormat(file: File): SupportedFormat {
 // Import DOCX using mammoth
 async function importDocx(file: File): Promise<string> {
   const mammoth = await import('mammoth').then((module) => module.default);
-  const arrayBuffer = await file.arrayBuffer();
+  const zip = await openDocumentArchive(await file.arrayBuffer());
+  // Mammoth receives only bounded, already inflated entries, including media
+  // and auxiliary XML. A post-conversion assertion alone would be too late.
+  const arrayBuffer = await zip.generateAsync({
+    type: 'arraybuffer',
+    compression: 'STORE',
+  });
   const result = await mammoth.convertToHtml(
     { arrayBuffer },
     {
@@ -74,6 +81,7 @@ async function importDocx(file: File): Promise<string> {
       }),
     },
   );
+  assertDocumentSize(result.value);
   return result.value;
 }
 
@@ -260,6 +268,14 @@ async function convertOdtXmlToHtml(
 ): Promise<string> {
   const officeText = doc.getElementsByTagName('office:text')[0];
   if (doc.querySelector('parsererror') || !officeText) throw new Error('Invalid OpenDocument XML.');
+  // A tiny XML node can request billions of spaces, independently of ZIP size.
+  // Bound the cumulative expansion before any repeat() or parallel conversion.
+  let spaces = 0;
+  for (const element of Array.from(officeText.getElementsByTagName('text:s'))) {
+    spaces += Math.max(1, Number.parseInt(getXmlAttribute(element, 'text:c'), 10) || 1);
+    if (!Number.isSafeInteger(spaces) || spaces > MAX_DOCUMENT_BYTES)
+      throw new Error('Expanded document exceeds the size limit.');
+  }
   const html = await processOdtBlocks(officeText, resolveImage);
   return html || '<p></p>';
 }
@@ -267,8 +283,7 @@ async function convertOdtXmlToHtml(
 // Import ODT (OpenDocument Text)
 async function importOdt(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const JSZip = await import('jszip').then((module) => module.default);
-  const zipFile = await JSZip.loadAsync(arrayBuffer);
+  const zipFile = await openDocumentArchive(arrayBuffer);
 
   const contentXml = await zipFile.file('content.xml')?.async('string');
   if (!contentXml) {

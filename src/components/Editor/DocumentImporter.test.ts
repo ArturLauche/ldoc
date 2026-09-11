@@ -85,7 +85,9 @@ describe('importDocument', () => {
     });
 
     const result = await importDocument(
-      new File([blob], 'image.odt', { type: 'application/vnd.oasis.opendocument.text' }),
+      new File([blob], 'image.odt', {
+        type: 'application/vnd.oasis.opendocument.text',
+      }),
     );
 
     expect(result.content).toContain('<img src="data:image/png;base64,YWJj" alt="Dot">');
@@ -113,4 +115,53 @@ it('preserves common bold and italic tags from imported HTML', async () => {
   );
   expect(result.content).toContain('<b>Bold</b>');
   expect(result.content).toContain('<i>Italic</i>');
+});
+
+it.each(['odt', 'ott', 'docx'])(
+  'bounds actual expansion of a compact %s archive before conversion',
+  async (extension) => {
+    const zip = new JSZip();
+    zip.file(
+      extension === 'docx' ? 'word/document.xml' : 'content.xml',
+      'a'.repeat(20 * 1024 * 1024 + 1),
+    );
+    const data = await zip.generateAsync({
+      type: 'uint8array',
+      compression: 'DEFLATE',
+    });
+    expect(data.byteLength).toBeLessThan(100_000);
+    await expect(
+      importDocument(new File([Uint8Array.from(data)], `large.${extension}`)),
+    ).rejects.toThrow('size limit');
+  },
+);
+
+it('counts all expanded archive entries against a shared budget', async () => {
+  const zip = new JSZip();
+  for (let i = 0; i < 3; i++) zip.file(`Pictures/image-${i}.png`, new Uint8Array(7 * 1024 * 1024));
+  zip.file('content.xml', '<office:document/>');
+  const data = await zip.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+  });
+  await expect(importDocument(new File([Uint8Array.from(data)], 'images.odt'))).rejects.toThrow(
+    'size limit',
+  );
+});
+
+it('rejects an individual embedded image over 10 MB before base64 conversion', async () => {
+  const zip = new JSZip();
+  zip.file('word/media/image.png', new Uint8Array(10 * 1024 * 1024 + 1));
+  const data = await zip.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+  });
+  await expect(importDocument(new File([Uint8Array.from(data)], 'image.docx'))).rejects.toThrow(
+    'size limit',
+  );
+});
+
+it('bounds OpenDocument space repetition before building HTML', async () => {
+  const xml = `<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:p><text:s text:c="2000000000"/></text:p></office:text></office:body></office:document>`;
+  await expect(importDocument(new File([xml], 'spaces.fodt'))).rejects.toThrow('size limit');
 });

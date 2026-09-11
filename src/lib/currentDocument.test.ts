@@ -11,17 +11,20 @@ describe('current document boundary', () => {
     '{"content":3}',
     '{"content":"ok","id":12}',
     '{"content":"ok","savedAt":"invalid"}',
-  ])('rejects invalid fields without mutating %s', (raw) => {
+  ])('rejects invalid fields without mutating %s', async (raw) => {
     localStorage.setItem(STORAGE_KEY, raw);
-    expect(readCurrentDocument('Untitled')).toMatchObject({ ok: false, code: 'invalid-data' });
+    expect(await readCurrentDocument('Untitled')).toMatchObject({
+      ok: false,
+      code: 'invalid-data',
+    });
     expect(localStorage.getItem(STORAGE_KEY)).toBe(raw);
   });
-  it('normalizes a legacy record and sanitizes HTML', () => {
+  it('normalizes a legacy record and sanitizes HTML', async () => {
     localStorage.setItem(
       LEGACY_STORAGE_KEY,
       JSON.stringify({ content: '<p onclick="x()">Safe</p>', name: '' }),
     );
-    expect(readCurrentDocument('Untitled')).toMatchObject({
+    expect(await readCurrentDocument('Untitled')).toMatchObject({
       ok: true,
       value: {
         source: LEGACY_STORAGE_KEY,

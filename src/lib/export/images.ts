@@ -101,7 +101,10 @@ async function fetchRemoteImage(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
   try {
-    const response = await fetch(src, { mode: 'cors', signal: controller.signal });
+    const response = await fetch(src, {
+      mode: 'cors',
+      signal: controller.signal,
+    });
     if (!response.ok) {
       warnings.add('image-fetch-failed', src);
       return undefined;
@@ -147,8 +150,11 @@ async function readBoundedImage(
       if (done) break;
       size += value.byteLength;
       if (size > MAX_IMAGE_BYTES) {
+        // Abort/cancel cleanup must not replace the already known size error.
+        // Some response streams reject cancel() as soon as abort() errors them.
+        const cancel = reader.cancel().catch(() => undefined);
         controller.abort();
-        await reader.cancel();
+        void cancel;
         return undefined;
       }
       chunks.push(value);

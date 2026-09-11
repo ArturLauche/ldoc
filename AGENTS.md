@@ -26,6 +26,7 @@ npm run test -- --run    # Vitest, single run
 npm run build            # production build + HTML/metadata verification
 npm run validate         # lint + typecheck + test --run + build (full gate)
 npm run audit            # all runtime + development dependency advisories
+npm run test:browser -- --project=chromium # production persistence regressions (build first)
 ```
 
 ## Setup and test instructions
@@ -45,7 +46,8 @@ npm run audit            # all runtime + development dependency advisories
 - Strict TS (`strict`, `noUnusedLocals/Parameters`): no `any`; narrow with unions,
   type guards, and `unknown` validation for external data.
 - Path alias `@/*` maps to `./src/*`; use `@/lib/...`, `@/components/...`.
-- All localStorage goes through `src/lib/storage.ts`; never call
+- Documents/library/history use the async `src/lib/documentDatabase.ts` IndexedDB transaction boundary. Await transaction completion before reporting a save. Keep current record + library saves atomic, with a baseline conflict check. Reads must also work when storage writes fail.
+- Preferences and legacy ingress: all localStorage goes through `src/lib/storage.ts`; never call
   `window.localStorage` in new code. Handle its typed result:
 - All document HTML (read, import, restore, persist, preview, export) goes through
   `sanitizeDocumentHtml` in `src/lib/sanitizeDocumentHtml.ts`; never add a second sanitizer.
@@ -84,7 +86,7 @@ export type DocumentStorageResult<T> =
 - Branch off `main`, open a PR back to `main` (history: `cursor/*`, `claude/*` branches,
   squash/merge as `#48`–`#50`); keep the diff focused and the route surface intentional.
 - For this task type docs-only change: commit `AGENTS.md` directly and push to `main`.
-- No `.github/workflows` in repo; the deploy gate is Cloudflare Pages clean install + build.
+- `.github/workflows/validate.yml` runs clean install, peer graph, full validation, audit, and Chromium persistence checks. Cloudflare Pages independently builds the preview. Browser tests use the production `dist` build; install browsers with `npx playwright install chromium` (or `chromium firefox webkit` for full local checks).
 
 ## Boundaries
 

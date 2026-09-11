@@ -26,6 +26,7 @@ interface Props {
   documents: StoredDocument[];
   currentId: string;
   error: boolean;
+  loading?: boolean;
   importing: boolean;
   onImport: () => void;
   onOpen: (doc: StoredDocument) => void;
@@ -41,6 +42,7 @@ export function DocumentLibraryDialog({
   documents,
   currentId,
   error,
+  loading = false,
   importing,
   onImport,
   onOpen,
@@ -63,13 +65,21 @@ export function DocumentLibraryDialog({
           block.after(parsed.createTextNode(' '));
         });
         const text = (parsed.body.textContent ?? '').replace(/\s+/g, ' ').trim();
-        return { doc, text, search: `${doc.name}\n${text}`.toLocaleLowerCase(locale) };
+        return {
+          doc,
+          text,
+          search: `${doc.name}\n${text}`.toLocaleLowerCase(locale),
+        };
       }),
     [documents, locale],
   );
   const filtered = entries.filter((entry) => entry.search.includes(deferredQuery));
   const dateFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
     [locale],
   );
 
@@ -101,9 +111,13 @@ export function DocumentLibraryDialog({
         </div>
         <div
           className="min-h-48 max-h-[min(24rem,55dvh)] overflow-y-auto border-y border-border"
-          aria-busy={query.trim().toLocaleLowerCase(locale) !== deferredQuery}
+          aria-busy={loading || query.trim().toLocaleLowerCase(locale) !== deferredQuery}
         >
-          {error ? (
+          {loading ? (
+            <p role="status" className="py-8 text-sm text-muted-foreground">
+              {t('loadingDocument')}
+            </p>
+          ) : error ? (
             <p role="alert" className="py-8 text-sm text-destructive">
               {t('libraryReadFailed')}
             </p>

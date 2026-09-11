@@ -1,6 +1,10 @@
 export type DocumentStorageResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: 'quota' | 'unavailable' | 'invalid-data'; error: unknown };
+  | {
+      ok: false;
+      code: 'quota' | 'unavailable' | 'invalid-data';
+      error: unknown;
+    };
 
 export class DocumentStorageError extends Error {
   constructor(
@@ -16,7 +20,10 @@ function storageUnavailable(error: unknown): DocumentStorageResult<never> {
   return { ok: false, code: 'unavailable', error };
 }
 
-function detectStorageError(error: unknown): DocumentStorageResult<never> {
+export function detectStorageError(error: unknown): DocumentStorageResult<never> {
+  if (error instanceof DocumentStorageError) {
+    return { ok: false, code: error.code, error: error.cause };
+  }
   if (error instanceof DOMException) {
     if (
       error.name === 'QuotaExceededError' ||

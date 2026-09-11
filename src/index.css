@@ -127,10 +127,12 @@
   }
 }
 
-.app-bar,
-.toolbar-bar {
-  background: hsl(var(--card));
-  border-bottom: 1px solid hsl(var(--border));
+@layer components {
+  .app-bar,
+  .toolbar-bar {
+    background: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border));
+  }
 }
 .app-footer {
   border-top: 1px solid hsl(var(--border));

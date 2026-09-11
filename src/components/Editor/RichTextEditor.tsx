@@ -20,15 +20,21 @@ import { useDocumentSession } from './useDocumentSession';
 const FileMenu = lazy(() => import('./FileMenu').then((module) => ({ default: module.FileMenu })));
 
 const EditorToolbar = lazy(() =>
-  import('./EditorToolbar').then((module) => ({ default: module.EditorToolbar })),
+  import('./EditorToolbar').then((module) => ({
+    default: module.EditorToolbar,
+  })),
 );
 
 const VersionHistory = lazy(() =>
-  import('./VersionHistory').then((module) => ({ default: module.VersionHistory })),
+  import('./VersionHistory').then((module) => ({
+    default: module.VersionHistory,
+  })),
 );
 
 const FindReplaceBar = lazy(() =>
-  import('./FindReplaceBar').then((module) => ({ default: module.FindReplaceBar })),
+  import('./FindReplaceBar').then((module) => ({
+    default: module.FindReplaceBar,
+  })),
 );
 
 const FileMenuFallback = () => (
@@ -50,6 +56,7 @@ export const RichTextEditor = () => {
   const editor = useEditor({
     extensions,
     content: '<p></p>',
+    editable: false,
     // Create the editor after commit so suspended/concurrent renders cannot
     // expose an instance that TipTap has already disposed.
     immediatelyRender: false,
@@ -65,6 +72,8 @@ export const RichTextEditor = () => {
     },
   });
   const {
+    isLoading,
+    isTransitioning,
     documentId,
     documentName,
     lastSaved,
@@ -123,7 +132,7 @@ export const RichTextEditor = () => {
       >
         {t('skipToEditor')}
       </a>
-      <header className="sticky top-0 z-40" data-editor-chrome>
+      <header inert={isLoading || isTransitioning} className="sticky top-0 z-40" data-editor-chrome>
         {/* Header */}
         <div className="app-bar">
           <div className="flex items-center justify-between gap-2 px-3 h-12 sm:px-5">
@@ -266,7 +275,7 @@ export const RichTextEditor = () => {
         <div role="alert" className="session-notice" data-editor-chrome>
           <p>{t('externalChanges')}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={saveConflictCopy}>
+            <Button size="sm" disabled={isLoading || isTransitioning} onClick={saveConflictCopy}>
               {t('saveAsCopy')}
             </Button>
             <Button size="sm" variant="outline" onClick={() => void reloadExternalDocument()}>
@@ -289,12 +298,18 @@ export const RichTextEditor = () => {
       <main
         id="lwrite-editor"
         tabIndex={-1}
+        aria-busy={isLoading || isTransitioning}
         className="editor-main flex-1 max-w-4xl mx-auto w-full min-w-0"
       >
         <h1 className="sr-only" lang="en">
           LWrite – Private rich text editor
         </h1>
         <div className="editor-container my-5 mx-3 sm:my-8 sm:mx-6">
+          {(isLoading || isTransitioning) && (
+            <p role="status" className="px-6 pt-4 text-sm text-muted-foreground">
+              {t('loadingDocument')}
+            </p>
+          )}
           <EditorContent editor={editor} className="editor-content" />
         </div>
       </main>

@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   test: {
+    include: ['src/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
     environmentOptions: {
       jsdom: {

@@ -110,12 +110,10 @@ const CSS_PERCENT_PATTERN = /^(?:0|[1-9]\d?|100)(?:\.\d+)?%$/;
 const FONT_FAMILY_PATTERN = /^[a-z0-9\s"',._-]+$/i;
 
 function removeControlAndWhitespace(value: string): string {
-  return Array.from(value)
-    .filter((character) => {
-      const code = character.charCodeAt(0);
-      return code > 0x20 && code !== 0x7f;
-    })
-    .join('');
+  // Match exactly the ASCII controls/whitespace excluded by URI checks.
+  // Embedded images can contain megabytes of base64; avoid per-character arrays.
+  // eslint-disable-next-line no-control-regex -- Intentionally strip URL-obfuscating controls.
+  return value.replace(/[\u0000-\u0020\u007f]/g, '');
 }
 
 function isUnsafeUri(attributeName: string, value: string): boolean {

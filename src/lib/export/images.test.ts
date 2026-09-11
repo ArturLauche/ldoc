@@ -59,11 +59,11 @@ describe('export image preparation', () => {
     });
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(body, { headers: { 'content-type': 'image/png', 'content-length': '1' } }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(body, {
+          headers: { 'content-type': 'image/png', 'content-length': '1' },
+        }),
+      ),
     );
     const warnings = new WarningCollector('odt');
     await prepareExportImages(
@@ -111,4 +111,22 @@ describe('export image preparation', () => {
     );
     expect(warnings.toArray()).toEqual([expect.objectContaining({ code: 'image-decode-failed' })]);
   });
+});
+
+it('preserves the size warning when stream cancellation rejects', async () => {
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(10 * 1024 * 1024 + 1));
+    },
+    cancel() {
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    },
+  });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+  const warnings = new WarningCollector('docx');
+  await prepareExportImages(
+    documentWithImages('<img src="https://images.example/large.png">'),
+    warnings,
+  );
+  expect(warnings.toArray()).toEqual([expect.objectContaining({ code: 'image-too-large' })]);
 });

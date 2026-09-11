@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type RefObject } from 'react';
+import { useState, useEffect, useCallback, useMemo, type RefObject } from 'react';
 import { History, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import {
   deleteDocumentVersion,
   getDocumentVersions,
+  migrateLegacyVersionsToDocument,
   saveDocumentVersion,
   type StoredVersion,
 } from '@/lib/versionHistory';
@@ -20,9 +21,12 @@ import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 
-function readVersions(documentId: string) {
+async function readVersions(documentId: string) {
   try {
-    return { versions: getDocumentVersions(documentId, { strict: true }), readError: false };
+    return {
+      versions: await getDocumentVersions(documentId, { strict: true }),
+      readError: false,
+    };
   } catch {
     return { versions: [] as StoredVersion[], readError: true };
   }
@@ -49,12 +53,19 @@ export const VersionHistory = ({
 }: VersionHistoryProps) => {
   const { t, locale } = useLocale();
   const confirm = useConfirm();
-  // Mounted on opening and keyed by document id: load once, without an empty first frame.
-  const [{ versions, readError }, setHistory] = useState(() => readVersions(documentId));
+  const [{ versions, readError }, setHistory] = useState<{
+    versions: StoredVersion[];
+    readError: boolean;
+  }>({ versions: [], readError: false });
+  const [loading, setLoading] = useState(true);
   const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(versions[0] ?? null);
   const [restoring, setRestoring] = useState(false);
   const dateTimeFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
     [locale],
   );
   const preview = useMemo(
@@ -62,23 +73,45 @@ export const VersionHistory = ({
     [selectedVersion?.content],
   );
 
-  const loadVersions = useCallback(() => {
-    const next = readVersions(documentId);
+  const applyHistory = useCallback((next: { versions: StoredVersion[]; readError: boolean }) => {
     setHistory(next);
+    setLoading(false);
     setSelectedVersion(
-      (selected) => next.versions.find((item) => item.id === selected?.id) ?? next.versions[0] ?? null,
+      (selected) =>
+        next.versions.find((item) => item.id === selected?.id) ?? next.versions[0] ?? null,
     );
-  }, [documentId]);
+  }, []);
+  const loadVersions = useCallback(async () => {
+    applyHistory(await readVersions(documentId));
+  }, [applyHistory, documentId]);
 
-  const saveVersion = () => {
+  useEffect(() => {
+    let cancelled = false;
+    // Also supports legacy history when there was no current document at startup.
+    void migrateLegacyVersionsToDocument(documentId)
+      .then(() => readVersions(documentId))
+      .then(
+        (next) => {
+          if (!cancelled) applyHistory(next);
+        },
+        () => {
+          if (!cancelled) applyHistory({ versions: [], readError: true });
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [applyHistory, documentId]);
+
+  const saveVersion = async () => {
     try {
-      saveDocumentVersion({
+      await saveDocumentVersion({
         documentId,
         name: documentName,
         content: currentContent,
         kind: 'manual',
       });
-      loadVersions();
+      await loadVersions();
       toast.success(t('versionSavedToast'));
     } catch {
       toast.error(t('versionActionFailed'));
@@ -122,8 +155,8 @@ export const VersionHistory = ({
     )
       return;
     try {
-      deleteDocumentVersion(version.id);
-      loadVersions();
+      await deleteDocumentVersion(version.id);
+      await loadVersions();
       toast.success(t('versionDeletedToast'));
     } catch {
       toast.error(t('versionActionFailed'));
@@ -143,7 +176,9 @@ export const VersionHistory = ({
           <DialogTitle>{t('versionHistoryTitle')}</DialogTitle>
           <DialogDescription>
             {documentName} ·{' '}
-            {formatMessage(t('versionHistorySavedCount'), { count: versions.length })}
+            {formatMessage(t('versionHistorySavedCount'), {
+              count: versions.length,
+            })}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
@@ -154,13 +189,17 @@ export const VersionHistory = ({
                 size="sm"
                 variant="outline"
                 className="w-full"
-                disabled={readError}
+                disabled={readError || loading}
               >
                 {t('versionHistorySaveCurrent')}
               </Button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-              {readError ? (
+              {loading ? (
+                <p role="status" className="p-3 text-sm text-muted-foreground">
+                  {t('loadingDocument')}
+                </p>
+              ) : readError ? (
                 <p role="alert" className="p-3 text-sm text-destructive">
                   {t('versionReadFailed')}
                 </p>

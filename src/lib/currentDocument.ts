@@ -1,7 +1,8 @@
-import { createDocumentId, LEGACY_STORAGE_KEY, STORAGE_KEY } from './documentLibrary';
+import { LEGACY_STORAGE_KEY, STORAGE_KEY } from './documentLibrary';
 import { assertDocumentSize } from './documentLimits';
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
-import { readStorageItem, writeStorageJson, type DocumentStorageResult } from './storage';
+import { type DocumentStorageResult } from './storage';
+import { readDocumentItem, writeDocumentItem } from './documentDatabase';
 
 export interface CurrentDocument {
   id: string;
@@ -17,15 +18,14 @@ export interface LoadedCurrentDocument {
   needsNormalization: boolean;
 }
 
-export function readCurrentDocument(
+export async function readCurrentDocument(
   defaultName: string,
-): DocumentStorageResult<LoadedCurrentDocument | null> {
+): Promise<DocumentStorageResult<LoadedCurrentDocument | null>> {
   for (const source of [STORAGE_KEY, LEGACY_STORAGE_KEY]) {
-    const raw = readStorageItem(source);
+    const raw = await readDocumentItem(source);
     if (!raw.ok) return raw;
     if (raw.value === null) continue;
     try {
-      assertDocumentSize(raw.value);
       const value: unknown = JSON.parse(raw.value);
       if (!value || typeof value !== 'object') throw new Error('Invalid document record.');
       const record = value as Record<string, unknown>;
@@ -38,8 +38,12 @@ export function readCurrentDocument(
       ) {
         throw new Error('Invalid document fields.');
       }
+      assertDocumentSize(record.content);
       const content = sanitizeDocumentHtml(record.content);
-      const id = typeof record.id === 'string' && record.id.trim() ? record.id : createDocumentId();
+      const id =
+        typeof record.id === 'string' && record.id.trim()
+          ? record.id
+          : await legacyDocumentId(source, raw.value);
       return {
         ok: true,
         value: {
@@ -63,14 +67,27 @@ export function readCurrentDocument(
   return { ok: true, value: null };
 }
 
-export function writeCurrentDocument(document: CurrentDocument): DocumentStorageResult<void> {
+export async function writeCurrentDocument(
+  document: CurrentDocument,
+): Promise<DocumentStorageResult<void>> {
   try {
     assertDocumentSize(document.content);
-    return writeStorageJson(STORAGE_KEY, {
-      ...document,
-      content: sanitizeDocumentHtml(document.content),
-    });
+    return writeDocumentItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...document,
+        content: sanitizeDocumentHtml(document.content),
+      }),
+    );
   } catch (error) {
     return { ok: false, code: 'invalid-data', error };
   }
+}
+
+async function legacyDocumentId(source: string, raw: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${source}\n${raw}`),
+  );
+  return `legacy-${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }

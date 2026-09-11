@@ -52,6 +52,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { logError } from '@/lib/logger';
 import {
   addImportedDocumentToLibrary,
+  createLibraryBackup,
   deleteLibraryDocument,
   duplicateLibraryDocument,
   exportLibraryDocumentsFile,
@@ -69,7 +70,7 @@ interface FileMenuProps {
   documentId: string;
   documentName: string;
   setDocumentName: (name: string) => void;
-  onSaveDocument: () => boolean;
+  onSaveDocument: () => boolean | Promise<boolean>;
   onLoadDocument: (doc: StoredDocument) => Promise<boolean>;
   onCreateNewDocument: () => Promise<boolean>;
   onImportDocument: (content: string, name: string) => Promise<boolean>;
@@ -98,14 +99,18 @@ export const FileMenu = ({
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [libraryError, setLibraryError] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
 
-  const refreshLibraryDocuments = useCallback(() => {
+  const refreshLibraryDocuments = useCallback(async () => {
+    setLibraryLoading(true);
     try {
-      setLibraryDocuments(getLibraryDocuments({ strict: true }));
+      setLibraryDocuments(await getLibraryDocuments({ strict: true }));
       setLibraryError(false);
     } catch {
       setLibraryError(true);
+    } finally {
+      setLibraryLoading(false);
     }
   }, []);
 
@@ -159,23 +164,33 @@ export const FileMenu = ({
     }
   };
 
-  const handleSave = () => {
-    onSaveDocument();
-    refreshLibraryDocuments();
+  const handleSave = async () => {
+    await onSaveDocument();
+    await refreshLibraryDocuments();
   };
 
-  const handleExportLibrary = () => {
+  const handleExportLibrary = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
     try {
-      if (!onSaveDocument()) return;
-      const documents = getLibraryDocuments({ strict: true });
-      const payload = exportLibraryDocumentsFile(documents);
+      const { payload, count, includesDraft } = await createLibraryBackup(
+        {
+          id: documentId,
+          name: documentName,
+          content: editor?.getHTML() ?? '<p></p>',
+        },
+        t('backupDraftSuffix'),
+      );
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       const blob = new Blob([payload], { type: 'application/json' });
       downloadBlob(blob, fileName);
-      toast.success(formatMessage(t('exportedLibraryToast'), { count: documents.length }));
+      toast.success(formatMessage(t('exportedLibraryToast'), { count }));
+      if (includesDraft) toast.info(t('backupIncludesDraft'));
     } catch (error) {
       logError('Library export failed', error);
       toast.error(t('exportLibraryFailed'));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -191,7 +206,7 @@ export const FileMenu = ({
       try {
         assertDocumentSize(file);
         const raw = await file.text();
-        const result = importUnifiedLibraryFile(raw);
+        const result = await importUnifiedLibraryFile(raw);
         refreshLibraryDocuments();
         toast.success(
           formatMessage(t('importedLibraryToast'), {
@@ -235,12 +250,12 @@ export const FileMenu = ({
           assertDocumentSize(file);
           const isLibraryFile = /\.json$/i.test(file.name) || file.type === 'application/json';
           if (isLibraryFile) {
-            const doc = importSingleLibraryDocument(await file.text());
+            const doc = await importSingleLibraryDocument(await file.text());
             lastName = doc.name;
           } else {
             const { importDocument } = await import('./DocumentImporter');
             const result = await importDocument(file);
-            const doc = addImportedDocumentToLibrary(result.fileName, result.content);
+            const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
             lastName = doc.name;
           }
           imported += 1;
@@ -281,9 +296,9 @@ export const FileMenu = ({
     }
   };
 
-  const handleDuplicateLibraryDocument = (doc: StoredDocument) => {
+  const handleDuplicateLibraryDocument = async (doc: StoredDocument) => {
     try {
-      const duplicated = duplicateLibraryDocument(doc.id);
+      const duplicated = await duplicateLibraryDocument(doc.id);
       refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDuplicatedToast'), { name: duplicated.name }));
     } catch (error) {
@@ -295,7 +310,9 @@ export const FileMenu = ({
   const handleDeleteLibraryDocument = async (doc: StoredDocument) => {
     const confirmed = await confirm({
       title: t('confirmDeleteDocumentTitle'),
-      description: formatMessage(t('confirmDeleteDocumentBody'), { name: doc.name }),
+      description: formatMessage(t('confirmDeleteDocumentBody'), {
+        name: doc.name,
+      }),
       confirmLabel: t('delete'),
       destructive: true,
     });
@@ -303,7 +320,7 @@ export const FileMenu = ({
 
     try {
       if (doc.id === documentId && !(await onCreateNewDocument())) return;
-      deleteLibraryDocument(doc.id);
+      await deleteLibraryDocument(doc.id);
       refreshLibraryDocuments();
       toast.success(formatMessage(t('documentDeletedToast'), { name: doc.name }));
     } catch (error) {
@@ -335,7 +352,9 @@ export const FileMenu = ({
       if (warnings.length) {
         const summary =
           warnings.length === 1
-            ? formatMessage(t('exportWarningSingle'), { message: warnings[0].message })
+            ? formatMessage(t('exportWarningSingle'), {
+                message: warnings[0].message,
+              })
             : formatMessage(t('exportWarningMany'), {
                 count: warnings.length,
                 message: warnings[0].message,
@@ -403,7 +422,7 @@ export const FileMenu = ({
               {t('libraryTransfer')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
-              <DropdownMenuItem onClick={handleExportLibrary}>
+              <DropdownMenuItem onClick={handleExportLibrary} disabled={isExporting}>
                 <Download className="h-4 w-4 mr-2" />
                 {t('exportAllDocs')}
               </DropdownMenuItem>
@@ -514,6 +533,7 @@ export const FileMenu = ({
         documents={libraryDocuments}
         currentId={documentId}
         error={libraryError}
+        loading={libraryLoading}
         importing={isImporting}
         onImport={handleImportSingleDocument}
         onOpen={(doc) => void handleOpenLibraryDocument(doc)}

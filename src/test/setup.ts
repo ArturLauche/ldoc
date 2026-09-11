@@ -1,5 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: new IDBFactory(),
+  });
+});
 
 class MemoryStorage implements Storage {
   private readonly items = new Map<string, string>();

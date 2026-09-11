@@ -18,7 +18,7 @@ guarantee that the application or its dependencies contain no vulnerabilities.
 | Vitest | 2.1.9 | 5.0.0 | Compatible Vite peer graph, existing jsdom test isolation, real editor and conversion regressions. |
 | jsdom | 29.1.1 | 30.0.1 | Raise the Node floor to the supported engine ranges. |
 | Tailwind | 3.4.19 | 4.3.3 | Vite plugin and CSS theme/source declarations; remove old Tailwind/PostCSS configuration. |
-| tailwind-merge | 2.6.0 | 3.6.0 | Match Tailwind 4 utility conflict handling. |
+| tailwind-merge | 2.6.1 | 3.6.0 | Match Tailwind 4 utility conflict handling. |
 | ESLint | 9.39.5 | 10.10.0 | Compatible plugins; resolve the new React hooks rules without disabling them. |
 | TypeScript | 5.9.3 | 6.0.3 | Strict app and build checks; hold the compatible minor until the ESLint parser supports newer versions. |
 | Supporting UI/test packages | Previous lockfile | Current registry releases | Update Radix, Lucide, Sonner, next-themes, Testing Library, globals, and type packages together. |

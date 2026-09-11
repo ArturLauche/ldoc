@@ -270,10 +270,12 @@ That earlier clean install also reported ESLint 9's end-of-support deprecation.
   [hydration advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-337j-9hxr-rhxg)
   and [navigation advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-wrjc-x8rr-h8h6).
 
-localStorage still has no atomic cross-tab transactions and can fail on quota
+At the initial review, localStorage had no atomic cross-tab transactions and could fail on quota
 or browser shutdown. Export backups remain necessary. There is no service
 worker or guaranteed fresh offline startup. Runtime origin detection cannot
 rewrite raw HTML before a crawler executes JavaScript; deployments on another
 production host must configure the static build origin. Actual Cloudflare
 deployment status and public contact configuration require follow-through at
 release time.
+
+The subsequent [PR review follow-up](pr-review-followup.md) replaces document persistence with IndexedDB transactions, preserves the 20 MB / 10 MB boundaries, and adds production browser regressions. The localStorage concurrency limitation described above is historical.

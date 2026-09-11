@@ -31,13 +31,17 @@ npm run test -- --run # Unit and component tests
 npm run build         # Production assets plus HTML/metadata verification
 npm run check:build   # Recheck an existing dist directory
 npm run preview       # Local Vite production preview
-npm run validate      # All required checks
+npm run validate      # Lint, types, unit/component tests and production build
+npx playwright install chromium # Install the browser for persistence checks
+npm run test:browser -- --project=chromium # Test production persistence at size limits
 npm run audit         # Runtime and development dependency advisories
 ```
 
 The supported stack is React 19, Router 7, Vite 8, Vitest 5, Tailwind 4, and ESLint 10. TypeScript 6.0.3 is held on its compatible minor because typescript-eslint currently requires TypeScript below 6.1. See [the major-version review](docs/dependency-upgrade.md) for compatibility decisions and verification, [AGENTS.md](AGENTS.md) for repository boundaries, and [the quality review](docs/quality-review.md) for the broader implementation.
 
 Supported browser floors are Chrome/Edge 111, Firefox 128, and Safari 16.4, following [Tailwind 4's CSS requirements](https://tailwindcss.com/docs/upgrade-guide#browser-requirements). Use a current browser for supported security updates. Theme tokens, font stacks, and Tailwind source paths live in `src/index.css`.
+
+GitHub Actions runs the clean npm install, full validation, dependency audit, and Chromium persistence regressions on pull requests. Cloudflare Pages also verifies its production clean install and build. See [PR review decisions](docs/pr-review-followup.md) for the persistence migration and archive limits.
 
 ## Persistence and recovery
 
@@ -47,7 +51,7 @@ Clearing site data, using another browser/profile, or changing the origin gives 
 
 Document input is limited to 20 MB and uploaded images to 10 MB. Actual browser storage capacity can be lower. Imports, saves, previews, restores, and exports use the shared HTML sanitizer. Remote images still contact the image server; offline availability and cross-origin export permission depend on that server. Fonts are served from `public/fonts`, without Google Fonts requests.
 
-The application has no service worker. An already loaded editor can work without a connection, but a fresh offline visit is not guaranteed. Concurrent tabs receive conflict warnings, but localStorage does not provide database transactions or atomic compare-and-swap.
+The application has no service worker. An already loaded editor can work without a connection, but a fresh offline visit is not guaranteed. Documents and version history use IndexedDB. Saves check for conflicts and commit the current record and library in one transaction. Existing localStorage document keys are read during migration and retained as recovery sources; IndexedDB becomes authoritative when the corresponding records are written. Theme and language remain in localStorage. Browser storage can still be cleared or run out of space, so keep downloaded backups.
 
 ## Cloudflare Pages
 
