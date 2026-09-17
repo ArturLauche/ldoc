@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { supportedLocales, t } from './translations';
 import {
   addGraphicItem,
   canAddGraphicItem,
@@ -17,6 +18,8 @@ import {
   updateGraphicTitle,
   updateItemLabel,
   MAX_GRAPHIC_JSON_LENGTH,
+  SMART_GRAPHIC_LAYOUTS,
+  flattenGraphicItems,
 } from './smartGraphic';
 
 describe('smartGraphic model', () => {
@@ -227,5 +230,55 @@ describe('smartGraphic model', () => {
     expect(canAddGraphicItem(model)).toBe(false);
     const next = addGraphicItem(model, model.items[0].id);
     expect(next.items).toHaveLength(4);
+  });
+
+  it('keeps user spacing in stored labels and titles through serialization', () => {
+    const model = createStarterGraphic('list-block');
+    const labeled = updateItemLabel(model, model.items[0].id, 'Hello world ');
+    expect(labeled.items[0].label).toBe('Hello world ');
+    const serialized = serializeSmartGraphic(labeled);
+    expect(serialized).toContain('Hello world ');
+    expect(parseSmartGraphicJson(serialized, { trim: false })?.items[0].label).toBe('Hello world ');
+  });
+
+  it('localizes starter, add, clamp and switch fillers for every supported locale', () => {
+    for (const locale of supportedLocales) {
+      for (const layout of SMART_GRAPHIC_LAYOUTS) {
+        const starter = createStarterGraphic(layout.id, locale);
+        const kinds = flattenGraphicItems(starter.items).map((item) => item.label);
+        expect(kinds.length).toBeGreaterThan(0);
+        expect(kinds.every((label) => label.startsWith(t(locale, 'graphicItemPlaceholder')) ||
+          label.startsWith(t(locale, 'graphicPlaceholderStep')) ||
+          label.startsWith(t(locale, 'graphicPlaceholderTopic')) ||
+          label.startsWith(t(locale, 'graphicPlaceholderLevel')))).toBe(true);
+        const switched = switchGraphicLayout(starter, 'list-block', locale);
+        expect(flattenGraphicLabels(switched).every((label) => label.length > 0)).toBe(true);
+        const withAdded = addGraphicItem(starter, starter.items[0].id, locale);
+        if (canAddGraphicItem(starter)) {
+          expect(flattenGraphicLabels(withAdded).some((label) => label.length > 0)).toBe(true);
+        }
+      }
+    }
+    expect(t('de', 'graphicPlaceholderStep')).toBe('Schritt');
+    expect(t('de', 'graphicPlaceholderTopic')).toBe('Thema');
+    expect(t('de', 'graphicPlaceholderLevel')).toBe('Ebene');
+    expect(t('en', 'graphicPlaceholderStep')).toBe('Step');
+  });
+
+  it('trim-parses imported JSON but preserves spaces when normalizing live edits', () => {
+    const model = createStarterGraphic('list-block');
+    const labeled = updateItemLabel(model, model.items[0].id, 'A B ');
+    const parsed = parseSmartGraphicJson(JSON.parse(JSON.stringify({ ...labeled })), { trim: false });
+    expect(parsed?.items[0].label).toBe('A B ');
+    const trimmedParse = parseSmartGraphicJson({ ...labeled });
+    expect(trimmedParse?.items[0].label).toBe('A B');
+  });
+
+  it('keeps hierarchy children intact when switching and adding items', () => {
+    const org = createStarterGraphic('hierarchy-org');
+    const switched = switchGraphicLayout(org, 'list-horizontal');
+    expect(flattenGraphicLabels(switched).length).toBe(flattenGraphicItems(org.items).length);
+    const restored = switchGraphicLayout(switched, 'hierarchy-org');
+    expect(restored.items[0].children.length).toBe(0);
   });
 });

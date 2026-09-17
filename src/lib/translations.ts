@@ -266,6 +266,9 @@ const en = {
   graphicColorGray: 'Gray',
   graphicTitlePlaceholder: 'Title',
   graphicItemPlaceholder: 'Text',
+  graphicPlaceholderStep: 'Step',
+  graphicPlaceholderTopic: 'Topic',
+  graphicPlaceholderLevel: 'Level',
   graphicDelete: 'Delete graphic',
 
   // Font picker
@@ -428,6 +431,10 @@ const es: TranslationCatalog = {
   matchCase: 'Distinguir mayúsculas',
   findNoMatches: 'Sin coincidencias',
   replacedAllToast: 'Se reemplazaron {count} coincidencias',
+  graphicItemPlaceholder: 'Texto',
+  graphicPlaceholderStep: 'Paso',
+  graphicPlaceholderTopic: 'Tema',
+  graphicPlaceholderLevel: 'Nivel',
 };
 
 const fr: TranslationCatalog = {
@@ -512,6 +519,10 @@ const fr: TranslationCatalog = {
   matchCase: 'Respecter la casse',
   findNoMatches: 'Aucune occurrence',
   replacedAllToast: '{count} occurrences remplacées',
+  graphicItemPlaceholder: 'Texte',
+  graphicPlaceholderStep: 'Étape',
+  graphicPlaceholderTopic: 'Sujet',
+  graphicPlaceholderLevel: 'Niveau',
 };
 
 const de: TranslationCatalog = {
@@ -738,6 +749,9 @@ const de: TranslationCatalog = {
   graphicColorGray: 'Grau',
   graphicTitlePlaceholder: 'Titel',
   graphicItemPlaceholder: 'Text',
+  graphicPlaceholderStep: 'Schritt',
+  graphicPlaceholderTopic: 'Thema',
+  graphicPlaceholderLevel: 'Ebene',
   graphicDelete: 'Grafik löschen',
   fontSearchPlaceholder: 'Schriftarten durchsuchen...',
   fontDefault: 'Standard',
@@ -830,6 +844,10 @@ const it: TranslationCatalog = {
   notFoundTitle: 'Ops! Pagina non trovata',
   notFoundCta: 'Torna alla home',
   notFoundDescription: 'La pagina richiesta non è stata trovata.',
+  graphicItemPlaceholder: 'Testo',
+  graphicPlaceholderStep: 'Passaggio',
+  graphicPlaceholderTopic: 'Argomento',
+  graphicPlaceholderLevel: 'Livello',
 };
 
 const pt: TranslationCatalog = {
@@ -848,6 +866,10 @@ const pt: TranslationCatalog = {
   notFoundTitle: 'Ops! Página não encontrada',
   notFoundCta: 'Voltar para a página inicial',
   notFoundDescription: 'A página solicitada não foi encontrada.',
+  graphicItemPlaceholder: 'Texto',
+  graphicPlaceholderStep: 'Etapa',
+  graphicPlaceholderTopic: 'Tópico',
+  graphicPlaceholderLevel: 'Nível',
 };
 
 const nl: TranslationCatalog = {
@@ -866,6 +888,10 @@ const nl: TranslationCatalog = {
   notFoundTitle: 'Oeps! Pagina niet gevonden',
   notFoundCta: 'Terug naar home',
   notFoundDescription: 'De opgevraagde pagina kon niet worden gevonden.',
+  graphicItemPlaceholder: 'Tekst',
+  graphicPlaceholderStep: 'Stap',
+  graphicPlaceholderTopic: 'Onderwerp',
+  graphicPlaceholderLevel: 'Niveau',
 };
 
 const ja: TranslationCatalog = {
@@ -884,6 +910,10 @@ const ja: TranslationCatalog = {
   notFoundTitle: 'おっと！ページが見つかりません',
   notFoundCta: 'ホームに戻る',
   notFoundDescription: 'リクエストされたページが見つかりませんでした。',
+  graphicItemPlaceholder: 'テキスト',
+  graphicPlaceholderStep: 'ステップ',
+  graphicPlaceholderTopic: 'トピック',
+  graphicPlaceholderLevel: '階層',
 };
 
 const zh: TranslationCatalog = {
@@ -902,6 +932,10 @@ const zh: TranslationCatalog = {
   notFoundTitle: '糟糕！找不到页面',
   notFoundCta: '返回首页',
   notFoundDescription: '未找到你请求的页面。',
+  graphicItemPlaceholder: '文本',
+  graphicPlaceholderStep: '步骤',
+  graphicPlaceholderTopic: '主题',
+  graphicPlaceholderLevel: '层级',
 };
 
 const ar: TranslationCatalog = {
@@ -920,6 +954,10 @@ const ar: TranslationCatalog = {
   notFoundTitle: 'عذرًا! الصفحة غير موجودة',
   notFoundCta: 'العودة إلى الرئيسية',
   notFoundDescription: 'تعذر العثور على الصفحة المطلوبة.',
+  graphicItemPlaceholder: 'نص',
+  graphicPlaceholderStep: 'خطوة',
+  graphicPlaceholderTopic: 'موضوع',
+  graphicPlaceholderLevel: 'مستوى',
 };
 
 const ru: TranslationCatalog = {
@@ -938,6 +976,10 @@ const ru: TranslationCatalog = {
   notFoundTitle: 'Упс! Страница не найдена',
   notFoundCta: 'Вернуться на главную',
   notFoundDescription: 'Запрошенная страница не найдена.',
+  graphicItemPlaceholder: 'Текст',
+  graphicPlaceholderStep: 'Шаг',
+  graphicPlaceholderTopic: 'Тема',
+  graphicPlaceholderLevel: 'Уровень',
 };
 
 export const translationMessages: { en: Record<TranslationKey, string> } & Record<

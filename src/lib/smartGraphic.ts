@@ -1,3 +1,5 @@
+import { t, type Locale, type TranslationKey } from '@/lib/translations';
+
 export const SMART_GRAPHIC_VERSION = 1 as const;
 export const MAX_GRAPHIC_JSON_LENGTH = 20_000;
 export const MAX_GRAPHIC_LABEL_LENGTH = 200;
@@ -113,18 +115,18 @@ export function layoutsForCategory(category: SmartGraphicCategory): SmartGraphic
   return SMART_GRAPHIC_LAYOUTS.filter((layout) => layout.category === category);
 }
 
-export function placeholderLabel(kind: SmartGraphicLayoutDefinition['placeholderKind'], index: number): string {
-  const n = index + 1;
-  switch (kind) {
-    case 'step':
-      return `Step ${n}`;
-    case 'topic':
-      return `Topic ${n}`;
-    case 'level':
-      return `Level ${n}`;
-    default:
-      return `Text ${n}`;
-  }
+export function placeholderLabel(
+  kind: SmartGraphicLayoutDefinition['placeholderKind'],
+  index: number,
+  locale: Locale = 'en',
+): string {
+  const keys: Record<SmartGraphicLayoutDefinition['placeholderKind'], TranslationKey> = {
+    item: 'graphicItemPlaceholder',
+    step: 'graphicPlaceholderStep',
+    topic: 'graphicPlaceholderTopic',
+    level: 'graphicPlaceholderLevel',
+  };
+  return `${t(locale, keys[kind])} ${index + 1}`;
 }
 
 export function createGraphicId(): string {
@@ -141,16 +143,16 @@ export function createGraphicItem(label = '', children: SmartGraphicItem[] = [])
   };
 }
 
-export function createStarterGraphic(layoutId: SmartGraphicLayoutId = 'list-block'): SmartGraphicModel {
+export function createStarterGraphic(layoutId: SmartGraphicLayoutId = 'list-block', locale: Locale = 'en'): SmartGraphicModel {
   const layout = getSmartGraphicLayout(layoutId);
   if (layout.supportsHierarchy) {
-    const root = createGraphicItem(placeholderLabel('topic', 0), [
-      createGraphicItem(placeholderLabel('topic', 1)),
-      createGraphicItem(placeholderLabel('topic', 2), [
-        createGraphicItem(placeholderLabel('topic', 3)),
+    const root = createGraphicItem(placeholderLabel('topic', 0, locale), [
+      createGraphicItem(placeholderLabel('topic', 1, locale)),
+      createGraphicItem(placeholderLabel('topic', 2, locale), [
+        createGraphicItem(placeholderLabel('topic', 3, locale)),
       ]),
     ]);
-    const extra = createGraphicItem(placeholderLabel('topic', 4));
+    const extra = createGraphicItem(placeholderLabel('topic', 4, locale));
     return clampGraphic({
       version: 1,
       layoutId: layout.id,
@@ -162,7 +164,7 @@ export function createStarterGraphic(layoutId: SmartGraphicLayoutId = 'list-bloc
   }
 
   const items = Array.from({ length: layout.starterCount }, (_, index) =>
-    createGraphicItem(placeholderLabel(layout.placeholderKind, index)),
+    createGraphicItem(placeholderLabel(layout.placeholderKind, index, locale)),
   );
   return {
     version: 1,
@@ -175,11 +177,11 @@ export function createStarterGraphic(layoutId: SmartGraphicLayoutId = 'list-bloc
 }
 
 export function coerceGraphic(value: unknown): SmartGraphicModel {
-  return parseSmartGraphicJson(value) ?? createStarterGraphic('list-block');
+  return parseSmartGraphicJson(value, { trim: false }) ?? createStarterGraphic('list-block');
 }
 
 export function serializeSmartGraphic(model: SmartGraphicModel): string {
-  const normalized = clampGraphic(model);
+  const normalized = clampGraphic(model, { trim: false });
   return JSON.stringify({
     version: SMART_GRAPHIC_VERSION,
     layoutId: normalized.layoutId,
@@ -190,7 +192,7 @@ export function serializeSmartGraphic(model: SmartGraphicModel): string {
   });
 }
 
-export function parseSmartGraphicJson(value: unknown): SmartGraphicModel | null {
+export function parseSmartGraphicJson(value: unknown, options = { trim: true }): SmartGraphicModel | null {
   let parsed: unknown = value;
   if (typeof value === 'string') {
     if (!value || value.length > MAX_GRAPHIC_JSON_LENGTH) return null;
@@ -210,7 +212,7 @@ export function parseSmartGraphicJson(value: unknown): SmartGraphicModel | null 
 
   const layout = getSmartGraphicLayout(layoutId);
   const budget = { left: MAX_GRAPHIC_NODES };
-  const items = parseItems(parsed.items, 1, layout, budget, new Set());
+  const items = parseItems(parsed.items, 1, layout, budget, new Set(), options);
   if (!items.length) return null;
 
   return clampGraphic({
@@ -218,9 +220,9 @@ export function parseSmartGraphicJson(value: unknown): SmartGraphicModel | null 
     layoutId,
     colorSet: isColorSet(parsed.colorSet) ? parsed.colorSet : 'theme',
     style: isStyle(parsed.style) ? parsed.style : 'filled',
-    title: sanitizeGraphicText(parsed.title, MAX_GRAPHIC_TITLE_LENGTH),
+    title: sanitizeGraphicText(parsed.title, MAX_GRAPHIC_TITLE_LENGTH, options),
     items,
-  });
+  }, options);
 }
 
 export function parseSmartGraphicFromDom(element: HTMLElement): SmartGraphicModel | null {
@@ -260,12 +262,12 @@ export function flattenGraphicLabels(model: SmartGraphicModel): string[] {
   return flattenGraphicItems(model.items).map((item) => item.label);
 }
 
-export function switchGraphicLayout(model: SmartGraphicModel, layoutId: SmartGraphicLayoutId): SmartGraphicModel {
-  const current = clampGraphic(model);
+export function switchGraphicLayout(model: SmartGraphicModel, layoutId: SmartGraphicLayoutId, locale: Locale = 'en'): SmartGraphicModel {
+  const current = clampGraphic(model, { trim: false }, locale);
   return clampGraphic({
     ...current,
     layoutId,
-  });
+  }, { trim: false }, locale);
 }
 
 export function updateGraphicTitle(model: SmartGraphicModel, title: string): SmartGraphicModel {
@@ -282,7 +284,7 @@ export function updateGraphicAppearance(
   return clampGraphic({
     ...model,
     ...patch,
-  });
+  }, { trim: false });
 }
 
 export function updateItemLabel(model: SmartGraphicModel, id: string, label: string): SmartGraphicModel {
@@ -294,13 +296,13 @@ export function updateItemLabel(model: SmartGraphicModel, id: string, label: str
   };
 }
 
-export function addGraphicItem(model: SmartGraphicModel, afterId?: string | null): SmartGraphicModel {
+export function addGraphicItem(model: SmartGraphicModel, afterId?: string | null, locale: Locale = 'en'): SmartGraphicModel {
   const layout = getSmartGraphicLayout(model.layoutId);
   if (countGraphicNodes(model.items) >= layout.maxItems) {
     return model;
   }
 
-  const label = placeholderLabel(layout.placeholderKind, countGraphicNodes(model.items));
+  const label = placeholderLabel(layout.placeholderKind, countGraphicNodes(model.items), locale);
   const item = createGraphicItem(label);
 
   if (!afterId) {
@@ -415,13 +417,13 @@ export function sanitizeGraphicText(
   return prepared.slice(0, maxLength);
 }
 
-function clampGraphic(model: SmartGraphicModel): SmartGraphicModel {
+function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale: Locale = 'en'): SmartGraphicModel {
   const layout = getSmartGraphicLayout(model.layoutId);
   const sourceItems = layout.supportsHierarchy ? model.items : flattenGraphicItems(model.items);
-  let items = capItems(sourceItems, layout);
+  let items = capItems(sourceItems, layout, options);
   if (items.length < layout.minItems) {
     const extras = Array.from({ length: layout.minItems - items.length }, (_, index) =>
-      createGraphicItem(placeholderLabel(layout.placeholderKind, items.length + index)),
+      createGraphicItem(placeholderLabel(layout.placeholderKind, items.length + index, locale)),
     );
     items = [...items, ...extras];
   }
@@ -430,14 +432,14 @@ function clampGraphic(model: SmartGraphicModel): SmartGraphicModel {
     layoutId: layout.id,
     colorSet: isColorSet(model.colorSet) ? model.colorSet : 'theme',
     style: isStyle(model.style) ? model.style : 'filled',
-    title: sanitizeGraphicText(model.title, MAX_GRAPHIC_TITLE_LENGTH),
+    title: sanitizeGraphicText(model.title, MAX_GRAPHIC_TITLE_LENGTH, options),
     items,
   };
 }
 
-function capItems(items: SmartGraphicItem[], layout: SmartGraphicLayoutDefinition): SmartGraphicItem[] {
+function capItems(items: SmartGraphicItem[], layout: SmartGraphicLayoutDefinition, options: { trim: boolean }): SmartGraphicItem[] {
   const budget = { left: MAX_GRAPHIC_NODES };
-  return parseItems(items, 1, layout, budget, new Set());
+  return parseItems(items, 1, layout, budget, new Set(), options);
 }
 
 function parseItems(
@@ -446,6 +448,7 @@ function parseItems(
   layout: SmartGraphicLayoutDefinition,
   budget: { left: number },
   usedIds: Set<string>,
+  options: { trim: boolean },
 ): SmartGraphicItem[] {
   if (!Array.isArray(value) || depth > layout.maxDepth || budget.left <= 0) {
     return [];
@@ -457,10 +460,10 @@ function parseItems(
     if (!isRecord(entry)) continue;
     budget.left -= 1;
     const allowChildren = layout.supportsHierarchy && depth < layout.maxDepth;
-    const children = allowChildren ? parseItems(entry.children, depth + 1, layout, budget, usedIds) : [];
+    const children = allowChildren ? parseItems(entry.children, depth + 1, layout, budget, usedIds, options) : [];
     items.push({
       id: sanitizeGraphicId(entry.id, usedIds),
-      label: sanitizeGraphicText(entry.label, MAX_GRAPHIC_LABEL_LENGTH),
+      label: sanitizeGraphicText(entry.label, MAX_GRAPHIC_LABEL_LENGTH, options),
       children,
     });
   }

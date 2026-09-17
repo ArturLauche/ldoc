@@ -29,14 +29,14 @@ interface SmartGraphicGalleryProps {
 }
 
 export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<SmartGraphicCategory>('list');
 
   const layouts = useMemo(() => layoutsForCategory(category), [category]);
 
   const insertLayout = (layoutId: SmartGraphicLayoutId) => {
-    editor.chain().focus().insertSmartGraphic(layoutId).run();
+    editor.chain().focus().insertSmartGraphic(layoutId, locale).run();
     setOpen(false);
   };
 
@@ -84,7 +84,7 @@ export function SmartGraphicGallery({ editor }: SmartGraphicGalleryProps) {
               <ScrollArea className="h-[min(28rem,55vh)] pr-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(item === category ? layouts : layoutsForCategory(item)).map((layout) => {
-                    const preview = createStarterGraphic(layout.id);
+                    const preview = createStarterGraphic(layout.id, locale);
                     return (
                       <button
                         key={layout.id}
