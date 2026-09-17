@@ -1,14 +1,19 @@
-import { Editor } from '@tiptap/core';
-import { render, screen } from '@testing-library/react';
+import { Editor, EditorContent } from '@tiptap/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import type { ReactElement } from 'react';
 import { LocaleProvider } from '@/components/locale-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useLocale } from '@/hooks/useLocale';
+import { writeStoredLocale } from '@/lib/localePreference';
+import { t } from '@/lib/translations';
 import {
+  SMART_GRAPHIC_LAYOUTS,
   addGraphicItem,
   coerceGraphic,
   flattenGraphicLabels,
+  getSmartGraphicLayout,
   removeGraphicItem,
   serializeSmartGraphic,
   switchGraphicLayout,
@@ -18,6 +23,38 @@ import {
 } from '@/lib/smartGraphic';
 import { createEditorExtensions } from './editorExtensions';
 import { SmartGraphicGallery } from './SmartGraphicGallery';
+import { SmartGraphicToolbar } from './SmartGraphicToolbar';
+import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
+
+function GermanLanguageSwitch() {
+  const { setLocale } = useLocale();
+  return <button onClick={() => setLocale('de')}>Deutsch</button>;
+}
+
+async function typeMultiwordText(
+  user: ReturnType<typeof userEvent.setup>,
+  input: HTMLElement,
+  readValue: () => string,
+) {
+  await user.clear(input);
+  await user.type(input, 'Hello ');
+  expect.soft(input).toHaveValue('Hello ');
+  expect.soft(input).toHaveFocus();
+  expect.soft(readValue()).toBe('Hello ');
+  await user.type(input, 'world');
+  expect(input).toHaveValue('Hello world');
+  expect(input).toHaveFocus();
+  expect(readValue()).toBe('Hello world');
+}
+
+function renderEditorWithToolbar(editor: Editor) {
+  return renderWithProviders(
+    <>
+      <SmartGraphicToolbar editor={editor} />
+      <EditorContent editor={editor} />
+    </>,
+  );
+}
 
 function renderWithProviders(ui: ReactElement) {
   return render(
@@ -43,8 +80,13 @@ function graphicFromEditor(editor: Editor): SmartGraphicModel {
 describe('smart graphic insert and editing', () => {
   let editor: Editor;
 
+  beforeEach(() => {
+    writeStoredLocale('en');
+  });
+
   afterEach(() => {
-    editor?.destroy();
+    cleanup();
+    act(() => editor?.destroy());
   });
 
   it('inserts a layout from the gallery and keeps labels when switching layouts', async () => {
@@ -174,4 +216,69 @@ describe('smart graphic insert and editing', () => {
     expect(editor.view.dom.querySelector('[data-placeholder]')?.getAttribute('data-placeholder'))
       .toBe('Commencez à écrire…');
   });
+
+  it.each(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id, layout] as const))(
+    'types a multiword label and title into %s through the node view',
+    async (layoutId, layout) => {
+      const user = userEvent.setup();
+      editor = createTestEditor();
+      renderEditorWithToolbar(editor);
+
+      await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
+      await user.click(screen.getByRole('tab', { name: t('en', GRAPHIC_CATEGORY_KEYS[layout.category]) }));
+      await user.click(screen.getByRole('button', { name: t('en', GRAPHIC_LAYOUT_KEYS[layoutId]) }));
+      expect(editor.isActive('smartGraphic')).toBe(true);
+      const inserted = graphicFromEditor(editor);
+      expect(inserted.layoutId).toBe(layoutId);
+
+      const canvas = document.querySelector('.lwrite-graphic-canvas[data-compact="false"]');
+      expect(canvas).toBeTruthy();
+      const shapeInputs = Array.from(canvas?.querySelectorAll('input') ?? []);
+      expect(shapeInputs.length).toBeGreaterThan(0);
+      await typeMultiwordText(user, shapeInputs[0]!, () => graphicFromEditor(editor).items[0].label);
+
+      await user.click(screen.getByRole('button', { name: 'Text pane' }));
+      const pane = screen.getByRole('dialog', { name: 'Text pane' });
+      const paneTitle = within(pane).getByRole('textbox', { name: 'Title' });
+      await typeMultiwordText(user, paneTitle, () => graphicFromEditor(editor).title);
+      await typeMultiwordText(user, within(pane).getByRole('textbox', { name: 'Hello world' }), () => graphicFromEditor(editor).items[0].label);
+      expect(shapeInputs[0]).toHaveValue('Hello world');
+
+      if (layout.supportsHierarchy) {
+        const treeInputs = within(pane).getAllByRole('textbox');
+        expect(treeInputs.length).toBeGreaterThanOrEqual(5);
+        const nested = graphicFromEditor(editor).items[0].children[1].children[0];
+        expect(nested).toBeDefined();
+        await typeMultiwordText(user, treeInputs[4]!, () => graphicFromEditor(editor).items[0].children[1].children[0].label);
+        expect(graphicFromEditor(editor).items[0].children[1].children[0].label).toBe('Hello world');
+      }
+    },
+    20000,
+  );
+
+  it.each(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id] as const))(
+    'localizes the preview and inserted labels for %s after a language change',
+    async (layoutId) => {
+      const user = userEvent.setup();
+      editor = createTestEditor();
+      renderWithProviders(<><GermanLanguageSwitch /><SmartGraphicToolbar editor={editor} /></>);
+      await user.click(screen.getByRole('button', { name: 'Deutsch' }));
+      await user.click(screen.getByRole('button', { name: t('de', 'toolbarInsertGraphic') }));
+      const layout = getSmartGraphicLayout(layoutId);
+      await user.click(screen.getByRole('tab', { name: t('de', GRAPHIC_CATEGORY_KEYS[layout.category]) }));
+      const choice = screen.getByRole('button', { name: t('de', GRAPHIC_LAYOUT_KEYS[layoutId]) });
+      const word = { item: 'Text', step: 'Schritt', topic: 'Thema', level: 'Ebene' }[layout.placeholderKind];
+      expect(within(choice).getByText(`${word} 1`)).toBeInTheDocument();
+      await user.click(choice);
+      const inserted = graphicFromEditor(editor);
+      expect(inserted.layoutId).toBe(layoutId);
+      expect(flattenGraphicLabels(inserted)).toEqual(
+        Array.from({ length: layout.starterCount }, (_, index) => `${word} ${index + 1}`),
+      );
+      if (layout.maxItems > layout.starterCount) {
+        await user.click(screen.getByRole('button', { name: t('de', 'graphicAddItem') }));
+        expect(flattenGraphicLabels(graphicFromEditor(editor))).toContain(`${word} ${layout.starterCount + 1}`);
+      }
+    },
+  );
 });

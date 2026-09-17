@@ -75,7 +75,7 @@ interface SmartGraphicToolbarProps {
 }
 
 export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [textPaneOpen, setTextPaneOpen] = useState(false);
 
   const graphicState = useEditorState({
@@ -142,7 +142,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
               <DropdownMenuRadioGroup
                 value={graphic.layoutId}
                 onValueChange={(value) =>
-                  apply(switchGraphicLayout(graphic, value as SmartGraphicLayoutId))
+                  apply(switchGraphicLayout(graphic, value as SmartGraphicLayoutId, locale))
                 }
               >
                 {SMART_GRAPHIC_LAYOUTS.map((item) => (
@@ -192,7 +192,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
           <ToolbarIconButton
             tooltip={t('graphicAddItem')}
             disabled={!canAddGraphicItem(graphic)}
-            onClick={() => apply(addGraphicItem(graphic, selectedId))}
+            onClick={() => apply(addGraphicItem(graphic, selectedId, locale))}
           >
             <Plus className="h-4 w-4" />
           </ToolbarIconButton>

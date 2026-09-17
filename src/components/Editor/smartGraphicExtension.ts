@@ -13,12 +13,13 @@ import {
   type SmartGraphicLayoutId,
   type SmartGraphicModel,
 } from '@/lib/smartGraphic';
+import type { Locale } from '@/lib/translations';
 import { SmartGraphicView } from './SmartGraphicView';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     smartGraphic: {
-      insertSmartGraphic: (layoutId?: SmartGraphicLayoutId) => ReturnType;
+      insertSmartGraphic: (layoutId?: SmartGraphicLayoutId, locale?: Locale) => ReturnType;
       updateSmartGraphic: (graphic: SmartGraphicModel) => ReturnType;
       selectSmartGraphicItem: (id: string | null) => ReturnType;
       deleteSmartGraphic: () => ReturnType;
@@ -115,7 +116,7 @@ export const SmartGraphic = Node.create({
           return true;
         },
       insertSmartGraphic:
-        (layoutId) =>
+        (layoutId, locale = 'en') =>
         ({ chain, state }) => {
           const insertPos = state.selection.from;
           return chain()
@@ -124,7 +125,7 @@ export const SmartGraphic = Node.create({
               {
                 type: this.name,
                 attrs: {
-                  graphic: createStarterGraphic(layoutId ?? 'list-block'),
+                  graphic: createStarterGraphic(layoutId ?? 'list-block', locale),
                 },
               },
               { updateSelection: false },
