@@ -65,6 +65,9 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
   const fileInputRef = useRef<HTMLInputElement>(null);
   // After inserting, writing continues in the document instead of the trigger.
   const returnToEditorRef = useRef(false);
+  // Opening or dismissing the dialog starts a new session; an upload that
+  // outlives its session was cancelled and must not insert or close the dialog.
+  const sessionRef = useRef(0);
   const [isOpen, setIsOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [altText, setAltText] = useState('');
@@ -123,19 +126,21 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
       return;
     }
 
+    const session = sessionRef.current;
     setIsUploading(true);
 
     try {
       const dataUrl = await readFileAsDataUrl(file);
+      if (session !== sessionRef.current) return;
       insertImage(dataUrl, file.name);
       returnToEditorRef.current = true;
       setIsOpen(false);
       setAltText('');
       toast.success(t('imageInserted'));
     } catch {
-      toast.error(t('imageUploadFailed'));
+      if (session === sessionRef.current) toast.error(t('imageUploadFailed'));
     } finally {
-      setIsUploading(false);
+      if (session === sessionRef.current) setIsUploading(false);
     }
   };
 
@@ -191,8 +196,8 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
     <Dialog
       open={isOpen}
       onOpenChange={(next) => {
-        // An upload that finished after the dialog was dismissed must not
-        // turn the next plain dismissal into a completed insert.
+        sessionRef.current += 1;
+        setIsUploading(false);
         if (next) returnToEditorRef.current = false;
         setIsOpen(next);
       }}
