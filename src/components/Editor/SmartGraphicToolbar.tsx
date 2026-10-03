@@ -26,6 +26,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
+import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
+import { cn } from '@/lib/utils';
 import {
   SMART_GRAPHIC_COLOR_SETS,
   SMART_GRAPHIC_LAYOUTS,
@@ -72,11 +74,20 @@ const STYLE_KEYS: Record<SmartGraphicStyle, TranslationKey> = {
 
 interface SmartGraphicToolbarProps {
   editor: Editor;
+  /** Include the insert-graphic gallery (the phone toolbar has its own). */
+  showInsert?: boolean;
+  /** Visible text labels for touch layouts, where tooltips do not appear. */
+  showLabels?: boolean;
 }
 
-export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
+export function SmartGraphicToolbar({
+  editor,
+  showInsert = true,
+  showLabels = false,
+}: SmartGraphicToolbarProps) {
   const { t, locale } = useLocale();
   const [textPaneOpen, setTextPaneOpen] = useState(false);
+  const toolsMenu = useTouchSafeMenu();
 
   const graphicState = useEditorState({
     editor,
@@ -111,21 +122,28 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
   const layout = graphic ? getSmartGraphicLayout(graphic.layoutId) : null;
 
   return (
-    <div className="flex max-w-full flex-wrap items-center gap-1">
-      <SmartGraphicGallery editor={editor} />
+    <div className={cn('flex max-w-full items-center gap-1', !showLabels && 'flex-wrap')}>
+      {showInsert ? <SmartGraphicGallery editor={editor} /> : null}
       {graphic && layout ? (
         <>
-          <DropdownMenu>
+          {/* Non-modal, so focus stays in the document after an action
+              instead of being trapped and returned to the trigger. */}
+          <DropdownMenu modal={false} open={toolsMenu.open} onOpenChange={toolsMenu.onOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild {...toolsMenu.triggerProps}>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 gap-1 px-2 text-xs"
+                    className={cn('h-9 gap-1 px-2 text-xs', showLabels && 'h-10 px-3 text-sm')}
                     aria-label={t('graphicTools')}
                   >
-                    <span className="hidden max-w-[5.5rem] truncate sm:inline">
+                    <span
+                      className={cn(
+                        'max-w-[5.5rem] truncate',
+                        showLabels ? 'max-w-[8rem]' : 'hidden lg:inline',
+                      )}
+                    >
                       {t('graphicTools')}
                     </span>
                     <ChevronDown className="h-3.5 w-3.5" />
@@ -190,6 +208,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
           </DropdownMenu>
 
           <ToolbarIconButton
+            showLabel={showLabels}
             tooltip={t('graphicAddItem')}
             disabled={!canAddGraphicItem(graphic)}
             onClick={() => apply(addGraphicItem(graphic, selectedId, locale))}
@@ -197,6 +216,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
             <Plus className="h-4 w-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
+            showLabel={showLabels}
             tooltip={t('graphicRemoveItem')}
             disabled={!canRemoveGraphicItem(graphic) || !selectedId}
             onClick={() => selectedId && apply(removeGraphicItem(graphic, selectedId))}
@@ -204,6 +224,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
             <Trash2 className="h-4 w-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
+            showLabel={showLabels}
             tooltip={t('graphicMoveUp')}
             disabled={!selectedId}
             onClick={() => selectedId && apply(moveGraphicItem(graphic, selectedId, 'up'))}
@@ -211,6 +232,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
             <ChevronUp className="h-4 w-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
+            showLabel={showLabels}
             tooltip={t('graphicMoveDown')}
             disabled={!selectedId}
             onClick={() => selectedId && apply(moveGraphicItem(graphic, selectedId, 'down'))}
@@ -220,6 +242,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
           {layout.supportsHierarchy ? (
             <>
               <ToolbarIconButton
+                showLabel={showLabels}
                 tooltip={t('graphicPromote')}
                 disabled={!selectedId}
                 onClick={() => selectedId && apply(promoteGraphicItem(graphic, selectedId))}
@@ -227,6 +250,7 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                 <IndentDecrease className="h-4 w-4" />
               </ToolbarIconButton>
               <ToolbarIconButton
+                showLabel={showLabels}
                 tooltip={t('graphicDemote')}
                 disabled={!canDemoteGraphicItem(graphic, selectedId)}
                 onClick={() => selectedId && apply(demoteGraphicItem(graphic, selectedId))}
@@ -243,10 +267,13 @@ export function SmartGraphicToolbar({ editor }: SmartGraphicToolbarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 p-0"
+                    className={cn('h-9 w-9 p-0', showLabels && 'h-10 w-auto gap-1 px-3 text-sm')}
                     aria-label={t('graphicTextPane')}
                   >
                     <ListTree className="h-4 w-4" />
+                    {showLabels ? (
+                      <span className="whitespace-nowrap">{t('graphicTextPane')}</span>
+                    ) : null}
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
@@ -292,11 +319,13 @@ function ToolbarIconButton({
   tooltip,
   disabled,
   onClick,
+  showLabel = false,
   children,
 }: {
   tooltip: string;
   disabled?: boolean;
   onClick: () => void;
+  showLabel?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -305,12 +334,13 @@ function ToolbarIconButton({
         <Button
           variant="ghost"
           size="sm"
-          className="h-9 w-9 p-0"
+          className={cn('h-9 w-9 p-0', showLabel && 'h-10 w-auto gap-1 px-3 text-sm')}
           aria-label={tooltip}
           disabled={disabled}
           onClick={onClick}
         >
           {children}
+          {showLabel ? <span className="whitespace-nowrap">{tooltip}</span> : null}
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{tooltip}</TooltipContent>

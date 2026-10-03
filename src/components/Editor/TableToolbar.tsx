@@ -24,7 +24,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
+import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import { formatMessage } from '@/lib/translations';
+import { cn } from '@/lib/utils';
 import { TableGridPicker } from './TableGridPicker';
 
 const CELL_FILL_COLORS = [
@@ -42,10 +44,15 @@ const CELL_FILL_COLORS = [
 
 interface TableToolbarProps {
   editor: Editor;
+  /** Include the insert-table picker (the phone toolbar has its own). */
+  showInsert?: boolean;
+  /** Visible text labels for touch layouts, where tooltips do not appear. */
+  showLabels?: boolean;
 }
 
-export function TableToolbar({ editor }: TableToolbarProps) {
+export function TableToolbar({ editor, showInsert = true, showLabels = false }: TableToolbarProps) {
   const { t } = useLocale();
+  const toolsMenu = useTouchSafeMenu();
   const tableState = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -66,22 +73,29 @@ export function TableToolbar({ editor }: TableToolbarProps) {
   });
 
   return (
-    <div className="flex max-w-full flex-wrap items-center gap-1">
-      <TableGridPicker editor={editor} />
+    <div className={cn('flex max-w-full items-center gap-1', !showLabels && 'flex-wrap')}>
+      {showInsert ? <TableGridPicker editor={editor} /> : null}
       {tableState.inTable ? (
         <>
-          <DropdownMenu>
+          {/* Non-modal, so focus stays in the document after an action
+              instead of being trapped and returned to the trigger. */}
+          <DropdownMenu modal={false} open={toolsMenu.open} onOpenChange={toolsMenu.onOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild {...toolsMenu.triggerProps}>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 gap-1 px-2 text-xs"
+                    className={cn('h-9 gap-1 px-2 text-xs', showLabels && 'h-10 px-3 text-sm')}
                     aria-label={t('tableTools')}
                   >
                     <TableProperties className="h-4 w-4" />
-                    <span className="hidden sm:inline max-w-[4.5rem] truncate">
+                    <span
+                      className={cn(
+                        'max-w-[4.5rem] truncate',
+                        showLabels ? 'max-w-[8rem]' : 'hidden lg:inline',
+                      )}
+                    >
                       {t('tableTools')}
                     </span>
                   </Button>
@@ -198,10 +212,13 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 p-0"
+                    className={cn('h-9 w-9 p-0', showLabels && 'h-10 w-auto gap-1 px-3 text-sm')}
                     aria-label={t('tableCellFill')}
                   >
                     <PaintBucket className="h-4 w-4" />
+                    {showLabels ? (
+                      <span className="max-w-[8rem] truncate">{t('tableCellFill')}</span>
+                    ) : null}
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
@@ -216,7 +233,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                   <button
                     key={color}
                     type="button"
-                    className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                    className="h-6 w-6 rounded-md border border-border/50 transition-transform hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-ring pointer-coarse:h-10 pointer-coarse:w-10"
                     style={{ backgroundColor: color }}
                     aria-label={formatMessage(t('tableSetCellFill'), { color })}
                     onClick={() =>
@@ -226,7 +243,7 @@ export function TableToolbar({ editor }: TableToolbarProps) {
                 ))}
                 <button
                   type="button"
-                  className="h-6 w-6 rounded-md border border-border/50 bg-background relative after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
+                  className="h-6 w-6 rounded-md border border-border/50 bg-background relative pointer-coarse:h-10 pointer-coarse:w-10 after:content-['×'] after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-muted-foreground"
                   aria-label={t('tableClearFill')}
                   onClick={() =>
                     editor.chain().focus().setCellAttribute('backgroundColor', null).run()

@@ -20,6 +20,7 @@ import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
+import { focusContainerOnTouch } from '@/lib/inputModality';
 
 async function readVersions(documentId: string) {
   try {
@@ -166,11 +167,12 @@ export const VersionHistory = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        onOpenAutoFocus={focusContainerOnTouch}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           returnFocusRef?.current?.focus();
         }}
-        className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+        className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 [--sheet-padding-bottom:0px] max-sm:h-[calc(var(--app-viewport-height,100dvh)-0.75rem)] sm:max-w-4xl"
       >
         <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left">
           <DialogTitle>{t('versionHistoryTitle')}</DialogTitle>
@@ -211,7 +213,7 @@ export const VersionHistory = ({
                         type="button"
                         onClick={() => setSelectedVersion(version)}
                         aria-pressed={selectedVersion?.id === version.id}
-                        className="w-full rounded-sm px-3 py-2.5 text-left hover:bg-accent aria-pressed:bg-accent"
+                        className="w-full rounded-sm px-3 py-2.5 text-left hover:bg-accent aria-pressed:bg-accent pointer-coarse:py-3"
                       >
                         <span className="block truncate text-sm font-medium">{version.name}</span>
                         <span className="mt-1 block text-xs text-muted-foreground">
@@ -265,7 +267,7 @@ export const VersionHistory = ({
                     </Button>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto bg-card p-5 sm:p-8">
+                <div className="min-h-0 flex-1 overflow-auto overscroll-contain bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8">
                   <div
                     className="document-preview prose prose-sm dark:prose-invert max-w-none break-words text-foreground"
                     dangerouslySetInnerHTML={{ __html: preview }}

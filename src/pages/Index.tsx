@@ -15,7 +15,15 @@ const Index = () => {
   return (
     <ConfirmProvider>
       <TooltipProvider>
-        <Toaster />
+        {/* Keep toasts clear of the docked phone toolbar and software keyboard. */}
+        <Toaster
+          offset={{
+            bottom: 'calc(var(--keyboard-inset, 0px) + var(--bottom-chrome-height, 0px) + 24px)',
+          }}
+          mobileOffset={{
+            bottom: 'calc(var(--keyboard-inset, 0px) + var(--bottom-chrome-height, 0px) + 12px)',
+          }}
+        />
         <RichTextEditor />
       </TooltipProvider>
     </ConfirmProvider>

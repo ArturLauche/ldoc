@@ -16,7 +16,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLocale } from '@/hooks/useLocale';
+import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import type { StoredDocument } from '@/lib/documentLibrary';
+import { focusContainerOnTouch } from '@/lib/inputModality';
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
 
 interface Props {
@@ -33,6 +35,53 @@ interface Props {
   onExport: (doc: StoredDocument) => void;
   onDuplicate: (doc: StoredDocument) => void;
   onDelete: (doc: StoredDocument) => void;
+}
+
+function DocumentActionsMenu({
+  doc,
+  onExport,
+  onDuplicate,
+  onDelete,
+}: {
+  doc: StoredDocument;
+  onExport: (doc: StoredDocument) => void;
+  onDuplicate: (doc: StoredDocument) => void;
+  onDelete: (doc: StoredDocument) => void;
+}) {
+  const { t } = useLocale();
+  // Rows sit in a scrolling list: a swipe that starts on the button must not open it.
+  const menu = useTouchSafeMenu();
+  return (
+    <DropdownMenu open={menu.open} onOpenChange={menu.onOpenChange}>
+      <DropdownMenuTrigger asChild {...menu.triggerProps}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="shrink-0 pointer-coarse:h-11 pointer-coarse:w-11"
+          aria-label={`${t('fileMenuLabel')}: ${doc.name}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => onExport(doc)}>
+          <Download className="mr-2 h-4 w-4" />
+          {t('exportDocumentBackup')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onDuplicate(doc)}>
+          <Copy className="mr-2 h-4 w-4" />
+          {t('duplicateDocument')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={() => onDelete(doc)}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          {t('deleteDocument')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function DocumentLibraryDialog({
@@ -86,11 +135,13 @@ export function DocumentLibraryDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        // A tap opens the list without covering it with the software keyboard.
+        onOpenAutoFocus={focusContainerOnTouch}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           returnFocusRef?.current?.focus();
         }}
-        className="sm:max-w-2xl"
+        className="flex flex-col sm:max-w-2xl"
       >
         <DialogHeader>
           <DialogTitle>{t('documentLibrary')}</DialogTitle>
@@ -106,11 +157,13 @@ export function DocumentLibraryDialog({
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('searchByTitleOrContent')}
             aria-label={t('searchSavedDocumentsAria')}
+            enterKeyHint="search"
+            autoComplete="off"
             className="pl-9"
           />
         </div>
         <div
-          className="min-h-48 max-h-[min(24rem,55dvh)] overflow-y-auto border-y border-border"
+          className="min-h-32 flex-1 overflow-y-auto overscroll-contain border-y border-border sm:min-h-48 sm:max-h-[min(24rem,55dvh)] sm:flex-none"
           aria-busy={loading || query.trim().toLocaleLowerCase(locale) !== deferredQuery}
         >
           {loading ? (
@@ -151,34 +204,12 @@ export function DocumentLibraryDialog({
                       </span>
                     </span>
                   </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`${t('fileMenuLabel')}: ${doc.name}`}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => onExport(doc)}>
-                        <Download className="mr-2 h-4 w-4" />
-                        {t('exportDocumentBackup')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => onDuplicate(doc)}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        {t('duplicateDocument')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onSelect={() => onDelete(doc)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        {t('deleteDocument')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <DocumentActionsMenu
+                    doc={doc}
+                    onExport={onExport}
+                    onDuplicate={onDuplicate}
+                    onDelete={onDelete}
+                  />
                 </li>
               ))}
             </ul>
@@ -195,10 +226,10 @@ export function DocumentLibraryDialog({
             </div>
           )}
         </div>
-        <div className="flex justify-between gap-3">
-          <Button variant="outline" onClick={onImport} disabled={importing}>
+        <div className="flex shrink-0 justify-between gap-3">
+          <Button variant="outline" onClick={onImport} disabled={importing} className="min-w-0">
             <Upload className="mr-2 h-4 w-4" />
-            {t('importSingleDoc')}
+            <span className="truncate">{t('importSingleDoc')}</span>
           </Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t('close')}

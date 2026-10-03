@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -6,17 +6,30 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocale } from '@/hooks/useLocale';
 import { FONT_FAMILIES, loadFont } from '@/lib/fonts';
+import { isTouchInteraction, keepEditorFocus } from '@/lib/inputModality';
 import { cn } from '@/lib/utils';
 
 interface FontPickerProps {
   value: string;
   onChange: (font: string) => void;
+  triggerClassName?: string;
+  /** Visible prefix in the trigger where no tooltip explains it (phone panel). */
+  label?: string;
+  align?: 'start' | 'center' | 'end';
 }
 
-export const FontPicker = ({ value, onChange }: FontPickerProps) => {
+export const FontPicker = ({
+  value,
+  onChange,
+  triggerClassName,
+  label,
+  align = 'start',
+}: FontPickerProps) => {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // After a pick, focus stays in the document that `onChange` focused.
+  const pickedRef = useRef(false);
 
   // Load current font
   useEffect(() => {
@@ -64,6 +77,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
     else if (font?.category === 'monospace' || fontName === 'Courier New') fallback = 'monospace';
     else if (font?.category === 'display') fallback = 'cursive';
 
+    pickedRef.current = true;
     onChange(`"${fontName}", ${fallback}`);
     setOpen(false);
     setSearch('');
@@ -74,10 +88,21 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="w-28 h-9 justify-between text-xs font-medium bg-card border-border"
+          className={cn(
+            'w-28 h-9 justify-between text-xs font-medium bg-card border-border',
+            triggerClassName,
+          )}
           aria-label={t('toolbarFontFamily')}
         >
-          <span className="truncate" style={{ fontFamily: value || 'inherit' }}>
+          {label ? (
+            <span aria-hidden="true" className="shrink-0 font-normal text-muted-foreground">
+              {label}
+            </span>
+          ) : null}
+          <span
+            className={cn('truncate', label && 'min-w-0 flex-1 text-start')}
+            style={{ fontFamily: value || 'inherit' }}
+          >
             {currentFontName}
           </span>
           <Search className="h-3 w-3 ml-1 opacity-50" />
@@ -85,8 +110,19 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
       </PopoverTrigger>
       <PopoverContent
         aria-label={t('toolbarFontFamily')}
-        className="w-64 p-0 bg-popover border border-border shadow-lg z-50"
-        align="start"
+        className="flex w-64 flex-col overflow-hidden p-0 bg-popover border border-border shadow-lg z-50"
+        align={align}
+        onOpenAutoFocus={(event) => {
+          // Keyboard users land in the search field; a tap shows the list
+          // without covering it with the software keyboard.
+          if (isTouchInteraction()) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!pickedRef.current) return;
+          pickedRef.current = false;
+          event.preventDefault();
+        }}
+        onMouseDown={keepEditorFocus}
       >
         <div className="p-2 border-b border-border/50">
           <div className="relative">
@@ -96,22 +132,23 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
               aria-label={t('fontSearchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 text-sm bg-card"
-              autoFocus
+              className="pl-8 h-9 bg-card pointer-coarse:h-10"
+              enterKeyHint="search"
             />
           </div>
         </div>
-        <ScrollArea className="h-64">
+        <ScrollArea className="h-64 max-h-[calc(var(--radix-popover-content-available-height,16rem)-3.75rem)]">
           <div className="p-1">
             {/* Default option */}
             <button
               onClick={() => {
+                pickedRef.current = true;
                 onChange('');
                 setOpen(false);
                 setSearch('');
               }}
               className={cn(
-                'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors',
+                'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors pointer-coarse:py-3',
                 !value && 'bg-accent',
               )}
             >
@@ -136,7 +173,7 @@ export const FontPicker = ({ value, onChange }: FontPickerProps) => {
                       onMouseEnter={handleMouseEnter}
                       onFocus={handleMouseEnter}
                       className={cn(
-                        'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors',
+                        'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors pointer-coarse:py-3',
                         currentFontName === font.name && 'bg-accent',
                       )}
                       style={{ fontFamily: `"${font.name}", ${font.category}` }}

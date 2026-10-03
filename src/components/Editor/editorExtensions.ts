@@ -10,7 +10,8 @@ import Subscript from '@tiptap/extension-subscript';
 import FontFamily from '@tiptap/extension-font-family';
 import Placeholder, { type PlaceholderOptions } from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
-import { mergeAttributes, type Extensions } from '@tiptap/core';
+import { Extension, mergeAttributes, type Extensions } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { FindReplace } from './findReplaceExtension';
 import { SmartGraphic } from './smartGraphicExtension';
 import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
@@ -103,6 +104,57 @@ const EnhancedTextStyle = TextStyle.extend({
   },
 });
 
+const SCROLL_GAP_PX = 16;
+
+/**
+ * Height of sticky or fixed chrome (`data-scroll-inset="top|bottom"`) that
+ * covers, or can slide over, an edge of the visual viewport, so caret
+ * scrolling keeps the cursor clear of the header and the docked phone toolbar.
+ */
+function chromeInset(side: 'top' | 'bottom'): number {
+  if (typeof document === 'undefined') return SCROLL_GAP_PX;
+  const viewport = window.visualViewport;
+  const offsetTop = viewport?.offsetTop ?? 0;
+  const height = viewport?.height ?? window.innerHeight;
+  let inset = 0;
+  document.querySelectorAll<HTMLElement>(`[data-scroll-inset="${side}"]`).forEach((element) => {
+    const rect = element.getBoundingClientRect();
+    if (!rect.height) return;
+    inset = Math.max(
+      inset,
+      // A header that auto-hides slides back in when the page scrolls up, so
+      // reserve its full height rather than its current (hidden) position.
+      side === 'top' ? element.offsetHeight : offsetTop + height - rect.top,
+    );
+  });
+  return Math.max(0, Math.min(inset, height / 2)) + SCROLL_GAP_PX;
+}
+
+// ProseMirror reads these sides on every scroll-into-view, so the getters
+// follow the header hiding or the phone toolbar growing.
+const chromeAwareSides = {
+  get top() {
+    return chromeInset('top');
+  },
+  get bottom() {
+    return chromeInset('bottom');
+  },
+  left: SCROLL_GAP_PX,
+  right: SCROLL_GAP_PX,
+};
+
+const ChromeAwareScrolling = Extension.create({
+  name: 'chromeAwareScrolling',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('chromeAwareScrolling'),
+        props: { scrollThreshold: chromeAwareSides, scrollMargin: chromeAwareSides },
+      }),
+    ];
+  },
+});
+
 /**
  * Builds the TipTap extension set with an initial placeholder. Later locale
  * changes use setEditorPlaceholder without rebuilding the editor or its history.
@@ -155,5 +207,6 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     EditorTableCell,
     SmartGraphic,
     FindReplace,
+    ChromeAwareScrolling,
   ];
 }
