@@ -224,17 +224,23 @@ test.describe('narrow phone layout', () => {
     await setContent(page, '<p>alpha beta alpha</p>');
     await page.getByRole('button', { name: 'Find & Replace' }).tap();
     const find = page.getByRole('textbox', { name: 'Find...' });
+    const textWidth = () =>
+      find.evaluate((input) => {
+        const style = getComputedStyle(input);
+        return (
+          input.clientWidth -
+          Number.parseFloat(style.paddingLeft) -
+          Number.parseFloat(style.paddingRight)
+        );
+      });
     await find.fill('alpha');
-    await expect(page.getByText('1 of 2')).toBeVisible();
-    const textWidth = await find.evaluate((input) => {
-      const style = getComputedStyle(input);
-      return (
-        input.clientWidth -
-        Number.parseFloat(style.paddingLeft) -
-        Number.parseFloat(style.paddingRight)
-      );
-    });
-    expect(textWidth).toBeGreaterThanOrEqual(80);
+    await expect(page.getByText('1 of 2')).toBeAttached();
+    await expect(page.getByText('1/2', { exact: true })).toBeVisible();
+    expect(await textWidth()).toBeGreaterThanOrEqual(80);
+    // Long "no matches" sentences in some languages must not squeeze the field.
+    await find.fill('zzzz');
+    await expect(page.getByText('0/0', { exact: true })).toBeVisible();
+    expect(await textWidth()).toBeGreaterThanOrEqual(80);
 
     await page.getByRole('button', { name: 'Replace and match case' }).tap();
     await expect(page.getByRole('button', { name: 'Match case', exact: true })).toBeVisible();

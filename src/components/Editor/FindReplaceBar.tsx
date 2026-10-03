@@ -186,12 +186,22 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
             )}
           />
           {compact ? (
-            <span
-              className="shrink-0 whitespace-nowrap pe-3 text-xs text-muted-foreground tabular-nums empty:pe-0"
-              aria-live="polite"
-            >
-              {matchStatus}
-            </span>
+            <>
+              {/* A find-bar style counter fits every language; the sentence
+                  stays available to screen readers. */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'shrink-0 whitespace-nowrap pe-3 text-xs text-muted-foreground tabular-nums empty:pe-0',
+                  query && !matchCount && 'text-destructive',
+                )}
+              >
+                {query ? `${matchCount ? activeIndex + 1 : 0}/${matchCount}` : null}
+              </span>
+              <span className="sr-only" aria-live="polite">
+                {matchStatus}
+              </span>
+            </>
           ) : null}
         </div>
         {compact ? null : (

@@ -46,7 +46,9 @@ describe('FindReplaceBar layouts', () => {
     expect(screen.queryByRole('button', { name: 'Match case' })).not.toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: 'Find...' }), 'cat');
-    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+    // A short counter fits the field; the sentence is for screen readers.
+    expect(screen.getByText('1/2')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('1 of 2')).toHaveClass('sr-only');
 
     const toggle = screen.getByRole('button', { name: 'Replace and match case' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');

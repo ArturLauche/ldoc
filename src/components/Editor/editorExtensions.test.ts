@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 
 const getPlaceholder = () => 'Start writing...';
@@ -94,6 +94,13 @@ describe('editorExtensions', () => {
       const expected = { top: 48 + 16, bottom: 56 + 16, left: 16, right: 16 };
       expect(sides('scrollThreshold')).toEqual(expected);
       expect(sides('scrollMargin')).toEqual(expected);
+      await nextMeasurement();
+
+      // Every side read during one scroll-into-view shares one measurement.
+      const measure = vi.spyOn(toolbar, 'getBoundingClientRect');
+      sides('scrollThreshold');
+      sides('scrollMargin');
+      expect(measure).toHaveBeenCalledTimes(1);
 
       header.remove();
       toolbar.remove();

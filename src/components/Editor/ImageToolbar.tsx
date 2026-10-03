@@ -188,7 +188,15 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(next) => {
+        // An upload that finished after the dialog was dismissed must not
+        // turn the next plain dismissal into a completed insert.
+        if (next) returnToEditorRef.current = false;
+        setIsOpen(next);
+      }}
+    >
       {variant === 'tile' ? (
         <DialogTrigger asChild>
           <ToolTile
