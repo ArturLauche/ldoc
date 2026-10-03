@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   AlignCenter,
@@ -68,6 +68,13 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
   // Opening or dismissing the dialog starts a new session; an upload that
   // outlives its session was cancelled and must not insert or close the dialog.
   const sessionRef = useRef(0);
+  // Unmounting (route change, editor teardown) cancels a pending upload too.
+  useEffect(
+    () => () => {
+      sessionRef.current += 1;
+    },
+    [],
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [altText, setAltText] = useState('');

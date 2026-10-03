@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { toast } from 'sonner';
 import { LocaleProvider } from '@/components/locale-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { readFileAsDataUrl } from '@/lib/media';
@@ -19,30 +20,38 @@ const PIXEL =
 describe('ImageToolbar uploads', () => {
   let editor: Editor;
   let finishUpload: (dataUrl: string) => void;
+  let failUpload: (error: Error) => void;
+  let unmount: () => void;
   let onComplete: Mock<() => void>;
 
   beforeEach(() => {
     finishUpload = () => {};
+    failUpload = () => {};
     vi.mocked(readFileAsDataUrl).mockImplementation(
-      () => new Promise<string>((resolve) => (finishUpload = resolve)),
+      () =>
+        new Promise<string>((resolve, reject) => {
+          finishUpload = resolve;
+          failUpload = reject;
+        }),
     );
     onComplete = vi.fn<() => void>();
     editor = new Editor({
       extensions: createEditorExtensions(() => ''),
       content: '<p>Text</p>',
     });
-    render(
+    ({ unmount } = render(
       <LocaleProvider>
         <TooltipProvider>
           <ImageToolbar editor={editor} variant="tile" onComplete={onComplete} />
         </TooltipProvider>
       </LocaleProvider>,
-    );
+    ));
   });
 
   afterEach(() => {
     editor.destroy();
     vi.mocked(readFileAsDataUrl).mockReset();
+    vi.restoreAllMocks();
   });
 
   const tile = () => screen.getByRole('button', { name: 'Insert image' });
@@ -78,6 +87,38 @@ describe('ImageToolbar uploads', () => {
     await user.click(tile());
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     await dismiss(user);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('lets the user retry after a failed read', async () => {
+    const user = userEvent.setup();
+    await user.click(tile());
+    chooseFile();
+    expect(await screen.findByText('Uploading...')).toBeInTheDocument();
+    const toastError = vi.spyOn(toast, 'error');
+    await act(async () => failUpload(new Error('unreadable')));
+    expect(toastError).toHaveBeenCalledWith('Failed to upload image');
+
+    expect(await screen.findByText('Click to upload or drag and drop')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(editor.getHTML()).not.toContain('<img');
+  });
+
+  it('stays silent when a cancelled read fails or the toolbar unmounts', async () => {
+    const user = userEvent.setup();
+    await user.click(tile());
+    chooseFile();
+    await dismiss(user);
+    const toastError = vi.spyOn(toast, 'error');
+    await act(async () => failUpload(new Error('unreadable')));
+    expect(toastError).not.toHaveBeenCalled();
+
+    await user.click(tile());
+    await screen.findByRole('dialog');
+    chooseFile();
+    unmount();
+    await act(async () => finishUpload(PIXEL));
+    expect(editor.getHTML()).not.toContain('<img');
     expect(onComplete).not.toHaveBeenCalled();
   });
 
