@@ -73,7 +73,8 @@ export type DocumentStorageResult<T> =
 - `src/components/Editor/`: `RichTextEditor.tsx` (shell), `useDocumentSession.ts`
   (load/save/autosave/rename/counts/shortcuts/snapshots), `editorExtensions.ts`
   (TipTap setup), `EditorToolbar.tsx`, `FileMenu.tsx`, `DocumentImporter.ts`,
-  `VersionHistory.tsx`.
+  `VersionHistory.tsx`. Phones (`useCompactLayout` in `src/hooks/useMediaQuery.ts`)
+  dock `MobileToolbar.tsx` above the keyboard; both toolbars share `toolbarModel.ts`.
 - `src/lib/`: `storage.ts`, `sanitizeDocumentHtml.ts`, `documentLibrary.ts`
   (library/backup/duplicate/delete/migration), `versionHistory.ts`, `media.ts`
   (image validation, 10 MB limit), `fileNames.ts` (`buildExportFileName`),

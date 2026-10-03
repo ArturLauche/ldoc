@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, afterEach } from 'vitest';
 import type { ReactElement } from 'react';
@@ -85,6 +85,39 @@ describe('table insert and tools', () => {
     );
   });
 
+  it.each([
+    [2, 3],
+    // The picker opens on 1 × 1, which must still need a confirming tap.
+    [1, 1],
+  ])('previews %i × %i on the first tap and inserts on a confirming tap', async (rows, cols) => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<TableGridPicker editor={editor} />);
+
+    await user.click(screen.getByRole('button', { name: 'Insert table' }));
+    const cell = screen.getByTestId(`table-picker-cell-${rows}-${cols}`);
+    const tap = () => {
+      fireEvent.pointerDown(cell, { pointerType: 'touch' });
+      // Browsers emulate hover and focus for a tap before the click.
+      fireEvent.mouseMove(screen.getByRole('grid'), { clientX: 200, clientY: 200 });
+      fireEvent.mouseEnter(cell);
+      fireEvent.focus(cell);
+      fireEvent.click(cell);
+    };
+
+    tap();
+    expect(editor.getHTML()).not.toContain('<table');
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent(
+      `${rows} × ${cols} table`,
+    );
+    expect(screen.getByLabelText('Rows')).toHaveValue(rows);
+    expect(screen.getByLabelText('Columns')).toHaveValue(cols);
+
+    tap();
+    expect(editor.getHTML().match(/<tr/g)?.length).toBe(rows);
+    expect(editor.getHTML().match(/<th/g)?.length).toBe(cols);
+  });
+
   it('inserts a rounded custom size and ignores empty custom fields', async () => {
     const user = userEvent.setup();
     editor = createTestEditor();
@@ -123,6 +156,15 @@ describe('table insert and tools', () => {
     renderWithProviders(<TableToolbar editor={editor} />);
     expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cell fill' })).toBeInTheDocument();
+  });
+
+  it('offers labeled contextual tools without the insert picker for touch layouts', () => {
+    editor = createTestEditor();
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });
+    renderWithProviders(<TableToolbar editor={editor} showInsert={false} showLabels />);
+    expect(screen.queryByRole('button', { name: 'Insert table' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Table' })).toHaveTextContent('Table');
+    expect(screen.getByRole('button', { name: 'Cell fill' })).toHaveTextContent('Cell fill');
   });
 
   it('keeps imported tables editable in the schema', () => {

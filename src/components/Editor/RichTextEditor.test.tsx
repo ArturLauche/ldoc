@@ -1,6 +1,7 @@
 import { storedItem } from '@/test/documentStorage';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -12,6 +13,7 @@ import {
   STORAGE_KEY,
   getLibraryDocuments,
 } from '@/lib/documentLibrary';
+import { COMPACT_LAYOUT_QUERY } from '@/hooks/useMediaQuery';
 import { RichTextEditor } from './RichTextEditor';
 
 function renderEditor() {
@@ -144,5 +146,56 @@ describe('RichTextEditor', () => {
       id?: string;
     };
     expect(storedCurrent.id).toBe((await getLibraryDocuments())[0].id);
+  });
+});
+
+describe('RichTextEditor on phones', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    localStorage.clear();
+    window.matchMedia = ((query: string) => ({
+      matches: query === COMPACT_LAYOUT_QUERY,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('docks a compact toolbar and keeps the header to one row', async () => {
+    const user = userEvent.setup();
+    const { container } = renderEditor();
+    await waitFor(() => expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false'));
+
+    const toolbar = await screen.findByRole(
+      'group',
+      { name: 'Document formatting' },
+      { timeout: 3000 },
+    );
+    expect(toolbar).toHaveClass('mobile-toolbar');
+    expect(toolbar).toHaveAttribute('data-scroll-inset', 'bottom');
+    expect(container.querySelector('.app-shell')).toHaveClass('is-compact');
+    expect(container.querySelector('.toolbar-bar')).toBeNull();
+    expect(within(toolbar).getByRole('button', { name: 'Text formatting' })).toBeInTheDocument();
+
+    // Language and theme fold into one menu so the title keeps its room.
+    expect(screen.queryByRole('button', { name: 'Change language' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Display and language' }));
+    expect(await screen.findByRole('menuitem', { name: 'Dark mode' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Deutsch' })).toBeInTheDocument();
+
+    // Save state stays in the phone header as an icon, with its label kept
+    // for assistive tech.
+    const saveStatus = container.querySelector<HTMLElement>('header [role="status"]');
+    expect(saveStatus).not.toBeNull();
+    expect(within(saveStatus!).getByText(/on this device/i)).toHaveClass('sr-only');
   });
 });

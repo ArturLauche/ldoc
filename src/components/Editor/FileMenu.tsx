@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   FileText,
@@ -41,12 +41,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DocumentLibraryDialog } from './DocumentLibraryDialog';
+import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
+import { focusContainerOnTouch } from '@/lib/inputModality';
 import { assertDocumentSize } from '@/lib/documentLimits';
 import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/download';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
-import { formatMessage } from '@/lib/translations';
+import { formatMessage, type TranslationKey } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 import { logError } from '@/lib/logger';
@@ -64,7 +66,50 @@ import {
 
 const SUPPORTED_IMPORT_FORMATS = '.txt,.html,.htm,.rtf,.docx,.odt,.ott,.fodt';
 
+const EXPORT_FORMATS: {
+  format: ExportFormat;
+  label: TranslationKey;
+  icon: typeof FileText;
+}[] = [
+  { format: 'txt', label: 'fileMenuFormatTxt', icon: FileType },
+  { format: 'html', label: 'fileMenuFormatHtml', icon: FileText },
+  { format: 'rtf', label: 'fileMenuFormatRtf', icon: FileSpreadsheet },
+  { format: 'docx', label: 'fileMenuFormatDocx', icon: FileBadge2 },
+  { format: 'odt', label: 'fileMenuFormatOdt', icon: FileArchive },
+  { format: 'pdf', label: 'fileMenuFormatPdf', icon: FileOutput },
+];
+
+function SheetSection({ label, children }: { label?: string; children: ReactNode }) {
+  return (
+    <section className="file-sheet-section">
+      {label ? <h3 className="file-sheet-label">{label}</h3> : null}
+      {children}
+    </section>
+  );
+}
+
+function SheetAction({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button type="button" className="file-sheet-action" onClick={onClick} disabled={disabled}>
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  );
+}
+
 interface FileMenuProps {
+  /** Phones open the file actions as a bottom sheet instead of nested menus. */
+  compact?: boolean;
   menuTriggerRef?: RefObject<HTMLButtonElement | null>;
   editor: Editor | null;
   documentId: string;
@@ -78,6 +123,7 @@ interface FileMenuProps {
 }
 
 export const FileMenu = ({
+  compact = false,
   menuTriggerRef,
   editor,
   documentId,
@@ -101,6 +147,10 @@ export const FileMenu = ({
   const [libraryError, setLibraryError] = useState(false);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
+  const fileMenu = useTouchSafeMenu();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Dialogs opened from the sheet wait until it has closed and released focus.
+  const afterSheetCloseRef = useRef<(() => void) | null>(null);
 
   const refreshLibraryDocuments = useCallback(async () => {
     setLibraryLoading(true);
@@ -370,6 +420,20 @@ export const FileMenu = ({
     }
   };
 
+  const startRename = () => {
+    setNewName(documentName);
+    setRenameOpen(true);
+  };
+
+  const print = () => requestAnimationFrame(() => window.print());
+
+  /** File pickers and downloads run within the tap; dialogs open after the sheet closes. */
+  const runFromSheet = (action: () => void, timing: 'now' | 'after-close' = 'now') => {
+    if (timing === 'after-close') afterSheetCloseRef.current = action;
+    setSheetOpen(false);
+    if (timing === 'now') action();
+  };
+
   const handleRename = () => {
     if (newName.trim()) {
       setDocumentName(newName.trim());
@@ -378,116 +442,213 @@ export const FileMenu = ({
     }
   };
 
+  const trigger = compact ? (
+    <Button
+      ref={triggerRef}
+      variant="ghost"
+      className="h-10 shrink-0 gap-0.5 px-2"
+      aria-label={t('fileMenuLabel')}
+      aria-haspopup="dialog"
+      aria-expanded={sheetOpen}
+      onClick={() => setSheetOpen(true)}
+    >
+      <Folder className="h-5 w-5" />
+      <ChevronDown className="h-3 w-3 opacity-70" />
+    </Button>
+  ) : null;
+
   return (
     <>
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            ref={triggerRef}
-            variant="ghost"
-            className="h-9 px-2.5 gap-1.5 text-sm font-medium"
+      {compact ? (
+        <>
+          {trigger}
+          <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+            <DialogContent
+              className="file-sheet flex flex-col gap-0 overflow-hidden p-0 [--sheet-padding-bottom:0.5rem] sm:max-w-sm"
+              onOpenAutoFocus={focusContainerOnTouch}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                const action = afterSheetCloseRef.current;
+                afterSheetCloseRef.current = null;
+                if (action) action();
+                else triggerRef.current?.focus();
+              }}
+            >
+              <DialogHeader className="border-b border-border px-5 pb-3 pt-5 pr-14 text-left">
+                <DialogTitle>{t('fileMenuLabel')}</DialogTitle>
+                <DialogDescription className="truncate">
+                  {documentName || t('untitledDocument')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+                <SheetSection>
+                  <SheetAction
+                    icon={<FilePlus />}
+                    label={t('fileMenuNewDocument')}
+                    onClick={() => runFromSheet(() => void handleNewDocument(), 'after-close')}
+                  />
+                  <SheetAction
+                    icon={<FolderOpen />}
+                    label={isImporting ? t('importInProgress') : t('fileMenuOpen')}
+                    disabled={isImporting}
+                    onClick={() => runFromSheet(() => void handleOpenFile())}
+                  />
+                  <SheetAction
+                    icon={<Save />}
+                    label={t('fileMenuSave')}
+                    onClick={() => runFromSheet(() => void handleSave())}
+                  />
+                  <SheetAction
+                    icon={<FileText />}
+                    label={t('fileMenuRename')}
+                    onClick={() => runFromSheet(startRename, 'after-close')}
+                  />
+                  <SheetAction
+                    icon={<History />}
+                    label={t('fileMenuVersionHistory')}
+                    onClick={() => runFromSheet(onShowVersionHistory, 'after-close')}
+                  />
+                  <SheetAction
+                    icon={<Printer />}
+                    label={t('fileMenuPrint')}
+                    onClick={() => runFromSheet(print, 'after-close')}
+                  />
+                </SheetSection>
+                <SheetSection label={t('documentLibrary')}>
+                  <SheetAction
+                    icon={<Search />}
+                    label={t('searchDocuments')}
+                    onClick={() => runFromSheet(() => handleLibraryOpenChange(true), 'after-close')}
+                  />
+                  <SheetAction
+                    icon={<Upload />}
+                    label={t('importSingleDoc')}
+                    disabled={isImporting}
+                    onClick={() => runFromSheet(handleImportSingleDocument)}
+                  />
+                  <SheetAction
+                    icon={<Download />}
+                    label={t('exportAllDocs')}
+                    disabled={isExporting}
+                    onClick={() => runFromSheet(() => void handleExportLibrary())}
+                  />
+                  <SheetAction
+                    icon={<Files />}
+                    label={t('importAllDocs')}
+                    disabled={isImporting}
+                    onClick={() => runFromSheet(handleImportLibrary)}
+                  />
+                </SheetSection>
+                <SheetSection label={t('fileMenuExportAs')}>
+                  <div className="file-sheet-formats">
+                    {EXPORT_FORMATS.map(({ format, label, icon: Icon }) => (
+                      <button
+                        key={format}
+                        type="button"
+                        className="file-sheet-format"
+                        aria-label={t(label)}
+                        disabled={isExporting}
+                        onClick={() => runFromSheet(() => void exportAs(format))}
+                      >
+                        <Icon aria-hidden="true" />
+                        <span aria-hidden="true">.{format}</span>
+                      </button>
+                    ))}
+                  </div>
+                </SheetSection>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <DropdownMenu modal={false} open={fileMenu.open} onOpenChange={fileMenu.onOpenChange}>
+          <DropdownMenuTrigger asChild {...fileMenu.triggerProps}>
+            <Button
+              ref={triggerRef}
+              variant="ghost"
+              className="h-9 px-2.5 gap-1.5 text-sm font-medium"
+            >
+              <Folder className="h-4 w-4" />
+              {t('fileMenuLabel')}
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            aria-label={t('fileMenuLabel')}
+            className="w-56 bg-popover border border-border shadow-lg z-50"
+            align="start"
           >
-            <Folder className="h-4 w-4" />
-            {t('fileMenuLabel')}
-            <ChevronDown className="h-3 w-3" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          aria-label={t('fileMenuLabel')}
-          className="w-56 bg-popover border border-border shadow-lg z-50"
-          align="start"
-        >
-          <DropdownMenuItem onClick={() => void handleNewDocument()}>
-            <FilePlus className="h-4 w-4 mr-2" />
-            {t('fileMenuNewDocument')}
-            <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void handleOpenFile()} disabled={isImporting}>
-            <FolderOpen className="h-4 w-4 mr-2" />
-            {isImporting ? t('importInProgress') : t('fileMenuOpen')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            {t('fileMenuSave')}
-            <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleLibraryOpenChange(true)}>
-            <Search className="h-4 w-4 mr-2" />
-            {t('searchDocuments')}
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Files className="h-4 w-4 mr-2" />
-              {t('libraryTransfer')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
-              <DropdownMenuItem onClick={handleExportLibrary} disabled={isExporting}>
+            <DropdownMenuItem onClick={() => void handleNewDocument()}>
+              <FilePlus className="h-4 w-4 mr-2" />
+              {t('fileMenuNewDocument')}
+              <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void handleOpenFile()} disabled={isImporting}>
+              <FolderOpen className="h-4 w-4 mr-2" />
+              {isImporting ? t('importInProgress') : t('fileMenuOpen')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSave}>
+              <Save className="h-4 w-4 mr-2" />
+              {t('fileMenuSave')}
+              <span className="ml-auto text-xs text-muted-foreground">⌘S</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleLibraryOpenChange(true)}>
+              <Search className="h-4 w-4 mr-2" />
+              {t('searchDocuments')}
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Files className="h-4 w-4 mr-2" />
+                {t('libraryTransfer')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
+                <DropdownMenuItem onClick={handleExportLibrary} disabled={isExporting}>
+                  <Download className="h-4 w-4 mr-2" />
+                  {t('exportAllDocs')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleImportLibrary} disabled={isImporting}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {t('importAllDocs')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleImportSingleDocument} disabled={isImporting}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {t('importSingleDoc')}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
                 <Download className="h-4 w-4 mr-2" />
-                {t('exportAllDocs')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleImportLibrary} disabled={isImporting}>
-                <Upload className="h-4 w-4 mr-2" />
-                {t('importAllDocs')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleImportSingleDocument} disabled={isImporting}>
-                <Upload className="h-4 w-4 mr-2" />
-                {t('importSingleDoc')}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Download className="h-4 w-4 mr-2" />
-              {t('fileMenuExportAs')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
-              <DropdownMenuItem onClick={() => void exportAs('txt')} disabled={isExporting}>
-                <FileType className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatTxt')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('html')} disabled={isExporting}>
-                <FileText className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatHtml')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('rtf')} disabled={isExporting}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatRtf')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('docx')} disabled={isExporting}>
-                <FileBadge2 className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatDocx')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('odt')} disabled={isExporting}>
-                <FileArchive className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatOdt')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportAs('pdf')} disabled={isExporting}>
-                <FileOutput className="h-4 w-4 mr-2" />
-                {t('fileMenuFormatPdf')}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
-              setNewName(documentName);
-              setRenameOpen(true);
-            }}
-          >
-            {t('fileMenuRename')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => requestAnimationFrame(() => window.print())}>
-            <Printer className="h-4 w-4 mr-2" />
-            {t('fileMenuPrint')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onShowVersionHistory}>
-            <History className="h-4 w-4 mr-2" />
-            {t('fileMenuVersionHistory')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                {t('fileMenuExportAs')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="bg-popover border border-border shadow-lg z-50 min-w-[180px]">
+                {EXPORT_FORMATS.map(({ format, label, icon: Icon }) => (
+                  <DropdownMenuItem
+                    key={format}
+                    onClick={() => void exportAs(format)}
+                    disabled={isExporting}
+                  >
+                    <Icon className="h-4 w-4 mr-2" />
+                    {t(label)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={startRename}>{t('fileMenuRename')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={print}>
+              <Printer className="h-4 w-4 mr-2" />
+              {t('fileMenuPrint')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onShowVersionHistory}>
+              <History className="h-4 w-4 mr-2" />
+              {t('fileMenuVersionHistory')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent

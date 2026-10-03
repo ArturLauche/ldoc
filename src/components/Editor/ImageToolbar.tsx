@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
   Image as ImageIcon,
+  ImageUp,
   Link2,
   Upload,
 } from 'lucide-react';
@@ -26,6 +27,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { toast } from 'sonner';
 import { formatMessage, type TranslationKey } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { focusContainerOnTouch } from '@/lib/inputModality';
+import { ToolTile } from './toolbarControls';
 import {
   DEFAULT_IMAGE_ALIGNMENT,
   DEFAULT_IMAGE_WIDTH,
@@ -49,11 +53,28 @@ const URL_ERROR_KEYS: Record<ImageUrlError, TranslationKey> = {
 
 interface ImageToolbarProps {
   editor: Editor | null;
+  /** `tile`: labeled insert control; `context`: labeled edit control for a selected image. */
+  variant?: 'icon' | 'tile' | 'context';
+  /** Runs once an image is inserted or updated and focus is back in the document. */
+  onComplete?: () => void;
 }
 
-export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
+export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageToolbarProps) => {
   const { t } = useLocale();
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // After inserting, writing continues in the document instead of the trigger.
+  const returnToEditorRef = useRef(false);
+  // Opening or dismissing the dialog starts a new session; an upload that
+  // outlives its session was cancelled and must not insert or close the dialog.
+  const sessionRef = useRef(0);
+  // Unmounting (route change, editor teardown) cancels a pending upload too.
+  useEffect(
+    () => () => {
+      sessionRef.current += 1;
+    },
+    [],
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [altText, setAltText] = useState('');
@@ -112,18 +133,21 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       return;
     }
 
+    const session = sessionRef.current;
     setIsUploading(true);
 
     try {
       const dataUrl = await readFileAsDataUrl(file);
+      if (session !== sessionRef.current) return;
       insertImage(dataUrl, file.name);
+      returnToEditorRef.current = true;
       setIsOpen(false);
       setAltText('');
       toast.success(t('imageInserted'));
     } catch {
-      toast.error(t('imageUploadFailed'));
+      if (session === sessionRef.current) toast.error(t('imageUploadFailed'));
     } finally {
-      setIsUploading(false);
+      if (session === sessionRef.current) setIsUploading(false);
     }
   };
 
@@ -137,6 +161,7 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
     }
 
     insertImage(normalized.url, 'Image');
+    returnToEditorRef.current = true;
     setIsOpen(false);
     setImageUrl('');
     setAltText('');
@@ -170,31 +195,74 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
       })
       .run();
     toast.success(t('imageUpdated'));
+    returnToEditorRef.current = true;
     setIsOpen(false);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                syncSelectionAttributes();
-              }}
-              className="h-9 w-9 p-0"
-              aria-label={t('imageInsertTooltip')}
-            >
-              <ImageIcon className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('imageInsertTooltip')}</TooltipContent>
-      </Tooltip>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(next) => {
+        sessionRef.current += 1;
+        setIsUploading(false);
+        if (next) returnToEditorRef.current = false;
+        setIsOpen(next);
+      }}
+    >
+      {variant === 'tile' ? (
+        <DialogTrigger asChild>
+          <ToolTile
+            icon={<ImageIcon />}
+            label={t('insertImageShort')}
+            aria-label={t('imageInsertTooltip')}
+            onClick={syncSelectionAttributes}
+          />
+        </DialogTrigger>
+      ) : variant === 'context' ? (
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={syncSelectionAttributes}
+            className="h-10 gap-1 px-3 text-sm"
+          >
+            <ImageUp className="h-4 w-4" />
+            <span className="whitespace-nowrap">{t('editImage')}</span>
+          </Button>
+        </DialogTrigger>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  syncSelectionAttributes();
+                }}
+                className="h-9 w-9 p-0"
+                aria-label={t('imageInsertTooltip')}
+              >
+                <ImageIcon className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('imageInsertTooltip')}</TooltipContent>
+        </Tooltip>
+      )}
 
-      <DialogContent className="bg-background border border-border shadow-lg sm:max-w-md">
+      <DialogContent
+        className="bg-background border border-border shadow-lg sm:max-w-md"
+        onOpenAutoFocus={focusContainerOnTouch}
+        onCloseAutoFocus={(event) => {
+          if (!returnToEditorRef.current) return;
+          returnToEditorRef.current = false;
+          event.preventDefault();
+          if (editor.isDestroyed) return;
+          editor.commands.focus();
+          onComplete?.();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('imageDialogTitle')}</DialogTitle>
           <DialogDescription>{t('imageDialogDescription')}</DialogDescription>
@@ -242,7 +310,9 @@ export const ImageToolbar = ({ editor }: ImageToolbarProps) => {
               >
                 <Upload className="h-6 w-6 mx-auto mb-3 text-muted-foreground" />
                 <span className="block text-sm text-muted-foreground mb-2">
-                  {isUploading ? t('imageUploading') : t('imageDropHint')}
+                  {isUploading
+                    ? t('imageUploading')
+                    : t(coarsePointer ? 'imageTapHint' : 'imageDropHint')}
                 </span>
                 <span className="block text-xs text-muted-foreground">{t('imageFormatsHint')}</span>
               </Button>

@@ -99,7 +99,8 @@ describe('smart graphic insert and editing', () => {
     await user.click(screen.getByRole('tab', { name: 'Process' }));
     expect(screen.getAllByTestId('graphic-preview-frame').length).toBeGreaterThan(0);
     screen.getAllByTestId('graphic-preview-frame').forEach((frame) => {
-      expect(frame).toHaveClass('h-36', 'items-center', 'justify-center');
+      // Fixed preview heights: shorter on phones so two columns fit.
+      expect(frame).toHaveClass('h-24', 'sm:h-36', 'items-center', 'justify-center');
       expect(frame.querySelector('[data-compact="true"]')).toBeTruthy();
     });
     expect(screen.getByTestId('graphic-layout-process-chevron')).toHaveClass('flex-nowrap');

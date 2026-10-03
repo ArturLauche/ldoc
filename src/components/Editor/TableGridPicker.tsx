@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { cn } from '@/lib/utils';
+import { ToolTile } from './toolbarControls';
 
 export const TABLE_PICKER_MAX = 10;
 export const TABLE_CUSTOM_MAX = 20;
@@ -24,6 +25,10 @@ export interface TableInsertSpec {
 
 interface TableGridPickerProps {
   editor: Editor;
+  /** `tile`: labeled trigger for the phone insert panel. */
+  variant?: 'icon' | 'tile';
+  /** Runs once a table is inserted and focus is back in the document. */
+  onComplete?: () => void;
 }
 
 function clampSize(value: number): number {
@@ -58,10 +63,16 @@ function sizeFromPointer(
   return { rows, cols };
 }
 
-export function TableGridPicker({ editor }: TableGridPickerProps) {
+export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableGridPickerProps) {
   const { t } = useLocale();
   const gridId = useId();
   const gridRef = useRef<HTMLDivElement>(null);
+  // Touch has no hover preview: the first tap picks a size, a second tap on
+  // the same cell (or the Insert button) creates the table.
+  const touchPointerRef = useRef(false);
+  const previewedRef = useRef(false);
+  // After inserting, writing continues in the document instead of the trigger.
+  const insertedRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [hoverRows, setHoverRows] = useState(1);
   const [hoverCols, setHoverCols] = useState(1);
@@ -82,6 +93,7 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
       const rows = clampSize(spec.rows);
       const cols = clampSize(spec.cols);
       editor.chain().focus().insertTable({ rows, cols, withHeaderRow: spec.withHeaderRow }).run();
+      insertedRef.current = true;
       setOpen(false);
     },
     [editor],
@@ -92,6 +104,16 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
     setHoverCols(Math.min(TABLE_PICKER_MAX, Math.max(1, cols)));
   }, []);
 
+  const previewSize = useCallback(
+    (rows: number, cols: number) => {
+      previewedRef.current = true;
+      moveHover(rows, cols);
+      setCustomRows(String(rows));
+      setCustomCols(String(cols));
+    },
+    [moveHover],
+  );
+
   const customRowCount = parseCustomSize(customRows);
   const customColCount = parseCustomSize(customCols);
   const canInsertCustom = customRowCount !== null && customColCount !== null;
@@ -100,34 +122,57 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
   const gridPx = TABLE_PICKER_MAX * TABLE_PICKER_HIT_PX;
 
   return (
-    <Popover open={open} onOpenChange={(nextOpen) => {
-      if (nextOpen) {
-        setHoverRows(1);
-        setHoverCols(1);
-      }
-      setOpen(nextOpen);
-    }}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0"
-              aria-label={t('toolbarInsertTable')}
-              aria-haspopup="dialog"
-            >
-              <Table className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('toolbarInsertTable')}</TooltipContent>
-      </Tooltip>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          previewedRef.current = false;
+          setHoverRows(1);
+          setHoverCols(1);
+        }
+        setOpen(nextOpen);
+      }}
+    >
+      {variant === 'tile' ? (
+        <PopoverTrigger asChild>
+          <ToolTile
+            icon={<Table />}
+            label={t('insertTableShort')}
+            aria-label={t('toolbarInsertTable')}
+            aria-haspopup="dialog"
+          />
+        </PopoverTrigger>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0"
+                aria-label={t('toolbarInsertTable')}
+                aria-haspopup="dialog"
+              >
+                <Table className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('toolbarInsertTable')}</TooltipContent>
+        </Tooltip>
+      )}
       <PopoverContent
         aria-label={t('toolbarInsertTable')}
         align="start"
         className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-2.5 bg-popover border border-border shadow-lg z-50"
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          if (!insertedRef.current) return;
+          insertedRef.current = false;
+          event.preventDefault();
+          if (editor.isDestroyed) return;
+          editor.commands.focus();
+          onComplete?.();
+        }}
       >
         <div className="flex flex-col gap-2">
           <div
@@ -137,13 +182,21 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             tabIndex={0}
             aria-label={sizeLabel}
             aria-activedescendant={activeCellId}
-            className="outline-hidden"
+            className="outline-hidden touch-manipulation"
             style={{
               width: gridPx,
               display: 'grid',
               gridTemplateColumns: `repeat(${TABLE_PICKER_MAX}, ${TABLE_PICKER_HIT_PX}px)`,
             }}
+            onPointerDown={(event) => {
+              touchPointerRef.current = event.pointerType !== 'mouse';
+            }}
+            onPointerMove={(event) => {
+              if (event.pointerType === 'mouse') touchPointerRef.current = false;
+            }}
             onMouseMove={(event) => {
+              // Browsers emulate mouse movement for taps; only real hovers preview.
+              if (touchPointerRef.current) return;
               const rect = event.currentTarget.getBoundingClientRect();
               if (rect.width === 0 || rect.height === 0) return;
               const next = sizeFromPointer(event.clientX, event.clientY, event.currentTarget);
@@ -189,9 +242,21 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
                       aria-selected={active}
                       className="flex items-center justify-center p-0"
                       style={{ width: TABLE_PICKER_HIT_PX, height: TABLE_PICKER_HIT_PX }}
-                      onMouseEnter={() => moveHover(row, col)}
-                      onFocus={() => moveHover(row, col)}
-                      onClick={() => insertTable({ rows: row, cols: col, withHeaderRow })}
+                      onMouseEnter={() => {
+                        if (!touchPointerRef.current) moveHover(row, col);
+                      }}
+                      onFocus={() => {
+                        if (!touchPointerRef.current) moveHover(row, col);
+                      }}
+                      onClick={() => {
+                        const confirmTap =
+                          previewedRef.current && row === hoverRows && col === hoverCols;
+                        if (touchPointerRef.current && !confirmTap) {
+                          previewSize(row, col);
+                          return;
+                        }
+                        insertTable({ rows: row, cols: col, withHeaderRow });
+                      }}
                     >
                       <span
                         aria-hidden="true"
@@ -215,12 +280,12 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
             {sizeLabel}
           </p>
           <Separator />
-          <label className="flex items-center gap-2 text-xs text-foreground">
+          <label className="flex items-center gap-2 text-xs text-foreground pointer-coarse:min-h-10 pointer-coarse:text-sm">
             <input
               type="checkbox"
               checked={withHeaderRow}
               onChange={(event) => setWithHeaderRow(event.target.checked)}
-              className="h-3.5 w-3.5 accent-primary"
+              className="h-3.5 w-3.5 accent-primary pointer-coarse:h-5 pointer-coarse:w-5"
             />
             {t('tableHeaderRow')}
           </label>
@@ -239,10 +304,14 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
                 max={TABLE_CUSTOM_MAX}
                 value={customRows}
                 onChange={(event) => setCustomRows(event.target.value)}
-                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs"
+                inputMode="numeric"
+                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs pointer-coarse:h-10 pointer-coarse:w-16 pointer-coarse:text-base"
               />
             </div>
-            <span className="mb-1.5 text-xs text-muted-foreground" aria-hidden="true">
+            <span
+              className="mb-1.5 text-xs text-muted-foreground pointer-coarse:mb-3"
+              aria-hidden="true"
+            >
               ×
             </span>
             <div className="min-w-0">
@@ -259,12 +328,13 @@ export function TableGridPicker({ editor }: TableGridPickerProps) {
                 max={TABLE_CUSTOM_MAX}
                 value={customCols}
                 onChange={(event) => setCustomCols(event.target.value)}
-                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs"
+                inputMode="numeric"
+                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs pointer-coarse:h-10 pointer-coarse:w-16 pointer-coarse:text-base"
               />
             </div>
             <Button
               size="sm"
-              className="h-7 shrink-0 px-2.5 text-xs"
+              className="h-7 shrink-0 px-2.5 text-xs pointer-coarse:h-10 pointer-coarse:px-4 pointer-coarse:text-sm"
               disabled={!canInsertCustom}
               aria-label={t('tableInsertCustom')}
               onClick={() => {
