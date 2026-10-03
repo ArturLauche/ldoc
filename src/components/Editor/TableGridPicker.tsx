@@ -27,6 +27,8 @@ interface TableGridPickerProps {
   editor: Editor;
   /** `tile`: labeled trigger for the phone insert panel. */
   variant?: 'icon' | 'tile';
+  /** Runs once a table is inserted and focus is back in the document. */
+  onComplete?: () => void;
 }
 
 function clampSize(value: number): number {
@@ -61,13 +63,16 @@ function sizeFromPointer(
   return { rows, cols };
 }
 
-export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerProps) {
+export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableGridPickerProps) {
   const { t } = useLocale();
   const gridId = useId();
   const gridRef = useRef<HTMLDivElement>(null);
   // Touch has no hover preview: the first tap picks a size, a second tap on
   // the same cell (or the Insert button) creates the table.
   const touchPointerRef = useRef(false);
+  const previewedRef = useRef(false);
+  // After inserting, writing continues in the document instead of the trigger.
+  const insertedRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [hoverRows, setHoverRows] = useState(1);
   const [hoverCols, setHoverCols] = useState(1);
@@ -88,6 +93,7 @@ export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerPro
       const rows = clampSize(spec.rows);
       const cols = clampSize(spec.cols);
       editor.chain().focus().insertTable({ rows, cols, withHeaderRow: spec.withHeaderRow }).run();
+      insertedRef.current = true;
       setOpen(false);
     },
     [editor],
@@ -100,6 +106,7 @@ export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerPro
 
   const previewSize = useCallback(
     (rows: number, cols: number) => {
+      previewedRef.current = true;
       moveHover(rows, cols);
       setCustomRows(String(rows));
       setCustomCols(String(cols));
@@ -115,13 +122,17 @@ export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerPro
   const gridPx = TABLE_PICKER_MAX * TABLE_PICKER_HIT_PX;
 
   return (
-    <Popover open={open} onOpenChange={(nextOpen) => {
-      if (nextOpen) {
-        setHoverRows(1);
-        setHoverCols(1);
-      }
-      setOpen(nextOpen);
-    }}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          previewedRef.current = false;
+          setHoverRows(1);
+          setHoverCols(1);
+        }
+        setOpen(nextOpen);
+      }}
+    >
       {variant === 'tile' ? (
         <PopoverTrigger asChild>
           <ToolTile
@@ -154,6 +165,14 @@ export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerPro
         align="start"
         className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-2.5 bg-popover border border-border shadow-lg z-50"
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          if (!insertedRef.current) return;
+          insertedRef.current = false;
+          event.preventDefault();
+          if (editor.isDestroyed) return;
+          editor.commands.focus();
+          onComplete?.();
+        }}
       >
         <div className="flex flex-col gap-2">
           <div
@@ -230,7 +249,8 @@ export function TableGridPicker({ editor, variant = 'icon' }: TableGridPickerPro
                         if (!touchPointerRef.current) moveHover(row, col);
                       }}
                       onClick={() => {
-                        const confirmTap = row === hoverRows && col === hoverCols;
+                        const confirmTap =
+                          previewedRef.current && row === hoverRows && col === hoverCols;
                         if (touchPointerRef.current && !confirmTap) {
                           previewSize(row, col);
                           return;

@@ -27,7 +27,10 @@ export function trackInputModality(): () => void {
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('keydown', onKeyDown, true);
   }
+  let stopped = false;
   return () => {
+    if (stopped) return;
+    stopped = true;
     if (--listeners === 0) {
       window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('keydown', onKeyDown, true);
@@ -48,7 +51,8 @@ export function isTouchInteraction(): boolean {
  * `onOpenAutoFocus` handler for dialogs and sheets: after a tap, focus the
  * dialog itself rather than its first control, so no software keyboard or
  * focus ring appears until the user picks a field. Keyboard users still land
- * on the first control.
+ * on the first control. (Radix's FocusScope gives dialog content
+ * `tabIndex={-1}`, so the container can take focus.)
  */
 export function focusContainerOnTouch(event: Event) {
   if (!isTouchInteraction()) return;

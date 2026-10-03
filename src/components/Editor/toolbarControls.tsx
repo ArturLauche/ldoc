@@ -1,4 +1,12 @@
-import { forwardRef, useCallback, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import type { Editor } from '@tiptap/react';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,13 +100,19 @@ interface LinkPopoverProps {
   /** The trigger button; receives open state through Radix. */
   trigger: ReactElement;
   align?: 'start' | 'center' | 'end';
+  /** Runs once a link is applied or removed and focus is back in the document. */
+  onComplete?: () => void;
 }
 
-export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverProps) {
+export function LinkPopover({ editor, trigger, align = 'center', onComplete }: LinkPopoverProps) {
   const { t } = useLocale();
+  const inputId = useId();
+  const errorId = `${inputId}-error`;
   const [linkUrl, setLinkUrl] = useState('');
   const [open, setOpen] = useState(false);
   const [linkError, setLinkError] = useState(false);
+  // After editing the link, writing continues in the document instead of the trigger.
+  const returnToEditorRef = useRef(false);
 
   const setLink = useCallback(() => {
     const href = normalizeLinkUrl(linkUrl);
@@ -107,6 +121,7 @@ export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverPr
       return;
     }
     editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    returnToEditorRef.current = true;
     setOpen(false);
     setLinkError(false);
   }, [editor, linkUrl]);
@@ -117,8 +132,10 @@ export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverPr
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
-          setLinkUrl(editor.getAttributes('link').href ?? '');
+          const href: unknown = editor.getAttributes('link').href;
+          setLinkUrl(typeof href === 'string' ? href : '');
           setLinkError(false);
+          returnToEditorRef.current = false;
         }
       }}
     >
@@ -127,13 +144,21 @@ export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverPr
         aria-label={t('toolbarLink')}
         align={align}
         className="w-[min(20rem,calc(100vw-1rem))] p-3 bg-popover border border-border shadow-lg z-50"
+        onCloseAutoFocus={(event) => {
+          if (!returnToEditorRef.current) return;
+          returnToEditorRef.current = false;
+          event.preventDefault();
+          if (editor.isDestroyed) return;
+          editor.commands.focus();
+          onComplete?.();
+        }}
       >
         <div className="flex flex-col gap-2">
-          <Label htmlFor="document-link">{t('toolbarLink')}</Label>
+          <Label htmlFor={inputId}>{t('toolbarLink')}</Label>
           <Input
-            id="document-link"
+            id={inputId}
             aria-invalid={linkError}
-            aria-describedby={linkError ? 'document-link-error' : undefined}
+            aria-describedby={linkError ? errorId : undefined}
             type="url"
             inputMode="url"
             enterKeyHint="done"
@@ -153,7 +178,7 @@ export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverPr
             }}
           />
           {linkError && (
-            <p id="document-link-error" role="alert" className="text-xs text-destructive">
+            <p id={errorId} role="alert" className="text-xs text-destructive">
               {t('linkInvalid')}
             </p>
           )}
@@ -173,6 +198,7 @@ export function LinkPopover({ editor, trigger, align = 'center' }: LinkPopoverPr
                 className="h-10 sm:h-9"
                 onClick={() => {
                   editor.chain().focus().extendMarkRange('link').unsetLink().run();
+                  returnToEditorRef.current = true;
                   setOpen(false);
                 }}
               >

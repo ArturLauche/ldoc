@@ -122,7 +122,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
           size="sm"
           className={cn(
             'h-9 w-9 shrink-0 p-0',
-            compact && 'h-10 w-10',
+            compact && 'h-10 w-10 max-[379px]:w-9',
             (options.pressed || options.expanded) && 'bg-primary/10 text-primary',
           )}
           onClick={onClick}
@@ -136,6 +136,13 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
+  );
+
+  const matchCaseButton = iconButton(
+    t('matchCase'),
+    <CaseSensitive className="h-4 w-4" />,
+    handleCaseSensitiveToggle,
+    { pressed: caseSensitive },
   );
 
   return (
@@ -153,7 +160,14 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
           compact && 'w-full flex-nowrap gap-0.5',
         )}
       >
-        <div className={cn('relative min-w-0', compact && 'flex-1')}>
+        {/* Phones show the match count inside the field, taking only the width it needs. */}
+        <div
+          className={cn(
+            'min-w-0',
+            compact &&
+              'flex h-10 flex-1 items-center rounded-md border border-input bg-background ring-offset-background has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-offset-2',
+          )}
+        >
           <Input
             ref={findInputRef}
             data-find-input
@@ -165,11 +179,15 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
             enterKeyHint="search"
             autoComplete="off"
             spellCheck={false}
-            className={cn('h-9 w-36 min-w-0 sm:w-44', compact && 'h-10 w-full pr-[4.75rem]')}
+            className={cn(
+              'h-9 w-36 min-w-0 sm:w-44',
+              compact &&
+                'h-full w-auto flex-1 border-0 bg-transparent pe-2 focus-visible:ring-0 focus-visible:ring-offset-0',
+            )}
           />
           {compact ? (
             <span
-              className="pointer-events-none absolute inset-y-0 right-2 flex max-w-[4.5rem] items-center truncate text-xs text-muted-foreground tabular-nums"
+              className="shrink-0 whitespace-nowrap pe-3 text-xs text-muted-foreground tabular-nums empty:pe-0"
               aria-live="polite"
             >
               {matchStatus}
@@ -181,14 +199,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
             {matchStatus}
           </span>
         )}
-        {iconButton(
-          t('matchCase'),
-          <CaseSensitive className="h-4 w-4" />,
-          handleCaseSensitiveToggle,
-          {
-            pressed: caseSensitive,
-          },
-        )}
+        {compact ? null : matchCaseButton}
         {iconButton(
           t('findPrevious'),
           <ArrowUp className="h-4 w-4" />,
@@ -218,23 +229,22 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
 
       {replaceVisible ? (
         <div
-          className={cn(
-            'flex min-w-0 flex-wrap items-center gap-1.5',
-            compact && 'w-full flex-nowrap gap-1',
-          )}
+          className={cn('flex min-w-0 flex-wrap items-center gap-1.5', compact && 'w-full gap-1')}
         >
+          {/* Narrow phones wrap the buttons below the field instead of squeezing it. */}
+          {compact ? matchCaseButton : null}
           <Input
             value={replacement}
             onChange={(event) => setReplacement(event.target.value)}
             placeholder={t('replacePlaceholder')}
             aria-label={t('replacePlaceholder')}
             autoComplete="off"
-            className={cn('h-9 w-36 min-w-0 sm:w-44', compact && 'h-10 w-auto flex-1')}
+            className={cn('h-9 w-36 min-w-0 sm:w-44', compact && 'h-10 w-auto flex-[3_1_7rem]')}
           />
           <Button
             variant="outline"
             size="sm"
-            className={cn('h-9', compact && 'h-10 shrink-0 px-3')}
+            className={cn('h-9', compact && 'h-10 grow px-3')}
             onClick={() => editor?.commands.replaceCurrentMatch(replacement)}
             disabled={!matchCount}
           >
@@ -243,7 +253,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
           <Button
             variant="outline"
             size="sm"
-            className={cn('h-9', compact && 'h-10 shrink-0 px-3')}
+            className={cn('h-9', compact && 'h-10 grow px-3')}
             onClick={handleReplaceAll}
             disabled={!matchCount}
           >

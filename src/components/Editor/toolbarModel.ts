@@ -17,6 +17,8 @@ export const FONT_SIZES = [
 ] as const;
 
 export const DEFAULT_FONT_SIZE = '16px';
+export const MIN_FONT_SIZE_PX = Number.parseFloat(FONT_SIZES[0]);
+export const MAX_FONT_SIZE_PX = Number.parseFloat(FONT_SIZES[FONT_SIZES.length - 1]);
 
 export const TEXT_COLORS = [
   '#000000',
@@ -78,7 +80,7 @@ export function stepFontSize(current: string, direction: 1 | -1): string {
     direction > 0
       ? sizes.find((size) => size > value)
       : [...sizes].reverse().find((size) => size < value);
-  return `${next ?? (direction > 0 ? sizes[sizes.length - 1] : sizes[0])}px`;
+  return `${next ?? (direction > 0 ? MAX_FONT_SIZE_PX : MIN_FONT_SIZE_PX)}px`;
 }
 
 export function useLineSpacings(t: (key: TranslationKey) => string) {

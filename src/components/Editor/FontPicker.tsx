@@ -84,7 +84,15 @@ export const FontPicker = ({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        // A pick whose close was cut short (the panel unmounted) must not
+        // swallow focus restoration the next time.
+        if (next) pickedRef.current = false;
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"

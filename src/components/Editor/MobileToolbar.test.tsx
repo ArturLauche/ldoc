@@ -111,17 +111,41 @@ describe('MobileToolbar', () => {
     expect(screen.queryByRole('region', { name: 'Insert' })).not.toBeInTheDocument();
   });
 
-  it('closes the insert panel once an insertion changes the document', async () => {
+  it('closes the insert panel once an insertion hands focus back to the document', async () => {
     const user = userEvent.setup();
     editor = createTestEditor();
     renderToolbar(editor);
     await user.click(screen.getByRole('button', { name: 'Insert' }));
+    const panel = screen.getByRole('region', { name: 'Insert' });
+
+    // Typing while the panel is open leaves it alone.
     act(() => {
-      editor.commands.insertTable({ rows: 2, cols: 2 });
+      editor.commands.insertContent('typed');
     });
+    expect(panel).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole('button', { name: 'Insert table' }));
+    await user.click(screen.getByTestId('table-picker-cell-2-2'));
+    expect(editor.getHTML()).toContain('<table');
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'Insert' })).not.toBeInTheDocument(),
     );
+  });
+
+  it('leaves Escape to an open picker before closing the panel', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderToolbar(editor);
+    await user.click(screen.getByRole('button', { name: 'Text formatting' }));
+    await user.click(screen.getByRole('button', { name: 'Select font' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Formatting options' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: 'Formatting options' })).not.toBeInTheDocument();
   });
 
   it('shows labeled contextual tools for tables and links', () => {

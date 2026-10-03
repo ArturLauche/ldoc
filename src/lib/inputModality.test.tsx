@@ -1,4 +1,6 @@
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
   focusContainerOnTouch,
   getInputModality,
@@ -43,6 +45,17 @@ describe('input modality tracking', () => {
     pointerDown('mouse');
     expect(isTouchInteraction()).toBe(true);
   });
+
+  it('ignores a repeated cleanup call', () => {
+    const first = trackInputModality();
+    pointerDown('mouse');
+    first();
+    first();
+    const second = trackInputModality();
+    pointerDown('touch');
+    expect(isTouchInteraction()).toBe(true);
+    second();
+  });
 });
 
 describe('keepEditorFocus', () => {
@@ -77,24 +90,26 @@ describe('focusContainerOnTouch', () => {
     pointerDown('mouse');
   });
 
-  it('focuses the dialog itself after a tap and keeps default focus otherwise', () => {
+  it('focuses the dialog itself after a tap and its first field otherwise', async () => {
     const stop = trackInputModality();
-    const dialog = document.createElement('div');
-    dialog.tabIndex = -1;
-    document.body.append(dialog);
-    const dispatchOpen = () => {
-      const event = new Event('focusScope.autoFocusOnMount', { cancelable: true });
-      dialog.addEventListener(event.type, focusContainerOnTouch, { once: true });
-      dialog.dispatchEvent(event);
-      return event.defaultPrevented;
-    };
+    const ui = (
+      <Dialog open>
+        <DialogContent onOpenAutoFocus={focusContainerOnTouch}>
+          <DialogTitle>Rename</DialogTitle>
+          <DialogDescription>Choose a name.</DialogDescription>
+          <input aria-label="Name" />
+        </DialogContent>
+      </Dialog>
+    );
+
+    pointerDown('touch');
+    const first = render(ui);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+    first.unmount();
 
     pointerDown('mouse');
-    expect(dispatchOpen()).toBe(false);
-    pointerDown('touch');
-    expect(dispatchOpen()).toBe(true);
-    expect(document.activeElement).toBe(dialog);
-    dialog.remove();
+    render(ui);
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus());
     stop();
   });
 });

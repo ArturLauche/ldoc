@@ -192,11 +192,10 @@ describe('RichTextEditor on phones', () => {
     expect(await screen.findByRole('menuitem', { name: 'Dark mode' })).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'Deutsch' })).toBeInTheDocument();
 
-    // Save state stays available on phones, with its label for assistive tech.
-    expect(
-      screen
-        .getAllByRole('status')
-        .some((status) => /on this device/i.test(status.textContent ?? '')),
-    ).toBe(true);
+    // Save state stays in the phone header as an icon, with its label kept
+    // for assistive tech.
+    const saveStatus = container.querySelector<HTMLElement>('header [role="status"]');
+    expect(saveStatus).not.toBeNull();
+    expect(within(saveStatus!).getByText(/on this device/i)).toHaveClass('sr-only');
   });
 });

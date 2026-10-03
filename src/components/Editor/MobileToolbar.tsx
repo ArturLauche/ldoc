@@ -38,7 +38,10 @@ import { TableGridPicker } from './TableGridPicker';
 import { TableToolbar } from './TableToolbar';
 import { ColorSwatchGrid, LinkPopover, ToolTile } from './toolbarControls';
 import {
+  DEFAULT_FONT_SIZE,
   HIGHLIGHT_COLORS,
+  MAX_FONT_SIZE_PX,
+  MIN_FONT_SIZE_PX,
   TEXT_BLOCK_STYLES,
   TEXT_COLORS,
   applyTextBlockStyle,
@@ -53,8 +56,6 @@ type FormatTab = 'text' | 'color' | 'paragraph';
 
 const FORMAT_PANEL_ID = 'mobile-format-panel';
 const INSERT_PANEL_ID = 'mobile-insert-panel';
-/** Lets an insert dialog or popover finish closing before its panel unmounts. */
-const INSERT_PANEL_CLOSE_DELAY_MS = 320;
 
 function BarButton({
   label,
@@ -138,12 +139,9 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
   useEffect(() => {
     if (!panel) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      // Open menus, popovers and dialogs claim Escape first (Radix prevents
+      // the default while dismissing in the capture phase).
       if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (
-        document.querySelector('[role=dialog], [role=alertdialog], [role=menu], [role=listbox]')
-      ) {
-        return;
-      }
       event.preventDefault();
       setPanel(null);
     };
@@ -151,27 +149,11 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [panel]);
 
-  // Insertions are one-off: once the document changes, give the room back.
-  useEffect(() => {
-    if (!editor || panel !== 'insert') return;
-    let timer = 0;
-    const onUpdate = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(
-        () => setPanel((current) => (current === 'insert' ? null : current)),
-        INSERT_PANEL_CLOSE_DELAY_MS,
-      );
-    };
-    editor.on('update', onUpdate);
-    return () => {
-      editor.off('update', onUpdate);
-      window.clearTimeout(timer);
-    };
-  }, [editor, panel]);
-
   if (!editor || !state) return null;
 
   const togglePanel = (next: Panel) => setPanel((current) => (current === next ? null : next));
+  // Insertions are one-off: give the room back once focus is in the document.
+  const closePanel = () => setPanel(null);
   const run = (command: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) =>
     command(editor.chain().focus()).run();
   const setAlignment = (alignment: TextAlignment) => run((chain) => chain.setTextAlign(alignment));
@@ -268,7 +250,7 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                 <div className="font-size-stepper" role="group" aria-label={t('toolbarFontSize')}>
                   <BarButton
                     label={t('decreaseFontSize')}
-                    disabled={fontSizePx <= 10}
+                    disabled={fontSizePx <= MIN_FONT_SIZE_PX}
                     onClick={() =>
                       run((chain) =>
                         chain.setMark('textStyle', { fontSize: stepFontSize(state.fontSize, -1) }),
@@ -278,11 +260,13 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                     <AArrowDown />
                   </BarButton>
                   <output className="font-size-value" aria-live="polite">
-                    {Number.isFinite(fontSizePx) ? fontSizePx : 16}
+                    {Number.isFinite(fontSizePx)
+                      ? fontSizePx
+                      : Number.parseFloat(DEFAULT_FONT_SIZE)}
                   </output>
                   <BarButton
                     label={t('increaseFontSize')}
-                    disabled={fontSizePx >= 48}
+                    disabled={fontSizePx >= MAX_FONT_SIZE_PX}
                     onClick={() =>
                       run((chain) =>
                         chain.setMark('textStyle', { fontSize: stepFontSize(state.fontSize, 1) }),
@@ -402,6 +386,7 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
           <div className="grid grid-cols-4 gap-1">
             <LinkPopover
               editor={editor}
+              onComplete={closePanel}
               trigger={
                 <ToolTile
                   icon={<Link />}
@@ -410,9 +395,9 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                 />
               }
             />
-            <ImageToolbar editor={editor} variant="tile" />
-            <TableGridPicker editor={editor} variant="tile" />
-            <SmartGraphicGallery editor={editor} variant="tile" />
+            <ImageToolbar editor={editor} variant="tile" onComplete={closePanel} />
+            <TableGridPicker editor={editor} variant="tile" onComplete={closePanel} />
+            <SmartGraphicGallery editor={editor} variant="tile" onComplete={closePanel} />
           </div>
         </div>
       ) : null}

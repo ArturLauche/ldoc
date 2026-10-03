@@ -29,7 +29,9 @@ describe('FindReplaceBar layouts', () => {
     renderBar(editor, false);
     expect(screen.getByRole('textbox', { name: 'Find...' })).toHaveFocus();
     expect(screen.getByRole('textbox', { name: 'Replace with...' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show replace' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Replace and match case' }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps phones to one row until replace is requested', async () => {
@@ -40,14 +42,20 @@ describe('FindReplaceBar layouts', () => {
     });
     renderBar(editor, true);
     expect(screen.queryByRole('textbox', { name: 'Replace with...' })).not.toBeInTheDocument();
+    // The field keeps its width: match case waits with replace.
+    expect(screen.queryByRole('button', { name: 'Match case' })).not.toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: 'Find...' }), 'cat');
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
 
-    const toggle = screen.getByRole('button', { name: 'Show replace' });
+    const toggle = screen.getByRole('button', { name: 'Replace and match case' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Match case' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     await user.type(screen.getByRole('textbox', { name: 'Replace with...' }), 'bird');
     await user.click(screen.getByRole('button', { name: 'Replace All' }));
     expect(editor.getText()).toBe('bird bird dog');

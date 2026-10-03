@@ -106,28 +106,47 @@ const EnhancedTextStyle = TextStyle.extend({
 
 const SCROLL_GAP_PX = 16;
 
+type ChromeInsets = Record<'top' | 'bottom', number>;
+
 /**
  * Height of sticky or fixed chrome (`data-scroll-inset="top|bottom"`) that
  * covers, or can slide over, an edge of the visual viewport, so caret
  * scrolling keeps the cursor clear of the header and the docked phone toolbar.
  */
-function chromeInset(side: 'top' | 'bottom'): number {
-  if (typeof document === 'undefined') return SCROLL_GAP_PX;
+function measureChromeInsets(): ChromeInsets {
   const viewport = window.visualViewport;
   const offsetTop = viewport?.offsetTop ?? 0;
   const height = viewport?.height ?? window.innerHeight;
-  let inset = 0;
-  document.querySelectorAll<HTMLElement>(`[data-scroll-inset="${side}"]`).forEach((element) => {
+  const insets: ChromeInsets = { top: 0, bottom: 0 };
+  document.querySelectorAll<HTMLElement>('[data-scroll-inset]').forEach((element) => {
+    const side = element.dataset.scrollInset;
+    if (side !== 'top' && side !== 'bottom') return;
     const rect = element.getBoundingClientRect();
     if (!rect.height) return;
-    inset = Math.max(
-      inset,
+    insets[side] = Math.max(
+      insets[side],
       // A header that auto-hides slides back in when the page scrolls up, so
       // reserve its full height rather than its current (hidden) position.
       side === 'top' ? element.offsetHeight : offsetTop + height - rect.top,
     );
   });
-  return Math.max(0, Math.min(inset, height / 2)) + SCROLL_GAP_PX;
+  const clamp = (inset: number) => Math.max(0, Math.min(inset, height / 2)) + SCROLL_GAP_PX;
+  return { top: clamp(insets.top), bottom: clamp(insets.bottom) };
+}
+
+let cachedChromeInsets: ChromeInsets | null = null;
+
+function chromeInset(side: 'top' | 'bottom'): number {
+  if (typeof document === 'undefined') return SCROLL_GAP_PX;
+  if (!cachedChromeInsets) {
+    cachedChromeInsets = measureChromeInsets();
+    // One scroll-into-view reads every side (for each scrollable ancestor)
+    // synchronously; share a single measurement across those reads.
+    queueMicrotask(() => {
+      cachedChromeInsets = null;
+    });
+  }
+  return cachedChromeInsets[side];
 }
 
 // ProseMirror reads these sides on every scroll-into-view, so the getters

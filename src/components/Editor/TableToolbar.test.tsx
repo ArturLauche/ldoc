@@ -85,13 +85,17 @@ describe('table insert and tools', () => {
     );
   });
 
-  it('previews a size on the first tap and inserts on a confirming tap', async () => {
+  it.each([
+    [2, 3],
+    // The picker opens on 1 × 1, which must still need a confirming tap.
+    [1, 1],
+  ])('previews %i × %i on the first tap and inserts on a confirming tap', async (rows, cols) => {
     const user = userEvent.setup();
     editor = createTestEditor();
     renderWithProviders(<TableGridPicker editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
-    const cell = screen.getByTestId('table-picker-cell-2-3');
+    const cell = screen.getByTestId(`table-picker-cell-${rows}-${cols}`);
     const tap = () => {
       fireEvent.pointerDown(cell, { pointerType: 'touch' });
       // Browsers emulate hover and focus for a tap before the click.
@@ -103,13 +107,15 @@ describe('table insert and tools', () => {
 
     tap();
     expect(editor.getHTML()).not.toContain('<table');
-    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('2 × 3 table');
-    expect(screen.getByLabelText('Rows')).toHaveValue(2);
-    expect(screen.getByLabelText('Columns')).toHaveValue(3);
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent(
+      `${rows} × ${cols} table`,
+    );
+    expect(screen.getByLabelText('Rows')).toHaveValue(rows);
+    expect(screen.getByLabelText('Columns')).toHaveValue(cols);
 
     tap();
-    expect(editor.getHTML().match(/<tr/g)?.length).toBe(2);
-    expect(editor.getHTML().match(/<th/g)?.length).toBe(3);
+    expect(editor.getHTML().match(/<tr/g)?.length).toBe(rows);
+    expect(editor.getHTML().match(/<th/g)?.length).toBe(cols);
   });
 
   it('inserts a rounded custom size and ignores empty custom fields', async () => {

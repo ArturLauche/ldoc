@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 
 const getPlaceholder = () => 'Start writing...';
@@ -52,32 +52,75 @@ describe('editorExtensions', () => {
     editor.destroy();
   });
 
-  it('keeps caret scrolling clear of the sticky header and docked phone toolbar', () => {
-    const editor = new Editor({
-      extensions: createEditorExtensions(getPlaceholder),
-      content: '<p>Text</p>',
-    });
+  describe('caret scrolling around editor chrome', () => {
     type Sides = { top: number; bottom: number; left: number; right: number };
-    const threshold = () => editor.view.someProp('scrollThreshold') as Sides;
-    const header = document.createElement('header');
-    header.dataset.scrollInset = 'top';
-    Object.defineProperty(header, 'offsetHeight', { value: 48 });
-    header.getBoundingClientRect = () => new DOMRect(0, -48, 360, 48);
-    const toolbar = document.createElement('div');
-    toolbar.dataset.scrollInset = 'bottom';
-    toolbar.getBoundingClientRect = () => new DOMRect(0, window.innerHeight - 56, 360, 56);
-    document.body.append(header, toolbar);
+    // Measurements are shared by the reads of one scroll-into-view.
+    const nextMeasurement = () => Promise.resolve();
+    let editor: Editor;
+    let header: HTMLElement;
+    let toolbar: HTMLElement;
 
-    // The hidden header (translated above the viewport) still reserves its
-    // height, because scrolling up brings it back over the caret.
-    expect(threshold().top).toBe(48 + 16);
-    expect(threshold().bottom).toBe(56 + 16);
-    expect(editor.view.someProp('scrollMargin')).toBe(threshold());
+    const sides = (prop: 'scrollThreshold' | 'scrollMargin') => {
+      const value = editor.view.someProp(prop) as Sides;
+      return { top: value.top, bottom: value.bottom, left: value.left, right: value.right };
+    };
 
-    header.remove();
-    toolbar.remove();
-    expect(threshold().top).toBe(16);
-    expect(threshold().bottom).toBe(16);
-    editor.destroy();
+    beforeEach(() => {
+      editor = new Editor({
+        extensions: createEditorExtensions(getPlaceholder),
+        content: '<p>Text</p>',
+      });
+      header = document.createElement('header');
+      header.dataset.scrollInset = 'top';
+      Object.defineProperty(header, 'offsetHeight', { value: 48 });
+      // Hidden: translated above the viewport.
+      header.getBoundingClientRect = () => new DOMRect(0, -48, 360, 48);
+      toolbar = document.createElement('div');
+      toolbar.dataset.scrollInset = 'bottom';
+      toolbar.getBoundingClientRect = () => new DOMRect(0, window.innerHeight - 56, 360, 56);
+      document.body.append(header, toolbar);
+    });
+
+    afterEach(() => {
+      header.remove();
+      toolbar.remove();
+      editor.destroy();
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: null });
+    });
+
+    it('keeps the caret clear of the sticky header and docked phone toolbar', async () => {
+      // The hidden header still reserves its height, because scrolling up
+      // brings it back over the caret.
+      const expected = { top: 48 + 16, bottom: 56 + 16, left: 16, right: 16 };
+      expect(sides('scrollThreshold')).toEqual(expected);
+      expect(sides('scrollMargin')).toEqual(expected);
+
+      header.remove();
+      toolbar.remove();
+      await nextMeasurement();
+      expect(sides('scrollThreshold')).toEqual({ top: 16, bottom: 16, left: 16, right: 16 });
+    });
+
+    it('measures against a software keyboard and caps the reserved space', async () => {
+      const visibleHeight = window.innerHeight - 300;
+      Object.defineProperty(window, 'visualViewport', {
+        configurable: true,
+        value: { height: visibleHeight, offsetTop: 20, scale: 1 },
+      });
+      // Docked to the top of the keyboard in a panned visual viewport.
+      toolbar.getBoundingClientRect = () => new DOMRect(0, 20 + visibleHeight - 56, 360, 56);
+      await nextMeasurement();
+      expect(sides('scrollThreshold').bottom).toBe(56 + 16);
+
+      // A panel taller than half the visible area must not push the caret off-screen.
+      toolbar.getBoundingClientRect = () => new DOMRect(0, 40, 360, visibleHeight - 20);
+      await nextMeasurement();
+      expect(sides('scrollThreshold').bottom).toBe(visibleHeight / 2 + 16);
+
+      // Hidden chrome reserves nothing.
+      toolbar.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
+      await nextMeasurement();
+      expect(sides('scrollMargin').bottom).toBe(16);
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type { TiptapEditorHTMLElement } from '@tiptap/react';
 
 const editor = (page: Page) => page.locator('.ProseMirror[contenteditable=true]');
 
@@ -7,13 +8,21 @@ async function ready(page: Page) {
   await expect(editor(page)).toBeVisible();
 }
 
+// TipTap publishes its editor on the ProseMirror root (`TiptapEditorHTMLElement`).
 async function setContent(page: Page, html: string) {
   await editor(page).evaluate((element, value) => {
-    const instance = (
-      element as HTMLElement & { editor: { commands: { setContent(html: string): void } } }
-    ).editor;
+    const instance = (element as TiptapEditorHTMLElement).editor;
+    if (!instance) throw new Error('The TipTap editor is not mounted');
     instance.commands.setContent(value);
   }, html);
+}
+
+async function selectText(page: Page, range: { from: number; to: number }) {
+  await editor(page).evaluate((element, value) => {
+    const instance = (element as TiptapEditorHTMLElement).editor;
+    if (!instance) throw new Error('The TipTap editor is not mounted');
+    instance.commands.setTextSelection(value);
+  }, range);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -98,14 +107,7 @@ test.describe('phone layout', () => {
   test('formats from the toolbar and panels without losing editor focus', async ({ page }) => {
     await setContent(page, '<p>Hello world</p>');
     await editor(page).locator('p').tap();
-    await editor(page).evaluate((element) => {
-      const instance = (
-        element as HTMLElement & {
-          editor: { commands: { setTextSelection(range: { from: number; to: number }): void } };
-        }
-      ).editor;
-      instance.commands.setTextSelection({ from: 1, to: 6 });
-    });
+    await selectText(page, { from: 1, to: 6 });
 
     await page.getByRole('button', { name: 'Bold', exact: true }).tap();
     await expect(editor(page).locator('strong')).toHaveText('Hello');
@@ -120,6 +122,31 @@ test.describe('phone layout', () => {
     await expect(editor(page).locator('h1')).toHaveAttribute('style', /text-align: center/);
     await expect(editor(page)).toBeFocused();
     await expectNoHorizontalOverflow(page);
+  });
+
+  test('inserts from the panel and hands the keyboard back to the document', async ({ page }) => {
+    await setContent(page, '<p>Hello</p>');
+    await editor(page).locator('p').tap();
+
+    await page.getByRole('button', { name: 'Insert', exact: true }).tap();
+    const panel = page.getByRole('region', { name: 'Insert' });
+    await panel.getByRole('button', { name: 'Insert table' }).tap();
+    const cell = page.getByTestId('table-picker-cell-2-2');
+    await cell.tap();
+    await expect(editor(page).locator('table')).toHaveCount(0);
+    await cell.tap();
+    await expect(editor(page).locator('tr')).toHaveCount(2);
+    await expect(panel).toBeHidden();
+    await expect(editor(page)).toBeFocused();
+
+    await selectText(page, { from: 1, to: 6 });
+    await page.getByRole('button', { name: 'Insert', exact: true }).tap();
+    await panel.getByRole('button', { name: 'Insert link' }).tap();
+    await page.getByRole('textbox', { name: 'Enter URL...' }).fill('example.com');
+    await page.getByRole('button', { name: 'Apply' }).tap();
+    await expect(editor(page).locator('a[href="https://example.com/"]')).toHaveText('Hello');
+    await expect(panel).toBeHidden();
+    await expect(editor(page)).toBeFocused();
   });
 
   test('stays above a software keyboard', async ({ page }) => {
@@ -169,7 +196,8 @@ test.describe('phone layout', () => {
     await page.getByRole('button', { name: 'Search Documents' }).tap();
     const library = page.getByRole('dialog', { name: 'Document Library' });
     await expect(library).toBeVisible();
-    // A tap opens the list without raising the keyboard over it.
+    // A tap focuses the sheet itself, so no keyboard rises over the list.
+    await expect(library).toBeFocused();
     await expect(
       library.getByRole('textbox', { name: 'Search saved documents' }),
     ).not.toBeFocused();
@@ -183,6 +211,36 @@ test.describe('phone layout', () => {
     await expectInsideViewport(page, '[role=menu]');
     await page.getByRole('menuitem', { name: 'Insert row below' }).tap();
     await expect(editor(page).locator('tr')).toHaveCount(2);
+  });
+});
+
+test.describe('narrow phone layout', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
+  test.use({ viewport: { width: 320, height: 568 }, isMobile: true, hasTouch: true });
+
+  test('keeps the find field usable next to its controls', async ({ page }) => {
+    await page.goto('/');
+    await ready(page);
+    await setContent(page, '<p>alpha beta alpha</p>');
+    await page.getByRole('button', { name: 'Find & Replace' }).tap();
+    const find = page.getByRole('textbox', { name: 'Find...' });
+    await find.fill('alpha');
+    await expect(page.getByText('1 of 2')).toBeVisible();
+    const textWidth = await find.evaluate((input) => {
+      const style = getComputedStyle(input);
+      return (
+        input.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight)
+      );
+    });
+    expect(textWidth).toBeGreaterThanOrEqual(80);
+
+    await page.getByRole('button', { name: 'Replace and match case' }).tap();
+    await expect(page.getByRole('button', { name: 'Match case', exact: true })).toBeVisible();
+    const replace = await page.getByRole('textbox', { name: 'Replace with...' }).boundingBox();
+    expect(replace!.width).toBeGreaterThanOrEqual(100);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

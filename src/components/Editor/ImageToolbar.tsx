@@ -55,9 +55,11 @@ interface ImageToolbarProps {
   editor: Editor | null;
   /** `tile`: labeled insert control; `context`: labeled edit control for a selected image. */
   variant?: 'icon' | 'tile' | 'context';
+  /** Runs once an image is inserted or updated and focus is back in the document. */
+  onComplete?: () => void;
 }
 
-export const ImageToolbar = ({ editor, variant = 'icon' }: ImageToolbarProps) => {
+export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageToolbarProps) => {
   const { t } = useLocale();
   const coarsePointer = useMediaQuery('(pointer: coarse)');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -236,7 +238,9 @@ export const ImageToolbar = ({ editor, variant = 'icon' }: ImageToolbarProps) =>
           if (!returnToEditorRef.current) return;
           returnToEditorRef.current = false;
           event.preventDefault();
+          if (editor.isDestroyed) return;
           editor.commands.focus();
+          onComplete?.();
         }}
       >
         <DialogHeader>

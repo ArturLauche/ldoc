@@ -30,9 +30,15 @@ interface SmartGraphicGalleryProps {
   editor: Editor;
   /** `tile`: labeled trigger for the phone insert panel. */
   variant?: 'icon' | 'tile';
+  /** Runs once a graphic is inserted and focus is back in the document. */
+  onComplete?: () => void;
 }
 
-export function SmartGraphicGallery({ editor, variant = 'icon' }: SmartGraphicGalleryProps) {
+export function SmartGraphicGallery({
+  editor,
+  variant = 'icon',
+  onComplete,
+}: SmartGraphicGalleryProps) {
   const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<SmartGraphicCategory>('list');
@@ -81,7 +87,9 @@ export function SmartGraphicGallery({ editor, variant = 'icon' }: SmartGraphicGa
           if (!insertedRef.current) return;
           insertedRef.current = false;
           event.preventDefault();
+          if (editor.isDestroyed) return;
           editor.commands.focus();
+          onComplete?.();
         }}
       >
         <DialogHeader>

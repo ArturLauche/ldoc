@@ -95,7 +95,8 @@ describe('FileMenu startup', () => {
     await user.click(trigger);
     const sheet = screen.getByRole('dialog', { name: 'File' });
     expect(within(sheet).getByText('Quarterly review')).toBeInTheDocument();
-    expect(within(sheet).queryByRole('menuitem')).not.toBeInTheDocument();
+    // Every action is a direct button; nothing opens a nested menu.
+    expect(sheet.querySelector('[aria-haspopup="menu"]')).toBeNull();
     for (const label of [
       'Plain Text (.txt)',
       'HTML Document (.html)',

@@ -151,6 +151,19 @@
 .app-footer {
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--card));
+  padding-inline: max(1rem, env(safe-area-inset-left, 0px))
+    max(1rem, env(safe-area-inset-right, 0px));
+  /* Extends the footer under a home indicator (viewport-fit=cover). */
+  border-bottom: env(safe-area-inset-bottom, 0px) solid hsl(var(--card));
+}
+/* The docked phone toolbar already covers the bottom inset. */
+.app-shell.is-compact .app-footer {
+  border-bottom-width: 0;
+}
+/* Standalone sticky headers (legal pages) clear the notch and status bar. */
+header.app-bar {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
 }
 
 /* Header: one compact row. Phones hide it while scrolling down. */
@@ -315,7 +328,7 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
 }
 
-/* Landscape phones are wide but short: no page frame margins above the text. */
+/* Compact layouts (phones, short landscape phones): no page frame margins above the text. */
 .app-shell.is-compact .editor-container {
   margin-block: 0;
   border-top-width: 0;
@@ -587,7 +600,8 @@
  * Dialogs become bottom sheets on phones: full width, anchored to the visible
  * area above the software keyboard, and never taller than what is visible.
  */
-@media (max-width: 639px), (max-height: 500px) and (pointer: coarse) {
+/* Matches COMPACT_LAYOUT_QUERY in src/hooks/useMediaQuery.ts. */
+@media (max-width: 639px), (max-height: 500px) and (pointer: coarse) and (max-width: 1023px) {
   .dialog-sheet {
     top: auto;
     bottom: var(--keyboard-inset, 0px);
@@ -631,10 +645,13 @@
   [role='listbox'] [role='option'] {
     min-height: 2.75rem;
   }
-  /* iOS zooms the page into text fields smaller than 16px. */
-  input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
-  textarea,
-  select {
+  /* iOS zooms the page into text fields smaller than 16px. Fields inside the
+     document (smart graphic labels) keep the document's typography. */
+  :is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+    textarea,
+    select
+  ):not(.ProseMirror *) {
     font-size: 16px;
   }
 }
@@ -939,7 +956,6 @@
     border-radius: 0;
   }
   .editor-content .ProseMirror {
-    min-height: 60dvh;
     padding: 1.25rem max(1rem, env(safe-area-inset-right, 0px)) 2rem
       max(1rem, env(safe-area-inset-left, 0px));
   }
