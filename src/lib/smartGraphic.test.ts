@@ -20,7 +20,30 @@ import {
   MAX_GRAPHIC_JSON_LENGTH,
   SMART_GRAPHIC_LAYOUTS,
   flattenGraphicItems,
+  GRAPHIC_PLACEHOLDER_KEYS,
+  MAX_GRAPHIC_LIST_DEPTH,
+  MAX_GRAPHIC_NODES,
+  SMART_GRAPHIC_CATEGORIES,
+  canAddGraphicChild,
+  canDemoteGraphicItem,
+  canMoveGraphicItem,
+  canPromoteGraphicItem,
+  countGraphicNodes,
+  findGraphicItemDepth,
+  graphicSelectionAfterRemoval,
+  insertGraphicChild,
+  insertGraphicItem,
+  isSequentialGraphicLayout,
+  layoutsForCategory,
+  type GraphicStarterNode,
+  type SmartGraphicItem,
+  type SmartGraphicModel,
 } from './smartGraphic';
+import type { TranslationKey } from './translations';
+
+function starterLabelKeys(nodes: readonly GraphicStarterNode[] = []): TranslationKey[] {
+  return nodes.flatMap((node) => [...(node.labelKey ? [node.labelKey] : []), ...starterLabelKeys(node.children)]);
+}
 
 describe('smartGraphic model', () => {
   it('creates a starter graphic for each layout with bounded nodes', () => {
@@ -243,14 +266,19 @@ describe('smartGraphic model', () => {
 
   it('localizes starter, add, clamp and switch fillers for every supported locale', () => {
     for (const locale of supportedLocales) {
+      const placeholders = Object.values(GRAPHIC_PLACEHOLDER_KEYS).map((key) => t(locale, key));
+      const fixedLabels = SMART_GRAPHIC_LAYOUTS.flatMap((layout) => starterLabelKeys(layout.starter)).map((key) =>
+        t(locale, key),
+      );
       for (const layout of SMART_GRAPHIC_LAYOUTS) {
         const starter = createStarterGraphic(layout.id, locale);
-        const kinds = flattenGraphicItems(starter.items).map((item) => item.label);
-        expect(kinds.length).toBeGreaterThan(0);
-        expect(kinds.every((label) => label.startsWith(t(locale, 'graphicItemPlaceholder')) ||
-          label.startsWith(t(locale, 'graphicPlaceholderStep')) ||
-          label.startsWith(t(locale, 'graphicPlaceholderTopic')) ||
-          label.startsWith(t(locale, 'graphicPlaceholderLevel')))).toBe(true);
+        const labels = flattenGraphicItems(starter.items).map((item) => item.label);
+        expect(labels.length).toBe(layout.starterCount);
+        expect(
+          labels.every(
+            (label) => fixedLabels.includes(label) || placeholders.some((word) => label.startsWith(`${word} `)),
+          ),
+        ).toBe(true);
         const switched = switchGraphicLayout(starter, 'list-block', locale);
         expect(flattenGraphicLabels(switched).every((label) => label.length > 0)).toBe(true);
         const withAdded = addGraphicItem(starter, starter.items[0].id, locale);
@@ -262,7 +290,10 @@ describe('smartGraphic model', () => {
     expect(t('de', 'graphicPlaceholderStep')).toBe('Schritt');
     expect(t('de', 'graphicPlaceholderTopic')).toBe('Thema');
     expect(t('de', 'graphicPlaceholderLevel')).toBe('Ebene');
+    expect(t('de', 'graphicPlaceholderStage')).toBe('Phase');
+    expect(t('de', 'graphicPlaceholderMilestone')).toBe('Meilenstein');
     expect(t('en', 'graphicPlaceholderStep')).toBe('Step');
+    expect(flattenGraphicLabels(createStarterGraphic('matrix-swot', 'de')).slice(0, 2)).toEqual(['Stärken', 'Text 1']);
   });
 
   it('trim-parses imported JSON but preserves spaces when normalizing live edits', () => {
@@ -280,5 +311,242 @@ describe('smartGraphic model', () => {
     expect(flattenGraphicLabels(switched).length).toBe(flattenGraphicItems(org.items).length);
     const restored = switchGraphicLayout(switched, 'hierarchy-org');
     expect(restored.items[0].children.length).toBe(0);
+  });
+});
+
+const LEGACY_LAYOUT_IDS = [
+  'list-block',
+  'list-horizontal',
+  'process-chevron',
+  'process-steps',
+  'cycle-basic',
+  'hierarchy-org',
+  'relationship-opposing',
+  'relationship-radial',
+  'matrix-grid',
+  'pyramid-basic',
+] as const;
+
+function treeDepth(items: SmartGraphicItem[]): number {
+  return items.length ? 1 + Math.max(...items.map((item) => treeDepth(item.children))) : 0;
+}
+
+function sortedLabels(model: SmartGraphicModel): string[] {
+  return flattenGraphicLabels(model).slice().sort();
+}
+
+describe('smartGraphic layout registry', () => {
+  it('keeps every stored layout id and describes each layout consistently', () => {
+    const ids = SMART_GRAPHIC_LAYOUTS.map((layout) => layout.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining([...LEGACY_LAYOUT_IDS]));
+    expect(ids.length).toBeGreaterThanOrEqual(30);
+
+    for (const layout of SMART_GRAPHIC_LAYOUTS) {
+      expect(SMART_GRAPHIC_CATEGORIES).toContain(layout.category);
+      expect(layout.minItems).toBeGreaterThanOrEqual(1);
+      expect(layout.minItems).toBeLessThanOrEqual(layout.starterCount);
+      expect(layout.starterCount).toBeLessThanOrEqual(layout.maxItems);
+      expect(layout.maxItems).toBeLessThanOrEqual(MAX_GRAPHIC_NODES);
+      expect(layout.maxDepth).toBeLessThanOrEqual(MAX_GRAPHIC_LIST_DEPTH);
+      expect(layout.supportsHierarchy).toBe(layout.maxDepth > 1);
+      const starter = createStarterGraphic(layout.id);
+      expect(countGraphicNodes(starter.items)).toBe(layout.starterCount);
+      expect(treeDepth(starter.items)).toBeLessThanOrEqual(layout.maxDepth);
+    }
+    for (const category of SMART_GRAPHIC_CATEGORIES) {
+      expect(layoutsForCategory(category).length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('round-trips every starter through serialization', () => {
+    for (const layout of SMART_GRAPHIC_LAYOUTS) {
+      const starter = updateGraphicTitle(createStarterGraphic(layout.id, 'de'), 'Plan');
+      const parsed = parseSmartGraphicJson(serializeSmartGraphic(starter));
+      expect(parsed).toEqual(starter);
+    }
+  });
+
+  it('loads documents saved with the original ten layouts unchanged', () => {
+    for (const layoutId of LEGACY_LAYOUT_IDS) {
+      const stored = JSON.stringify({
+        version: 1,
+        layoutId,
+        colorSet: 'green',
+        style: 'subtle',
+        title: 'Saved',
+        items: [
+          { id: 'a1', label: 'One', children: layoutId === 'hierarchy-org' ? [{ id: 'a2', label: 'Two', children: [] }] : [] },
+          { id: 'b1', label: 'Three', children: [] },
+          { id: 'c1', label: 'Four', children: [] },
+          { id: 'd1', label: 'Five', children: [] },
+        ],
+      });
+      const parsed = parseSmartGraphicJson(stored);
+      expect(parsed?.layoutId).toBe(layoutId);
+      expect(parsed?.colorSet).toBe('green');
+      expect(parsed?.style).toBe('subtle');
+      expect(flattenGraphicLabels(parsed!)).toEqual(
+        layoutId === 'hierarchy-org' ? ['One', 'Two', 'Three', 'Four', 'Five'] : ['One', 'Three', 'Four', 'Five'],
+      );
+      expect(parsed?.items[0].id).toBe('a1');
+    }
+  });
+
+  it('keeps every label when switching between any two layouts', () => {
+    for (const from of SMART_GRAPHIC_LAYOUTS) {
+      const source = createStarterGraphic(from.id);
+      for (const to of SMART_GRAPHIC_LAYOUTS) {
+        const switched = switchGraphicLayout(source, to.id);
+        expect(switched.layoutId).toBe(to.id);
+        expect(sortedLabels(switched)).toEqual(
+          expect.arrayContaining(sortedLabels(source)),
+        );
+        expect(treeDepth(switched.items)).toBeLessThanOrEqual(to.maxDepth);
+      }
+    }
+  });
+
+  it('lifts nodes beyond a hierarchy layout depth instead of dropping them', () => {
+    const tree = createStarterGraphic('hierarchy-tree');
+    expect(treeDepth(tree.items)).toBe(3);
+    const deep = demoteGraphicItem(tree, tree.items[0].children[0].children[1].id);
+    expect(treeDepth(deep.items)).toBe(4);
+
+    const org = switchGraphicLayout(deep, 'hierarchy-org');
+    expect(treeDepth(org.items)).toBe(3);
+    expect(sortedLabels(org)).toEqual(sortedLabels(deep));
+
+    const cards = switchGraphicLayout(deep, 'list-cards');
+    expect(treeDepth(cards.items)).toBe(2);
+    expect(cards.items[0].children.map((item) => item.label)).toEqual(['Topic 2', 'Topic 3', 'Topic 4', 'Topic 5', 'Topic 6']);
+
+    const parsed = parseSmartGraphicJson({ ...deep, layoutId: 'hierarchy-org' });
+    expect(sortedLabels(parsed!)).toEqual(sortedLabels(deep));
+  });
+
+  it('keeps the minimum number of top-level shapes when nodes are nested', () => {
+    const tree = createStarterGraphic('hierarchy-tree');
+    expect(tree.items).toHaveLength(1);
+    // SWOT draws one quadrant per top-level item: the lifted tree fills one.
+    const swot = switchGraphicLayout(tree, 'matrix-swot');
+    expect(swot.items).toHaveLength(4);
+    expect(swot.items[0].children).toHaveLength(countGraphicNodes(tree.items) - 1);
+    expect(flattenGraphicLabels(swot)).toEqual(expect.arrayContaining(flattenGraphicLabels(tree)));
+    for (const layoutId of ['list-cards', 'timeline-vertical', 'timeline-alternating'] as const) {
+      expect(switchGraphicLayout(tree, layoutId).items).toHaveLength(2);
+    }
+
+    // An empty quadrant cannot go once four remain; details and quadrants
+    // whose details take their place can.
+    const lastQuadrant = swot.items[3];
+    expect(canRemoveGraphicItem(swot, lastQuadrant.id)).toBe(false);
+    expect(removeGraphicItem(swot, lastQuadrant.id)).toBe(swot);
+    expect(canRemoveGraphicItem(swot, swot.items[0].children[0].id)).toBe(true);
+    expect(canRemoveGraphicItem(swot, swot.items[0].id)).toBe(true);
+    expect(removeGraphicItem(swot, swot.items[0].id).items).toHaveLength(3 + swot.items[0].children.length);
+
+    // A full tree has no room for placeholders: nested items move up
+    // instead, in reading order, and nothing exceeds the node cap.
+    const fullTree = switchGraphicLayout(
+      {
+        ...tree,
+        items: [
+          {
+            ...tree.items[0],
+            children: Array.from({ length: MAX_GRAPHIC_NODES - 1 }, (_, index) => ({
+              id: `leaf${index}`,
+              label: `Leaf ${index + 1}`,
+              children: [],
+            })),
+          },
+        ],
+      },
+      'hierarchy-tree',
+    );
+    expect(countGraphicNodes(fullTree.items)).toBe(MAX_GRAPHIC_NODES);
+    const fullSwot = switchGraphicLayout(fullTree, 'matrix-swot');
+    expect(fullSwot.items).toHaveLength(4);
+    expect(countGraphicNodes(fullSwot.items)).toBe(MAX_GRAPHIC_NODES);
+    expect(flattenGraphicLabels(fullSwot)).toEqual(flattenGraphicLabels(fullTree));
+    expect(fullSwot.items.slice(1).map((item) => item.label)).toEqual(['Leaf 9', 'Leaf 10', 'Leaf 11']);
+    // Text typed into any quadrant survives a save and reload.
+    const typed = updateItemLabel(fullSwot, fullSwot.items[3].id, 'Threat typed by the user');
+    const reloaded = parseSmartGraphicJson(serializeSmartGraphic(typed));
+    expect(flattenGraphicLabels(reloaded!)).toContain('Threat typed by the user');
+
+    // Nesting a quadrant under another would leave three: it stays put.
+    expect(canDemoteGraphicItem(swot, swot.items[1].id)).toBe(false);
+    expect(demoteGraphicItem(swot, swot.items[1].id)).toBe(swot);
+    const five = insertGraphicItem(swot, swot.items[3].id).model;
+    expect(canDemoteGraphicItem(five, five.items[4].id)).toBe(true);
+    expect(demoteGraphicItem(five, five.items[4].id).items).toHaveLength(4);
+  });
+
+  it('numbers new headings and details separately in card-style layouts', () => {
+    const cards = createStarterGraphic('list-cards');
+    const detail = cards.items[0].children[1];
+    const added = insertGraphicItem(cards, detail.id);
+    expect(added.itemId).not.toBeNull();
+    expect(added.model.items[0].children[2]).toMatchObject({ id: added.itemId, label: 'Text 7' });
+
+    const heading = insertGraphicItem(cards, cards.items[2].id);
+    expect(heading.model.items[3]).toMatchObject({ id: heading.itemId, label: 'Topic 4' });
+
+    const child = insertGraphicChild(cards, cards.items[1].id);
+    expect(child.model.items[1].children.at(-1)).toMatchObject({ id: child.itemId, label: 'Text 7' });
+    expect(canAddGraphicChild(cards, detail.id)).toBe(false);
+    expect(insertGraphicChild(cards, detail.id).itemId).toBeNull();
+
+    const steps = createStarterGraphic('process-steps');
+    expect(insertGraphicItem(steps).model.items.at(-1)?.label).toBe('Step 5');
+    expect(canAddGraphicChild(steps, steps.items[0].id)).toBe(false);
+  });
+
+  it('stops adding at the layout bound and reports no new item', () => {
+    let model = createStarterGraphic('relationship-venn');
+    model = insertGraphicItem(model).model;
+    expect(model.items).toHaveLength(4);
+    const blocked = insertGraphicItem(model, model.items[0].id);
+    expect(blocked.itemId).toBeNull();
+    expect(blocked.model).toBe(model);
+  });
+
+  it('reports which moves and level changes are possible', () => {
+    const org = createStarterGraphic('hierarchy-org');
+    const [root] = org.items;
+    const [first, middle, last] = root.children;
+    expect(canMoveGraphicItem(org, first.id, 'up')).toBe(false);
+    expect(canMoveGraphicItem(org, first.id, 'down')).toBe(true);
+    expect(canMoveGraphicItem(org, last.id, 'down')).toBe(false);
+    expect(canMoveGraphicItem(org, null, 'down')).toBe(false);
+    // Moves past either end change nothing, so no edit is recorded.
+    expect(moveGraphicItem(org, first.id, 'up')).toBe(org);
+    expect(moveGraphicItem(org, last.id, 'down')).toBe(org);
+    expect(canPromoteGraphicItem(org, root.id)).toBe(false);
+    expect(canPromoteGraphicItem(org, middle.id)).toBe(true);
+    expect(canPromoteGraphicItem(createStarterGraphic('list-block'), first.id)).toBe(false);
+    expect(findGraphicItemDepth(org.items, middle.children[0].id)).toBe(3);
+  });
+
+  it('chooses a sensible selection after removing an item', () => {
+    const org = createStarterGraphic('hierarchy-org');
+    const [root] = org.items;
+    const [first, middle, last] = root.children;
+    expect(graphicSelectionAfterRemoval(org, middle.id)).toBe(middle.children[0].id);
+    expect(graphicSelectionAfterRemoval(org, last.id)).toBe(middle.id);
+    expect(graphicSelectionAfterRemoval(org, first.id)).toBe(middle.id);
+    expect(graphicSelectionAfterRemoval(org, middle.children[0].id)).toBe(middle.id);
+    expect(graphicSelectionAfterRemoval(org, 'missing')).toBeNull();
+  });
+
+  it('marks ordered layouts for numbered exports', () => {
+    expect(isSequentialGraphicLayout('process-chevron')).toBe(true);
+    expect(isSequentialGraphicLayout('cycle-basic')).toBe(true);
+    expect(isSequentialGraphicLayout('timeline-vertical')).toBe(true);
+    expect(isSequentialGraphicLayout('list-numbered')).toBe(true);
+    expect(isSequentialGraphicLayout('list-block')).toBe(false);
+    expect(isSequentialGraphicLayout('hierarchy-org')).toBe(false);
+    expect(isSequentialGraphicLayout('unknown-layout')).toBe(false);
   });
 });

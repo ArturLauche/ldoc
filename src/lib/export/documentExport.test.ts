@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { exportDocument } from './documentExport';
 import { extractExportDocumentFromHtml } from './model';
-import { serializeSmartGraphic } from '@/lib/smartGraphic';
+import { createStarterGraphic, demoteGraphicItem, serializeSmartGraphic, updateGraphicTitle } from '@/lib/smartGraphic';
 
 const TINY_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
@@ -346,6 +346,47 @@ describe('exportDocument', () => {
     });
     expect(docx.warnings.map((warning) => warning.code)).toContain('graphic-layout-simplified');
     expect(docx.blob.type).toContain('officedocument');
+  });
+
+  it('exports timelines as numbered outlines and card grids with nested bullets', async () => {
+    const timeline = updateGraphicTitle(createStarterGraphic('timeline-vertical'), 'Roadmap');
+    const timelineHtml = `<div data-lwrite-graphic='${serializeSmartGraphic(timeline)}'></div>`;
+    const htmlExport = await exportDocument({ html: timelineHtml, name: 'Roadmap', locale: 'en', format: 'docx' });
+    expect(htmlExport.warnings.map((warning) => warning.code)).toContain('graphic-layout-simplified');
+    const timelineText = await (
+      await exportDocument({ html: timelineHtml, name: 'Roadmap', locale: 'en', format: 'txt' })
+    ).blob.text();
+    expect(timelineText).toMatch(/1\.\s+Milestone 1/);
+    expect(timelineText).toMatch(/4\.\s+Milestone 4/);
+
+    // Details under a milestone stay bullets, as the diagram draws them.
+    const detailed = demoteGraphicItem(timeline, timeline.items[1].id);
+    const detailedText = await (
+      await exportDocument({
+        html: `<div data-lwrite-graphic='${serializeSmartGraphic(detailed)}'></div>`,
+        name: 'Roadmap',
+        locale: 'en',
+        format: 'txt',
+      })
+    ).blob.text();
+    expect(detailedText).toMatch(/1\.\s+Milestone 1/);
+    expect(detailedText).toContain('Milestone 2');
+    expect(detailedText).not.toMatch(/\d\.\s+Milestone 2/);
+    expect(detailedText).toMatch(/2\.\s+Milestone 3/);
+
+    const cards = createStarterGraphic('list-cards');
+    const cardText = await (
+      await exportDocument({
+        html: `<div data-lwrite-graphic='${serializeSmartGraphic(cards)}'></div>`,
+        name: 'Cards',
+        locale: 'en',
+        format: 'txt',
+      })
+    ).blob.text();
+    expect(cardText).not.toMatch(/1\.\s+Topic 1/);
+    expect(cardText).toContain('Topic 1');
+    expect(cardText.indexOf('Text 1')).toBeGreaterThan(cardText.indexOf('Topic 1'));
+    expect(cardText.indexOf('Text 1')).toBeLessThan(cardText.indexOf('Topic 2'));
   });
 
   it('rejects unsupported export formats', async () => {

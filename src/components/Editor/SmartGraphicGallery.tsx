@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
-import { Shapes } from 'lucide-react';
+import { Search, Shapes, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,21 +10,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { focusContainerOnTouch } from '@/lib/inputModality';
 import {
   SMART_GRAPHIC_CATEGORIES,
+  SMART_GRAPHIC_LAYOUTS,
   createStarterGraphic,
-  layoutsForCategory,
   type SmartGraphicCategory,
   type SmartGraphicLayoutId,
 } from '@/lib/smartGraphic';
-import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
-import { SmartGraphicCanvas } from './SmartGraphicCanvas';
+import { formatMessage } from '@/lib/translations';
+import { cn } from '@/lib/utils';
+import { LayoutCard } from './graphics/LayoutCard';
+import { layoutMatchesQuery } from './graphics/layoutSearch';
+import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
 import { ToolTile } from './toolbarControls';
+
+type GalleryTab = 'all' | SmartGraphicCategory;
 
 interface SmartGraphicGalleryProps {
   editor: Editor;
@@ -41,10 +47,8 @@ export function SmartGraphicGallery({
 }: SmartGraphicGalleryProps) {
   const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<SmartGraphicCategory>('list');
+  const [tab, setTab] = useState<GalleryTab>('all');
   const insertedRef = useRef(false);
-
-  const layouts = useMemo(() => layoutsForCategory(category), [category]);
 
   const insertLayout = (layoutId: SmartGraphicLayoutId) => {
     editor.chain().focus().insertSmartGraphic(layoutId, locale).run();
@@ -81,7 +85,7 @@ export function SmartGraphicGallery({
       )}
 
       <DialogContent
-        className="flex flex-col gap-3 overflow-hidden bg-background p-4 sm:max-h-[85vh] sm:w-[min(52rem,calc(100vw-1.25rem))] sm:max-w-4xl sm:p-6"
+        className="flex flex-col gap-0 overflow-hidden bg-background p-0 [--sheet-padding-bottom:0px] max-sm:h-[calc(var(--app-viewport-height,100dvh)-2.5rem)] sm:h-[min(46rem,90vh)] sm:w-[min(66rem,calc(100vw-2rem))] sm:max-w-none"
         onOpenAutoFocus={focusContainerOnTouch}
         onCloseAutoFocus={(event) => {
           if (!insertedRef.current) return;
@@ -92,60 +96,158 @@ export function SmartGraphicGallery({
           onComplete?.();
         }}
       >
-        <DialogHeader>
-          <DialogTitle>{t('graphicGalleryTitle')}</DialogTitle>
-          <DialogDescription>{t('graphicGalleryDescription')}</DialogDescription>
-        </DialogHeader>
-        <Tabs
-          value={category}
-          onValueChange={(value) => setCategory(value as SmartGraphicCategory)}
-          className="min-h-0 flex-1"
-        >
-          <TabsList className="scroll-strip flex h-auto w-full justify-start gap-0 rounded-none border-b border-border bg-transparent p-0 text-foreground max-sm:overflow-x-auto sm:flex-wrap">
-            {SMART_GRAPHIC_CATEGORIES.map((item) => (
-              <TabsTrigger
-                key={item}
-                value={item}
-                className="shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-xs text-muted-foreground shadow-none max-sm:min-h-10 focus-visible:ring-inset focus-visible:ring-offset-0 sm:text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                {t(GRAPHIC_CATEGORY_KEYS[item])}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {SMART_GRAPHIC_CATEGORIES.map((item) => (
-            <TabsContent key={item} value={item} className="mt-3 min-h-0">
-              <ScrollArea className="h-[min(28rem,55vh)] pr-3 max-sm:h-auto max-sm:[&>[data-radix-scroll-area-viewport]]:max-h-[calc(var(--app-viewport-height,100dvh)-14rem)]">
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  {(item === category ? layouts : layoutsForCategory(item)).map((layout) => {
-                    const preview = createStarterGraphic(layout.id, locale);
-                    return (
-                      <button
-                        key={layout.id}
-                        type="button"
-                        className="min-w-0 rounded-md border border-border bg-card p-2 text-left transition-colors hover:border-primary focus:outline-hidden focus:ring-2 focus:ring-ring sm:p-3"
-                        onClick={() => insertLayout(layout.id)}
-                        aria-label={t(GRAPHIC_LAYOUT_KEYS[layout.id])}
-                      >
-                        <div className="mb-2 truncate text-xs font-medium text-foreground sm:text-sm">
-                          {t(GRAPHIC_LAYOUT_KEYS[layout.id])}
-                        </div>
-                        <div
-                          data-testid="graphic-preview-frame"
-                          className="flex h-24 items-center justify-center overflow-hidden bg-background p-1 sm:h-36 sm:p-2"
-                        >
-                          <div className="flex h-full w-full min-w-0 items-center justify-center">
-                            <SmartGraphicCanvas graphic={preview} compact />
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          ))}
-        </Tabs>
+        <GalleryBody tab={tab} onTabChange={setTab} onInsert={insertLayout} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Dialog content; mounted only while the gallery is open. */
+function GalleryBody({
+  tab,
+  onTabChange,
+  onInsert,
+}: {
+  tab: GalleryTab;
+  onTabChange: (tab: GalleryTab) => void;
+  onInsert: (layoutId: SmartGraphicLayoutId) => void;
+}) {
+  const { t, locale } = useLocale();
+  const wide = useMediaQuery('(min-width: 640px)');
+  const [query, setQuery] = useState('');
+
+  const previews = useMemo(
+    () => new Map(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id, createStarterGraphic(layout.id, locale)])),
+    [locale],
+  );
+  const matching = useMemo(
+    () => SMART_GRAPHIC_LAYOUTS.filter((layout) => layoutMatchesQuery(layout, query, t)),
+    [query, t],
+  );
+  const tabs: GalleryTab[] = ['all', ...SMART_GRAPHIC_CATEGORIES];
+  const countFor = (item: GalleryTab) =>
+    matching.filter((layout) => item === 'all' || layout.category === item).length;
+  const tabLabel = (item: GalleryTab) => t(item === 'all' ? 'graphicCategoryAll' : GRAPHIC_CATEGORY_KEYS[item]);
+
+  const renderGrid = (category: SmartGraphicCategory) => {
+    const layouts = matching.filter((layout) => layout.category === category);
+    if (!layouts.length) return null;
+    return (
+      <section key={category} aria-label={t(GRAPHIC_CATEGORY_KEYS[category])} className="space-y-2.5">
+        {tab === 'all' ? (
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t(GRAPHIC_CATEGORY_KEYS[category])}
+          </h3>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
+          {layouts.map((layout) => (
+            <LayoutCard
+              key={layout.id}
+              name={t(GRAPHIC_LAYOUT_KEYS[layout.id])}
+              hint={t(GRAPHIC_LAYOUT_HINT_KEYS[layout.id])}
+              preview={previews.get(layout.id) ?? createStarterGraphic(layout.id, locale)}
+              onSelect={() => onInsert(layout.id)}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const visibleCategories = tab === 'all' ? SMART_GRAPHIC_CATEGORIES : [tab];
+  const empty = visibleCategories.every((category) => !matching.some((layout) => layout.category === category));
+
+  return (
+    <Tabs
+      value={tab}
+      onValueChange={(value) => onTabChange(value as GalleryTab)}
+      orientation={wide ? 'vertical' : 'horizontal'}
+      className="flex min-h-0 flex-1 flex-col sm:flex-row"
+    >
+      {/* Scrolls on short screens (landscape phones) so every category stays reachable. */}
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-card/60 sm:px-3 sm:py-5">
+        <DialogHeader className="space-y-1 pe-8 sm:px-2 sm:pe-2">
+          <DialogTitle>{t('graphicGalleryTitle')}</DialogTitle>
+          <DialogDescription className="text-xs sm:text-[0.8125rem]">{t('graphicGalleryDescription')}</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <SearchField query={query} onQueryChange={setQuery} />
+        </div>
+        <TabsList
+          aria-label={t('graphicGalleryCategories')}
+          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
+        >
+          {tabs.map((item) => (
+            <TabsTrigger
+              key={item}
+              value={item}
+              className="shrink-0 justify-between gap-3 rounded-full border border-border px-3 py-1.5 text-[0.8125rem] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground max-sm:min-h-9 data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:rounded-md sm:border-transparent sm:px-2.5 sm:py-2 sm:data-[state=active]:border-transparent sm:data-[state=active]:bg-accent sm:data-[state=active]:text-foreground"
+            >
+              {tabLabel(item)}
+              <span aria-hidden="true" className="text-xs tabular-nums opacity-70">
+                {countFor(item)}
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="hidden h-14 shrink-0 items-baseline gap-2 border-b border-border px-5 pe-14 pt-[1.125rem] sm:flex">
+          <h3 className="text-sm font-semibold text-foreground">{tabLabel(tab)}</h3>
+          <span aria-hidden="true" className="text-xs tabular-nums text-muted-foreground">
+            {countFor(tab)}
+          </span>
+        </div>
+        {tabs.map((item) => (
+          <TabsContent
+            key={item}
+            value={item}
+            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-5"
+          >
+            {empty ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
+                <p>{formatMessage(t('graphicGalleryNoResults'), { query: query.trim() })}</p>
+                <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+                  {t('graphicGalleryClearSearch')}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">{visibleCategories.map(renderGrid)}</div>
+            )}
+          </TabsContent>
+        ))}
+      </div>
+    </Tabs>
+  );
+}
+
+function SearchField({ query, onQueryChange }: { query: string; onQueryChange: (query: string) => void }) {
+  const { t } = useLocale();
+  return (
+    <>
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <Input
+        type="search"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder={t('graphicGallerySearch')}
+        aria-label={t('graphicGallerySearch')}
+        className={cn('h-9 ps-9', query && 'pe-9')}
+      />
+      {query ? (
+        <button
+          type="button"
+          onClick={() => onQueryChange('')}
+          aria-label={t('graphicGalleryClearSearch')}
+          className="absolute end-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </>
   );
 }

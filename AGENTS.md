@@ -75,6 +75,9 @@ export type DocumentStorageResult<T> =
   (TipTap setup), `EditorToolbar.tsx`, `FileMenu.tsx`, `DocumentImporter.ts`,
   `VersionHistory.tsx`. Phones (`useCompactLayout` in `src/hooks/useMediaQuery.ts`)
   dock `MobileToolbar.tsx` above the keyboard; both toolbars share `toolbarModel.ts`.
+- Smart graphics: model, layout registry (limits, starters) and edits in `src/lib/smartGraphic.ts`;
+  `SmartGraphicCanvas.tsx` renders via `graphics/registry.ts` (one renderer per stored layout id in
+  `graphics/layouts/*`, shared primitives/geometry, container queries for narrow editors).
 - `src/lib/`: `storage.ts`, `sanitizeDocumentHtml.ts`, `documentLibrary.ts`
   (library/backup/duplicate/delete/migration), `versionHistory.ts`, `media.ts`
   (image validation, 10 MB limit), `fileNames.ts` (`buildExportFileName`),

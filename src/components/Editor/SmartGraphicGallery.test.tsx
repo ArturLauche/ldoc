@@ -9,11 +9,17 @@ import { useLocale } from '@/hooks/useLocale';
 import { writeStoredLocale } from '@/lib/localePreference';
 import { t } from '@/lib/translations';
 import {
+  GRAPHIC_PLACEHOLDER_KEYS,
+  SMART_GRAPHIC_CATEGORIES,
   SMART_GRAPHIC_LAYOUTS,
   addGraphicItem,
   coerceGraphic,
+  createStarterGraphic,
+  findGraphicItemDepth,
+  flattenGraphicItems,
   flattenGraphicLabels,
   getSmartGraphicLayout,
+  layoutsForCategory,
   removeGraphicItem,
   serializeSmartGraphic,
   switchGraphicLayout,
@@ -24,7 +30,7 @@ import {
 import { createEditorExtensions } from './editorExtensions';
 import { SmartGraphicGallery } from './SmartGraphicGallery';
 import { SmartGraphicToolbar } from './SmartGraphicToolbar';
-import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
+import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
 
 function GermanLanguageSwitch() {
   const { setLocale } = useLocale();
@@ -89,22 +95,25 @@ describe('smart graphic insert and editing', () => {
     act(() => editor?.destroy());
   });
 
-  it('inserts a layout from the gallery and keeps labels when switching layouts', async () => {
+  it('browses all layouts by category and inserts one', async () => {
     const user = userEvent.setup();
     editor = createTestEditor();
     renderWithProviders(<SmartGraphicGallery editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
-    expect(screen.getByText('Insert Graphic')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: 'Insert Graphic' });
+    const tabs = within(dialog).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual([
+      'All',
+      ...SMART_GRAPHIC_CATEGORIES.map((category) => t('en', GRAPHIC_CATEGORY_KEYS[category])),
+    ]);
+    // The default view groups every layout under its category.
+    expect(within(dialog).getAllByTestId('graphic-preview')).toHaveLength(SMART_GRAPHIC_LAYOUTS.length);
+    expect(within(dialog).getByRole('region', { name: 'Timeline' })).toBeInTheDocument();
+    expect(within(dialog).getByText('Phases that hand off to each other')).toBeInTheDocument();
+
     await user.click(screen.getByRole('tab', { name: 'Process' }));
-    expect(screen.getAllByTestId('graphic-preview-frame').length).toBeGreaterThan(0);
-    screen.getAllByTestId('graphic-preview-frame').forEach((frame) => {
-      // Fixed preview heights: shorter on phones so two columns fit.
-      expect(frame).toHaveClass('h-24', 'sm:h-36', 'items-center', 'justify-center');
-      expect(frame.querySelector('[data-compact="true"]')).toBeTruthy();
-    });
-    expect(screen.getByTestId('graphic-layout-process-chevron')).toHaveClass('flex-nowrap');
-    expect(screen.getByTestId('graphic-layout-process-steps')).toHaveClass('flex-nowrap');
+    expect(within(dialog).getAllByTestId('graphic-preview')).toHaveLength(layoutsForCategory('process').length);
     await user.click(screen.getByRole('button', { name: 'Chevron Process' }));
 
     expect(editor.isActive('smartGraphic')).toBe(true);
@@ -115,6 +124,42 @@ describe('smart graphic insert and editing', () => {
     editor.commands.updateSmartGraphic(labeled);
     editor.commands.updateSmartGraphic(switchGraphicLayout(graphicFromEditor(editor), 'list-block'));
     expect(flattenGraphicLabels(graphicFromEditor(editor))).toContain('Launch');
+  });
+
+  it('searches layouts by name, purpose and category in the current language', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<SmartGraphicGallery editor={editor} />);
+    await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
+    const search = screen.getByRole('searchbox', { name: 'Search layouts' });
+
+    await user.type(search, 'timeline');
+    expect(screen.getAllByTestId('graphic-preview')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Alternating Timeline' })).toBeInTheDocument();
+
+    await user.clear(search);
+    await user.type(search, 'sales funnel');
+    expect(screen.getAllByRole('button', { name: 'Funnel' })).toHaveLength(1);
+    expect(screen.getAllByTestId('graphic-preview')).toHaveLength(1);
+
+    await user.clear(search);
+    await user.type(search, 'zzz');
+    const emptyState = screen.getByText('No layouts match “zzz”.').parentElement as HTMLElement;
+    await user.click(within(emptyState).getByRole('button', { name: 'Clear search' }));
+    expect(search).toHaveValue('');
+    expect(screen.getAllByTestId('graphic-preview')).toHaveLength(SMART_GRAPHIC_LAYOUTS.length);
+  });
+
+  it('searches German layout names after a language change', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    renderWithProviders(<><GermanLanguageSwitch /><SmartGraphicGallery editor={editor} /></>);
+    await user.click(screen.getByRole('button', { name: 'Deutsch' }));
+    await user.click(screen.getByRole('button', { name: 'Grafik einfügen' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Layouts durchsuchen' }), 'trichter');
+    await user.click(screen.getByRole('button', { name: 'Trichter' }));
+    expect(graphicFromEditor(editor).layoutId).toBe('pyramid-funnel');
+    expect(flattenGraphicLabels(graphicFromEditor(editor))[0]).toBe('Phase 1');
   });
 
   it('adds and removes nodes through the structured model', () => {
@@ -234,7 +279,7 @@ describe('smart graphic insert and editing', () => {
 
       const canvas = document.querySelector('.lwrite-graphic-canvas[data-compact="false"]');
       expect(canvas).toBeTruthy();
-      const shapeInputs = Array.from(canvas?.querySelectorAll('input') ?? []);
+      const shapeInputs = Array.from(canvas?.querySelectorAll('textarea') ?? []);
       expect(shapeInputs.length).toBeGreaterThan(0);
       await typeMultiwordText(user, shapeInputs[0]!, () => graphicFromEditor(editor).items[0].label);
 
@@ -246,12 +291,19 @@ describe('smart graphic insert and editing', () => {
       expect(shapeInputs[0]).toHaveValue('Hello world');
 
       if (layout.supportsHierarchy) {
+        // The pane lists the title, then every node in outline order.
         const treeInputs = within(pane).getAllByRole('textbox');
-        expect(treeInputs.length).toBeGreaterThanOrEqual(5);
-        const nested = graphicFromEditor(editor).items[0].children[1].children[0];
-        expect(nested).toBeDefined();
-        await typeMultiwordText(user, treeInputs[4]!, () => graphicFromEditor(editor).items[0].children[1].children[0].label);
-        expect(graphicFromEditor(editor).items[0].children[1].children[0].label).toBe('Hello world');
+        const nodes = flattenGraphicItems(graphicFromEditor(editor).items);
+        expect(treeInputs).toHaveLength(nodes.length + 1);
+        // Timelines start flat; their details are added later.
+        const nestedIndex = nodes.findIndex((item) => findGraphicItemDepth(graphicFromEditor(editor).items, item.id) === 2);
+        if (nestedIndex >= 0) {
+          const nestedId = nodes[nestedIndex].id;
+          const readNested = () =>
+            flattenGraphicItems(graphicFromEditor(editor).items).find((item) => item.id === nestedId)?.label ?? '';
+          await typeMultiwordText(user, treeInputs[nestedIndex + 1]!, readNested);
+          expect(readNested()).toBe('Hello world');
+        }
       }
     },
     20000,
@@ -268,17 +320,21 @@ describe('smart graphic insert and editing', () => {
       const layout = getSmartGraphicLayout(layoutId);
       await user.click(screen.getByRole('tab', { name: t('de', GRAPHIC_CATEGORY_KEYS[layout.category]) }));
       const choice = screen.getByRole('button', { name: t('de', GRAPHIC_LAYOUT_KEYS[layoutId]) });
-      const word = { item: 'Text', step: 'Schritt', topic: 'Thema', level: 'Ebene' }[layout.placeholderKind];
-      expect(within(choice).getByText(`${word} 1`)).toBeInTheDocument();
+      const expected = flattenGraphicLabels(createStarterGraphic(layoutId, 'de'));
+      expect(within(choice).getByText(expected[0])).toBeInTheDocument();
+      expect(within(choice).getByText(t('de', GRAPHIC_LAYOUT_HINT_KEYS[layoutId]))).toBeInTheDocument();
       await user.click(choice);
       const inserted = graphicFromEditor(editor);
       expect(inserted.layoutId).toBe(layoutId);
-      expect(flattenGraphicLabels(inserted)).toEqual(
-        Array.from({ length: layout.starterCount }, (_, index) => `${word} ${index + 1}`),
-      );
+      expect(flattenGraphicLabels(inserted)).toEqual(expected);
+      const word = t('de', GRAPHIC_PLACEHOLDER_KEYS[layout.placeholderKind]);
       if (layout.maxItems > layout.starterCount) {
+        // Without a selection, a new item is appended at the top level.
         await user.click(screen.getByRole('button', { name: t('de', 'graphicAddItem') }));
-        expect(flattenGraphicLabels(graphicFromEditor(editor))).toContain(`${word} ${layout.starterCount + 1}`);
+        const next = layout.childPlaceholderKind ? inserted.items.length + 1 : layout.starterCount + 1;
+        expect(flattenGraphicLabels(graphicFromEditor(editor))).toContain(`${word} ${next}`);
+      } else {
+        expect(screen.getByRole('button', { name: t('de', 'graphicAddItem') })).toHaveAttribute('aria-disabled', 'true');
       }
     },
   );
