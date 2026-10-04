@@ -446,6 +446,35 @@ describe('smartGraphic layout registry', () => {
     expect(canRemoveGraphicItem(swot, swot.items[0].id)).toBe(true);
     expect(removeGraphicItem(swot, swot.items[0].id).items).toHaveLength(3 + swot.items[0].children.length);
 
+    // A full tree has no room for placeholders: nested items move up
+    // instead, in reading order, and nothing exceeds the node cap.
+    const fullTree = switchGraphicLayout(
+      {
+        ...tree,
+        items: [
+          {
+            ...tree.items[0],
+            children: Array.from({ length: MAX_GRAPHIC_NODES - 1 }, (_, index) => ({
+              id: `leaf${index}`,
+              label: `Leaf ${index + 1}`,
+              children: [],
+            })),
+          },
+        ],
+      },
+      'hierarchy-tree',
+    );
+    expect(countGraphicNodes(fullTree.items)).toBe(MAX_GRAPHIC_NODES);
+    const fullSwot = switchGraphicLayout(fullTree, 'matrix-swot');
+    expect(fullSwot.items).toHaveLength(4);
+    expect(countGraphicNodes(fullSwot.items)).toBe(MAX_GRAPHIC_NODES);
+    expect(flattenGraphicLabels(fullSwot)).toEqual(flattenGraphicLabels(fullTree));
+    expect(fullSwot.items.slice(1).map((item) => item.label)).toEqual(['Leaf 9', 'Leaf 10', 'Leaf 11']);
+    // Text typed into any quadrant survives a save and reload.
+    const typed = updateItemLabel(fullSwot, fullSwot.items[3].id, 'Threat typed by the user');
+    const reloaded = parseSmartGraphicJson(serializeSmartGraphic(typed));
+    expect(flattenGraphicLabels(reloaded!)).toContain('Threat typed by the user');
+
     // Nesting a quadrant under another would leave three: it stays put.
     expect(canDemoteGraphicItem(swot, swot.items[1].id)).toBe(false);
     expect(demoteGraphicItem(swot, swot.items[1].id)).toBe(swot);

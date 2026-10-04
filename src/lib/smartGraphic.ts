@@ -631,13 +631,16 @@ function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale
     : flattenGraphicItems(model.items);
   let items = capItems(sourceItems, layout, options);
   // Renderers draw one shape per top-level item (quadrants, cards,
-  // milestones), so the minimum applies to the top level.
+  // milestones), so the minimum applies to the top level. Placeholders
+  // fill it while the layout has room; past that, nested items move up
+  // instead, so the node count never outgrows the layout or the parse cap.
   if (items.length < layout.minItems) {
     const count = items.length;
-    const extras = Array.from({ length: layout.minItems - count }, (_, index) =>
+    const room = Math.max(0, Math.min(layout.maxItems, MAX_GRAPHIC_NODES) - countGraphicNodes(items));
+    const extras = Array.from({ length: Math.min(layout.minItems - count, room) }, (_, index) =>
       createGraphicItem(placeholderLabel(layout.placeholderKind, count + index, locale)),
     );
-    items = [...items, ...extras];
+    items = liftIntoTopLevel([...items, ...extras], layout.minItems);
   }
   return {
     version: 1,
@@ -652,6 +655,23 @@ function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale
 function capItems(items: SmartGraphicItem[], layout: SmartGraphicLayoutDefinition, options: { trim: boolean }): SmartGraphicItem[] {
   const budget = { left: MAX_GRAPHIC_NODES };
   return parseItems(items, 1, layout.maxDepth, budget, new Set(), options);
+}
+
+/**
+ * Moves trailing nested items up until the top level has `minimum` entries.
+ * Each lifted item follows its former parent, so reading order is unchanged.
+ */
+function liftIntoTopLevel(items: SmartGraphicItem[], minimum: number): SmartGraphicItem[] {
+  const next = items.slice();
+  while (next.length < minimum) {
+    let parentIndex = next.length - 1;
+    while (parentIndex >= 0 && next[parentIndex].children.length === 0) parentIndex -= 1;
+    if (parentIndex < 0) break;
+    const parent = next[parentIndex];
+    const lifted = parent.children[parent.children.length - 1];
+    next.splice(parentIndex, 1, { ...parent, children: parent.children.slice(0, -1) }, lifted);
+  }
+  return next;
 }
 
 /**
