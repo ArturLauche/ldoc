@@ -927,25 +927,492 @@ header.app-bar {
   background-image: none;
 }
 
+/*
+ * Smart graphics. The node view renders `.lwrite-graphic-node` (ProseMirror's
+ * node DOM) around one framed `.lwrite-graphic-view`; saved HTML without the
+ * editor falls back to a framed `div.lwrite-graphic` outline.
+ */
+.editor-content .ProseMirror .lwrite-graphic-node,
+.editor-content .ProseMirror div.lwrite-graphic {
+  margin: 1.5rem 0;
+}
+
 .editor-content .ProseMirror .lwrite-graphic-view,
 .editor-content .ProseMirror div.lwrite-graphic {
-  margin: 1.25rem 0;
   border: 1px solid hsl(var(--border) / 0.8);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   background: hsl(var(--card));
-  padding: 0.85rem;
+  padding: 1.25rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
 
 .editor-content .ProseMirror .lwrite-graphic-view.is-selected,
-.editor-content .ProseMirror .lwrite-graphic-view.ProseMirror-selectednode {
-  outline: 2px solid hsl(var(--primary) / 0.7);
-  outline-offset: 2px;
+.editor-content .ProseMirror .lwrite-graphic-node.ProseMirror-selectednode > .lwrite-graphic-view {
+  border-color: hsl(var(--ring) / 0.8);
+  box-shadow: 0 0 0 1px hsl(var(--ring) / 0.8);
 }
 
-.editor-content .ProseMirror .lwrite-graphic-canvas {
+/* Palette tokens: six fills per color set plus the text drawn on them. Named
+   sets switch to light fills with dark text in dark mode. */
+.lwrite-graphic-canvas {
+  --sg-1: hsl(var(--primary));
+  --sg-2: hsl(var(--chart-1));
+  --sg-3: hsl(var(--chart-3));
+  --sg-4: hsl(var(--chart-4));
+  --sg-5: hsl(var(--chart-5));
+  --sg-6: hsl(var(--muted-foreground));
+  --sg-on: hsl(var(--primary-foreground));
+  --sg-surface: hsl(var(--card));
+  --sg-line: hsl(var(--muted-foreground) / 0.5);
+  --sg-line-strong: hsl(var(--muted-foreground) / 0.8);
   color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  line-height: 1.35;
+  /* Break inside a word only when it cannot fit on its own line. */
+  overflow-wrap: break-word;
+}
+.lwrite-graphic-canvas[data-color='blue'] {
+  --sg-1: #1e40af; --sg-2: #2563eb; --sg-3: #1e3a8a; --sg-4: #1d4ed8; --sg-5: #0369a1; --sg-6: #4338ca;
+  --sg-on: #ffffff;
+}
+.lwrite-graphic-canvas[data-color='green'] {
+  --sg-1: #166534; --sg-2: #047857; --sg-3: #065f46; --sg-4: #15803d; --sg-5: #0f766e; --sg-6: #3f6212;
+  --sg-on: #ffffff;
+}
+.lwrite-graphic-canvas[data-color='orange'] {
+  --sg-1: #c2410c; --sg-2: #9a3412; --sg-3: #b45309; --sg-4: #b91c1c; --sg-5: #92400e; --sg-6: #a16207;
+  --sg-on: #ffffff;
+}
+.lwrite-graphic-canvas[data-color='purple'] {
+  --sg-1: #6d28d9; --sg-2: #6b21a8; --sg-3: #7e22ce; --sg-4: #5b21b6; --sg-5: #86198f; --sg-6: #4c1d95;
+  --sg-on: #ffffff;
+}
+.lwrite-graphic-canvas[data-color='gray'] {
+  --sg-1: #374151; --sg-2: #1f2937; --sg-3: #4b5563; --sg-4: #334155; --sg-5: #475569; --sg-6: #52525b;
+  --sg-on: #ffffff;
+}
+.dark .lwrite-graphic-canvas[data-color='blue'] {
+  --sg-1: #93c5fd; --sg-2: #60a5fa; --sg-3: #bfdbfe; --sg-4: #7dd3fc; --sg-5: #a5b4fc; --sg-6: #c7d2fe;
+  --sg-on: #0f172a;
+}
+.dark .lwrite-graphic-canvas[data-color='green'] {
+  --sg-1: #86efac; --sg-2: #6ee7b7; --sg-3: #bbf7d0; --sg-4: #5eead4; --sg-5: #a7f3d0; --sg-6: #bef264;
+  --sg-on: #0f172a;
+}
+.dark .lwrite-graphic-canvas[data-color='orange'] {
+  --sg-1: #fdba74; --sg-2: #fbbf24; --sg-3: #fed7aa; --sg-4: #fca5a5; --sg-5: #fcd34d; --sg-6: #fde68a;
+  --sg-on: #0f172a;
+}
+.dark .lwrite-graphic-canvas[data-color='purple'] {
+  --sg-1: #d8b4fe; --sg-2: #c4b5fd; --sg-3: #e9d5ff; --sg-4: #f0abfc; --sg-5: #ddd6fe; --sg-6: #a78bfa;
+  --sg-on: #0f172a;
+}
+.dark .lwrite-graphic-canvas[data-color='gray'] {
+  --sg-1: #d1d5db; --sg-2: #9ca3af; --sg-3: #e5e7eb; --sg-4: #cbd5e1; --sg-5: #94a3b8; --sg-6: #d4d4d8;
+  --sg-on: #0f172a;
+}
+
+/* Selected item: a ring outside the shape, so it never depends on fill color. */
+.lwrite-graphic-canvas [data-active='true'] {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+/* Labels wrap and grow: the hidden copy sizes the grid cell, the textarea
+   fills it (width: 0 keeps it from widening content-sized shapes). */
+.sg-label {
+  display: grid;
+  min-width: 0;
+}
+.sg-label::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+.sg-label > textarea,
+.sg-label::after {
+  grid-area: 1 / 1;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  overflow-wrap: inherit;
+}
+.sg-label > textarea {
+  width: 0;
+  min-width: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+.sg-label > textarea::placeholder {
+  color: currentColor;
+  opacity: 0.6;
+}
+.sg-label > textarea:focus-visible {
+  outline: none;
+}
+
+/* Tree connectors are structural CSS: each branch draws its own elbow, so
+   lines stay attached whatever the label heights. */
+.sg-org,
+.sg-org-children {
+  display: flex;
+  justify-content: center;
+}
+.sg-org-children {
+  position: relative;
+  padding-top: 1.25rem;
+}
+.sg-org-children::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: 50%;
+  height: 1.25rem;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+}
+.sg-org-branch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 0.375rem 0;
+}
+.sg-org > .sg-org-branch {
+  padding-top: 0;
+}
+.sg-org-children > .sg-org-branch::before,
+.sg-org-children > .sg-org-branch::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 1.25rem;
+  border-top: 1.5px solid var(--sg-line-strong);
+}
+.sg-org-children > .sg-org-branch::before {
+  inset-inline-end: 50%;
+}
+.sg-org-children > .sg-org-branch::after {
+  inset-inline-start: 50%;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+}
+.sg-org-children > .sg-org-branch:first-child::before,
+.sg-org-children > .sg-org-branch:last-child::after {
+  border-top: 0;
+}
+.sg-org-children > .sg-org-branch:last-child::before {
+  border-inline-end: 1.5px solid var(--sg-line-strong);
+  border-start-end-radius: 0.5rem;
+}
+.sg-org-children > .sg-org-branch:first-child::after {
+  border-start-start-radius: 0.5rem;
+}
+.sg-org-children > .sg-org-branch:only-child::before {
+  display: none;
+}
+.sg-org-children > .sg-org-branch:only-child::after {
+  border-start-start-radius: 0;
+}
+/* Wide leaf groups hang below their parent as a list: always for broad
+   trees, and in narrow containers for the rest. */
+.sg-org-children.is-leaves[data-stack='true'] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding-inline-start: 1.25rem;
+}
+.sg-org-children.is-leaves[data-stack='true']::before {
+  height: 0.75rem;
+}
+.sg-org-children.is-leaves[data-stack='true']::after {
+  content: '';
+  position: absolute;
+  top: 0.75rem;
+  inset-inline-start: 0.5rem;
+  inset-inline-end: 50%;
+  border-top: 1.5px solid var(--sg-line-strong);
+  border-start-start-radius: 0.5rem;
+}
+.sg-org-children.is-leaves[data-stack='true'] > .sg-org-branch {
+  padding: 0;
+  align-items: stretch;
+}
+.sg-org-children.is-leaves[data-stack='true'] > .sg-org-branch::before {
+  display: block;
+  top: -0.5rem;
+  height: calc(50% + 0.5rem);
+  inset-inline-start: -0.75rem;
+  inset-inline-end: auto;
+  width: 0.75rem;
+  border: 0;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+  border-bottom: 1.5px solid var(--sg-line-strong);
+  border-radius: 0;
+  border-end-start-radius: 0.375rem;
+}
+.sg-org-children.is-leaves[data-stack='true'] > .sg-org-branch::after {
+  display: block;
+  top: 50%;
+  bottom: -0.5rem;
+  height: auto;
+  inset-inline-start: -0.75rem;
+  width: 0;
+  border: 0;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+  border-radius: 0;
+}
+.sg-org-children.is-leaves[data-stack='true'] > .sg-org-branch:last-child::after {
+  display: none;
+}
+@container (max-width: 32rem) {
+  .sg-org-children.is-leaves[data-stack='narrow'] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding-inline-start: 1.25rem;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow']::before {
+    height: 0.75rem;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow']::after {
+    content: '';
+    position: absolute;
+    top: 0.75rem;
+    inset-inline-start: 0.5rem;
+    inset-inline-end: 50%;
+    border-top: 1.5px solid var(--sg-line-strong);
+    border-start-start-radius: 0.5rem;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow'] > .sg-org-branch {
+    padding: 0;
+    align-items: stretch;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow'] > .sg-org-branch::before {
+    display: block;
+    top: -0.5rem;
+    height: calc(50% + 0.5rem);
+    inset-inline-start: -0.75rem;
+    inset-inline-end: auto;
+    width: 0.75rem;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-bottom: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+    border-end-start-radius: 0.375rem;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow'] > .sg-org-branch::after {
+    display: block;
+    top: 50%;
+    bottom: -0.5rem;
+    height: auto;
+    inset-inline-start: -0.75rem;
+    width: 0;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+  }
+  .sg-org-children.is-leaves[data-stack='narrow'] > .sg-org-branch:last-child::after {
+    display: none;
+  }
+}
+
+/* Broad org charts fold into an indented tree in narrow editors. */
+@container (width < 32rem) {
+  .sg-org[data-fold='true'] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sg-org[data-fold='true'] .sg-org-branch {
+    align-items: flex-start;
+    padding: 0;
+  }
+  .sg-org[data-fold='true'] .sg-org-children,
+  .sg-org[data-fold='true'] .sg-org-children.is-leaves[data-stack] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin-inline-start: 1.125rem;
+    padding-top: 0.5rem;
+    padding-inline-start: 1.375rem;
+  }
+  .sg-org[data-fold='true'] .sg-org-children::before,
+  .sg-org[data-fold='true'] .sg-org-children::after {
+    display: none;
+  }
+  .sg-org[data-fold='true'] .sg-org-children > .sg-org-branch::before,
+  .sg-org[data-fold='true'] .sg-org-children.is-leaves[data-stack] > .sg-org-branch::before {
+    display: block;
+    top: -0.5rem;
+    height: 1.875rem;
+    inset-inline-start: -1.375rem;
+    inset-inline-end: auto;
+    width: 1.125rem;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-bottom: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+    border-end-start-radius: 0.5rem;
+  }
+  .sg-org[data-fold='true'] .sg-org-children > .sg-org-branch::after,
+  .sg-org[data-fold='true'] .sg-org-children.is-leaves[data-stack] > .sg-org-branch::after {
+    display: block;
+    top: -0.5rem;
+    bottom: -0.5rem;
+    height: auto;
+    inset-inline-start: -1.375rem;
+    width: 0;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+  }
+  .sg-org[data-fold='true'] .sg-org-children > .sg-org-branch:last-child::after,
+  .sg-org[data-fold='true'] .sg-org-children.is-leaves[data-stack] > .sg-org-branch:last-child::after {
+    display: none;
+  }
+}
+
+/* Left-to-right tree: a bus on each child group, an elbow per branch. */
+.sg-htree-node {
+  display: flex;
+  align-items: center;
+}
+.sg-htree-children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-inline-start: 1rem;
+  margin-inline-start: 1rem;
+}
+.sg-htree-children::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  inset-inline-start: -1rem;
+  width: 1rem;
+  border-top: 1.5px solid var(--sg-line-strong);
+}
+.sg-htree-branch {
+  position: relative;
+  padding-block: 0.25rem;
+}
+.sg-htree-branch::before,
+.sg-htree-branch::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -1rem;
+  width: 1rem;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+}
+.sg-htree-branch::before {
+  top: 0;
+  height: 50%;
+  border-bottom: 1.5px solid var(--sg-line-strong);
+}
+.sg-htree-branch::after {
+  top: 50%;
+  bottom: 0;
+}
+.sg-htree-branch:first-child::before {
+  border-inline-start: 0;
+}
+.sg-htree-branch:first-child::after {
+  border-top: 1.5px solid var(--sg-line-strong);
+  border-start-start-radius: 0.5rem;
+}
+.sg-htree-branch:last-child::before {
+  border-end-start-radius: 0.5rem;
+}
+.sg-htree-branch:last-child::after {
+  display: none;
+}
+.sg-htree-branch:only-child::before {
+  border-inline-start: 0;
+  border-radius: 0;
+}
+
+/* Narrow editors: the left-to-right tree folds into an indented tree. */
+@container (width < 32rem) {
+  .sg-htree-node {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sg-htree-children {
+    gap: 0.5rem;
+    margin-inline-start: 1.125rem;
+    padding-top: 0.5rem;
+    padding-inline-start: 1.375rem;
+  }
+  .sg-htree-children::before {
+    display: none;
+  }
+  .sg-htree-branch {
+    padding-block: 0;
+  }
+  .sg-htree-branch::before,
+  .sg-htree-branch:first-child::before,
+  .sg-htree-branch:last-child::before,
+  .sg-htree-branch:only-child::before {
+    top: -0.5rem;
+    height: 1.75rem;
+    inset-inline-start: -1.375rem;
+    width: 1.125rem;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-bottom: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+    border-end-start-radius: 0.5rem;
+  }
+  .sg-htree-branch::after,
+  .sg-htree-branch:first-child::after {
+    top: -0.5rem;
+    bottom: -0.5rem;
+    inset-inline-start: -1.375rem;
+    width: 0;
+    border: 0;
+    border-inline-start: 1.5px solid var(--sg-line-strong);
+    border-radius: 0;
+  }
+}
+
+/* Indented tree: a rail per child list, an elbow into each node. */
+.sg-tree-children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-inline-start: 1.125rem;
+  padding-top: 0.5rem;
+  padding-inline-start: 1.375rem;
+}
+.sg-tree-branch {
+  position: relative;
+}
+.sg-tree-branch::before {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  inset-inline-start: -1.375rem;
+  width: 1.125rem;
+  height: calc(0.5rem + 1.25rem);
+  border-inline-start: 1.5px solid var(--sg-line-strong);
+  border-bottom: 1.5px solid var(--sg-line-strong);
+  border-end-start-radius: 0.5rem;
+}
+.sg-tree-branch:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  bottom: -0.5rem;
+  inset-inline-start: -1.375rem;
+  border-inline-start: 1.5px solid var(--sg-line-strong);
 }
 
 @media (max-width: 639px) {
@@ -981,14 +1448,10 @@ header.app-bar {
   .editor-content .ProseMirror :is(td, th) {
     min-width: 5.5rem;
   }
-  /* The node view nests two framed wrappers; one frame is enough on a phone. */
-  .editor-content .ProseMirror .lwrite-graphic-view {
-    padding: 0.5rem;
-  }
-  .editor-content .ProseMirror .lwrite-graphic-view .lwrite-graphic-view {
-    margin: 0;
-    border-color: transparent;
-    padding: 0;
+  /* Graphics use the phone width; the frame keeps a slim inset. */
+  .editor-content .ProseMirror .lwrite-graphic-view,
+  .editor-content .ProseMirror div.lwrite-graphic {
+    padding: 0.75rem 0.625rem;
   }
   .app-footer nav a {
     display: inline-flex;

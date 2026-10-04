@@ -95,7 +95,8 @@ export const SmartGraphic = Node.create({
   addNodeView() {
     return ReactNodeViewRenderer(SmartGraphicView, {
       as: 'div',
-      className: 'lwrite-graphic-view',
+      // The outer node DOM; the framed `.lwrite-graphic-view` is rendered inside.
+      className: 'lwrite-graphic-node',
       stopEvent: ({ event }) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return false;
