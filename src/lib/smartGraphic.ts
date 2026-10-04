@@ -10,6 +10,7 @@ export const MAX_GRAPHIC_LIST_DEPTH = 4;
 export type SmartGraphicCategory =
   | 'list'
   | 'process'
+  | 'timeline'
   | 'cycle'
   | 'hierarchy'
   | 'relationship'
@@ -20,17 +21,50 @@ export type SmartGraphicStyle = 'filled' | 'outline' | 'subtle' | 'intense';
 
 export type SmartGraphicColorSet = 'theme' | 'blue' | 'green' | 'orange' | 'purple' | 'gray';
 
+/**
+ * Stored layout ids. Ids are persisted in documents: never rename or remove
+ * one; add new layouts at the end of their category instead.
+ */
 export type SmartGraphicLayoutId =
   | 'list-block'
   | 'list-horizontal'
+  | 'list-numbered'
+  | 'list-cards'
   | 'process-chevron'
   | 'process-steps'
+  | 'process-arrow'
+  | 'process-staircase'
+  | 'timeline-horizontal'
+  | 'timeline-vertical'
+  | 'timeline-alternating'
   | 'cycle-basic'
+  | 'cycle-segmented'
+  | 'cycle-loop'
   | 'hierarchy-org'
+  | 'hierarchy-horizontal'
+  | 'hierarchy-tree'
   | 'relationship-opposing'
   | 'relationship-radial'
+  | 'relationship-converging'
+  | 'relationship-diverging'
+  | 'relationship-venn'
+  | 'relationship-nested'
   | 'matrix-grid'
-  | 'pyramid-basic';
+  | 'matrix-swot'
+  | 'matrix-titled'
+  | 'pyramid-basic'
+  | 'pyramid-inverted'
+  | 'pyramid-list'
+  | 'pyramid-funnel';
+
+export type GraphicPlaceholderKind = 'item' | 'step' | 'topic' | 'level' | 'stage' | 'milestone';
+
+/** One node of a layout's starter content: a localized placeholder or a fixed localized label. */
+export interface GraphicStarterNode {
+  kind?: GraphicPlaceholderKind;
+  labelKey?: TranslationKey;
+  children?: readonly GraphicStarterNode[];
+}
 
 export interface SmartGraphicItem {
   id: string;
@@ -50,12 +84,20 @@ export interface SmartGraphicModel {
 export interface SmartGraphicLayoutDefinition {
   id: SmartGraphicLayoutId;
   category: SmartGraphicCategory;
+  /** Node bounds (all levels). Switching layouts keeps extra nodes; renderers show them as overflow. */
   minItems: number;
   maxItems: number;
   maxDepth: number;
+  /** Number of nodes in the starter graphic. */
   starterCount: number;
   supportsHierarchy: boolean;
-  placeholderKind: 'item' | 'step' | 'topic' | 'level';
+  placeholderKind: GraphicPlaceholderKind;
+  /** Placeholder for nested nodes, when it differs from `placeholderKind`. */
+  childPlaceholderKind?: GraphicPlaceholderKind;
+  /** Order carries meaning (steps, stages, milestones): exports as a numbered list. */
+  sequential: boolean;
+  /** Starter tree for layouts whose structure matters; otherwise flat placeholders. */
+  starter?: readonly GraphicStarterNode[];
 }
 
 export interface GraphicOutlineItem {
@@ -66,6 +108,7 @@ export interface GraphicOutlineItem {
 export const SMART_GRAPHIC_CATEGORIES: readonly SmartGraphicCategory[] = [
   'list',
   'process',
+  'timeline',
   'cycle',
   'hierarchy',
   'relationship',
@@ -84,17 +127,81 @@ export const SMART_GRAPHIC_COLOR_SETS: readonly SmartGraphicColorSet[] = [
   'gray',
 ];
 
+type LayoutSpec = Omit<
+  SmartGraphicLayoutDefinition,
+  'maxDepth' | 'starterCount' | 'supportsHierarchy' | 'sequential'
+> & {
+  maxDepth?: number;
+  starterCount?: number;
+  sequential?: boolean;
+};
+
+function defineLayout(spec: LayoutSpec): SmartGraphicLayoutDefinition {
+  const maxDepth = spec.maxDepth ?? 1;
+  return {
+    ...spec,
+    maxDepth,
+    supportsHierarchy: maxDepth > 1,
+    sequential: spec.sequential ?? false,
+    starterCount: spec.starter ? countStarterNodes(spec.starter) : (spec.starterCount ?? 4),
+  };
+}
+
+function countStarterNodes(nodes: readonly GraphicStarterNode[]): number {
+  return nodes.reduce((total, node) => total + 1 + countStarterNodes(node.children ?? []), 0);
+}
+
+/** One root with a small team below it; shared by the tree layouts. */
+const ORG_STARTER: readonly GraphicStarterNode[] = [{ children: [{}, { children: [{}] }, {}] }];
+
+const CARD_STARTER: readonly GraphicStarterNode[] = [
+  { children: [{}, {}] },
+  { children: [{}, {}] },
+  { children: [{}, {}] },
+];
+
+const SWOT_STARTER: readonly GraphicStarterNode[] = [
+  { labelKey: 'graphicStarterStrengths', children: [{}] },
+  { labelKey: 'graphicStarterWeaknesses', children: [{}] },
+  { labelKey: 'graphicStarterOpportunities', children: [{}] },
+  { labelKey: 'graphicStarterThreats', children: [{}] },
+];
+
+/**
+ * The layout library, in gallery order. Bounds are per layout: the global
+ * `MAX_GRAPHIC_NODES` safety limit applies on top of every entry.
+ */
 export const SMART_GRAPHIC_LAYOUTS: readonly SmartGraphicLayoutDefinition[] = [
-  { id: 'list-block', category: 'list', minItems: 2, maxItems: 8, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'item' },
-  { id: 'list-horizontal', category: 'list', minItems: 2, maxItems: 6, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'item' },
-  { id: 'process-chevron', category: 'process', minItems: 2, maxItems: 6, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'step' },
-  { id: 'process-steps', category: 'process', minItems: 2, maxItems: 8, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'step' },
-  { id: 'cycle-basic', category: 'cycle', minItems: 3, maxItems: 8, maxDepth: 1, starterCount: 5, supportsHierarchy: false, placeholderKind: 'step' },
-  { id: 'hierarchy-org', category: 'hierarchy', minItems: 1, maxItems: 12, maxDepth: 3, starterCount: 5, supportsHierarchy: true, placeholderKind: 'topic' },
-  { id: 'relationship-opposing', category: 'relationship', minItems: 2, maxItems: 6, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'item' },
-  { id: 'relationship-radial', category: 'relationship', minItems: 3, maxItems: 8, maxDepth: 1, starterCount: 5, supportsHierarchy: false, placeholderKind: 'topic' },
-  { id: 'matrix-grid', category: 'matrix', minItems: 4, maxItems: 4, maxDepth: 1, starterCount: 4, supportsHierarchy: false, placeholderKind: 'item' },
-  { id: 'pyramid-basic', category: 'pyramid', minItems: 2, maxItems: 5, maxDepth: 1, starterCount: 3, supportsHierarchy: false, placeholderKind: 'level' },
+  defineLayout({ id: 'list-block', category: 'list', minItems: 2, maxItems: 8, placeholderKind: 'item' }),
+  defineLayout({ id: 'list-horizontal', category: 'list', minItems: 2, maxItems: 6, placeholderKind: 'item' }),
+  defineLayout({ id: 'list-numbered', category: 'list', minItems: 2, maxItems: 10, placeholderKind: 'item', sequential: true }),
+  defineLayout({ id: 'list-cards', category: 'list', minItems: 2, maxItems: 12, maxDepth: 2, placeholderKind: 'topic', childPlaceholderKind: 'item', starter: CARD_STARTER }),
+  defineLayout({ id: 'process-chevron', category: 'process', minItems: 2, maxItems: 6, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'process-steps', category: 'process', minItems: 2, maxItems: 8, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'process-arrow', category: 'process', minItems: 2, maxItems: 6, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'process-staircase', category: 'process', minItems: 2, maxItems: 6, placeholderKind: 'stage', sequential: true }),
+  defineLayout({ id: 'timeline-horizontal', category: 'timeline', minItems: 2, maxItems: 8, placeholderKind: 'milestone', sequential: true }),
+  defineLayout({ id: 'timeline-vertical', category: 'timeline', minItems: 2, maxItems: 12, maxDepth: 2, placeholderKind: 'milestone', childPlaceholderKind: 'item', sequential: true }),
+  defineLayout({ id: 'timeline-alternating', category: 'timeline', minItems: 2, maxItems: 12, maxDepth: 2, placeholderKind: 'milestone', childPlaceholderKind: 'item', sequential: true }),
+  defineLayout({ id: 'cycle-basic', category: 'cycle', minItems: 3, maxItems: 8, starterCount: 5, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'cycle-segmented', category: 'cycle', minItems: 3, maxItems: 8, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'cycle-loop', category: 'cycle', minItems: 2, maxItems: 6, placeholderKind: 'step', sequential: true }),
+  defineLayout({ id: 'hierarchy-org', category: 'hierarchy', minItems: 1, maxItems: 12, maxDepth: 3, placeholderKind: 'topic', starter: ORG_STARTER }),
+  defineLayout({ id: 'hierarchy-horizontal', category: 'hierarchy', minItems: 1, maxItems: 12, maxDepth: 3, placeholderKind: 'topic', starter: ORG_STARTER }),
+  defineLayout({ id: 'hierarchy-tree', category: 'hierarchy', minItems: 1, maxItems: 12, maxDepth: 4, placeholderKind: 'topic', starter: [{ children: [{ children: [{}, {}] }, { children: [{}] }] }] }),
+  defineLayout({ id: 'relationship-opposing', category: 'relationship', minItems: 2, maxItems: 6, placeholderKind: 'item' }),
+  defineLayout({ id: 'relationship-radial', category: 'relationship', minItems: 3, maxItems: 8, starterCount: 5, placeholderKind: 'topic' }),
+  defineLayout({ id: 'relationship-converging', category: 'relationship', minItems: 3, maxItems: 7, placeholderKind: 'item' }),
+  defineLayout({ id: 'relationship-diverging', category: 'relationship', minItems: 3, maxItems: 7, placeholderKind: 'item' }),
+  defineLayout({ id: 'relationship-venn', category: 'relationship', minItems: 2, maxItems: 4, starterCount: 3, placeholderKind: 'item' }),
+  defineLayout({ id: 'relationship-nested', category: 'relationship', minItems: 2, maxItems: 5, starterCount: 3, placeholderKind: 'level' }),
+  defineLayout({ id: 'matrix-grid', category: 'matrix', minItems: 4, maxItems: 4, placeholderKind: 'item' }),
+  defineLayout({ id: 'matrix-swot', category: 'matrix', minItems: 4, maxItems: 12, maxDepth: 2, placeholderKind: 'topic', childPlaceholderKind: 'item', starter: SWOT_STARTER }),
+  defineLayout({ id: 'matrix-titled', category: 'matrix', minItems: 5, maxItems: 5, starterCount: 5, placeholderKind: 'topic' }),
+  defineLayout({ id: 'pyramid-basic', category: 'pyramid', minItems: 2, maxItems: 5, starterCount: 3, placeholderKind: 'level' }),
+  defineLayout({ id: 'pyramid-inverted', category: 'pyramid', minItems: 2, maxItems: 5, starterCount: 3, placeholderKind: 'level' }),
+  defineLayout({ id: 'pyramid-list', category: 'pyramid', minItems: 2, maxItems: 6, placeholderKind: 'level' }),
+  defineLayout({ id: 'pyramid-funnel', category: 'pyramid', minItems: 2, maxItems: 6, placeholderKind: 'stage', sequential: true }),
 ];
 
 export const SMART_GRAPHIC_LAYOUT_IDS: readonly SmartGraphicLayoutId[] = SMART_GRAPHIC_LAYOUTS.map(
@@ -115,18 +222,31 @@ export function layoutsForCategory(category: SmartGraphicCategory): SmartGraphic
   return SMART_GRAPHIC_LAYOUTS.filter((layout) => layout.category === category);
 }
 
+/** True when item order carries meaning (exports use a numbered list). */
+export function isSequentialGraphicLayout(layoutId: string): boolean {
+  return LAYOUT_BY_ID.get(layoutId as SmartGraphicLayoutId)?.sequential ?? false;
+}
+
+export const GRAPHIC_PLACEHOLDER_KEYS: Record<GraphicPlaceholderKind, TranslationKey> = {
+  item: 'graphicItemPlaceholder',
+  step: 'graphicPlaceholderStep',
+  topic: 'graphicPlaceholderTopic',
+  level: 'graphicPlaceholderLevel',
+  stage: 'graphicPlaceholderStage',
+  milestone: 'graphicPlaceholderMilestone',
+};
+
 export function placeholderLabel(
-  kind: SmartGraphicLayoutDefinition['placeholderKind'],
+  kind: GraphicPlaceholderKind,
   index: number,
   locale: Locale = 'en',
 ): string {
-  const keys: Record<SmartGraphicLayoutDefinition['placeholderKind'], TranslationKey> = {
-    item: 'graphicItemPlaceholder',
-    step: 'graphicPlaceholderStep',
-    topic: 'graphicPlaceholderTopic',
-    level: 'graphicPlaceholderLevel',
-  };
-  return `${t(locale, keys[kind])} ${index + 1}`;
+  return `${t(locale, GRAPHIC_PLACEHOLDER_KEYS[kind])} ${index + 1}`;
+}
+
+/** The placeholder kind for a node at `depth` (1 = top level) in this layout. */
+export function placeholderKindAt(layout: SmartGraphicLayoutDefinition, depth: number): GraphicPlaceholderKind {
+  return depth > 1 ? (layout.childPlaceholderKind ?? layout.placeholderKind) : layout.placeholderKind;
 }
 
 export function createGraphicId(): string {
@@ -145,35 +265,32 @@ export function createGraphicItem(label = '', children: SmartGraphicItem[] = [])
 
 export function createStarterGraphic(layoutId: SmartGraphicLayoutId = 'list-block', locale: Locale = 'en'): SmartGraphicModel {
   const layout = getSmartGraphicLayout(layoutId);
-  if (layout.supportsHierarchy) {
-    const root = createGraphicItem(placeholderLabel('topic', 0, locale), [
-      createGraphicItem(placeholderLabel('topic', 1, locale)),
-      createGraphicItem(placeholderLabel('topic', 2, locale), [
-        createGraphicItem(placeholderLabel('topic', 3, locale)),
-      ]),
-    ]);
-    const extra = createGraphicItem(placeholderLabel('topic', 4, locale));
-    return clampGraphic({
-      version: 1,
-      layoutId: layout.id,
-      colorSet: 'theme',
-      style: 'filled',
-      title: '',
-      items: [root, extra],
+  const starter: readonly GraphicStarterNode[] =
+    layout.starter ?? Array.from({ length: layout.starterCount }, () => ({}));
+  // Placeholders count per kind in reading order: "Topic 1", "Text 1", "Text 2", "Topic 2"…
+  const counters = new Map<GraphicPlaceholderKind, number>();
+  const build = (nodes: readonly GraphicStarterNode[], depth: number): SmartGraphicItem[] =>
+    nodes.map((node) => {
+      let label: string;
+      if (node.labelKey) {
+        label = t(locale, node.labelKey);
+      } else {
+        const kind = node.kind ?? placeholderKindAt(layout, depth);
+        const index = counters.get(kind) ?? 0;
+        counters.set(kind, index + 1);
+        label = placeholderLabel(kind, index, locale);
+      }
+      return createGraphicItem(label, build(node.children ?? [], depth + 1));
     });
-  }
 
-  const items = Array.from({ length: layout.starterCount }, (_, index) =>
-    createGraphicItem(placeholderLabel(layout.placeholderKind, index, locale)),
-  );
-  return {
+  return clampGraphic({
     version: 1,
     layoutId: layout.id,
     colorSet: 'theme',
     style: 'filled',
     title: '',
-    items,
-  };
+    items: build(starter, 1),
+  }, { trim: true }, locale);
 }
 
 export function coerceGraphic(value: unknown): SmartGraphicModel {
@@ -212,7 +329,10 @@ export function parseSmartGraphicJson(value: unknown, options = { trim: true }):
 
   const layout = getSmartGraphicLayout(layoutId);
   const budget = { left: MAX_GRAPHIC_NODES };
-  const items = parseItems(parsed.items, 1, layout, budget, new Set(), options);
+  // Hierarchies accept any outline depth here; `clampGraphic` lifts nodes
+  // beyond the layout's depth instead of dropping their text.
+  const maxDepth = layout.supportsHierarchy ? MAX_GRAPHIC_LIST_DEPTH : 1;
+  const items = parseItems(parsed.items, 1, maxDepth, budget, new Set(), options);
   if (!items.length) return null;
 
   return clampGraphic({
@@ -297,24 +417,61 @@ export function updateItemLabel(model: SmartGraphicModel, id: string, label: str
 }
 
 export function addGraphicItem(model: SmartGraphicModel, afterId?: string | null, locale: Locale = 'en'): SmartGraphicModel {
+  return insertGraphicItem(model, afterId, locale).model;
+}
+
+/** Adds a sibling after `afterId` (or at the end) and reports the new node's id. */
+export function insertGraphicItem(
+  model: SmartGraphicModel,
+  afterId?: string | null,
+  locale: Locale = 'en',
+): { model: SmartGraphicModel; itemId: string | null } {
   const layout = getSmartGraphicLayout(model.layoutId);
   if (countGraphicNodes(model.items) >= layout.maxItems) {
-    return model;
+    return { model, itemId: null };
   }
 
-  const label = placeholderLabel(layout.placeholderKind, countGraphicNodes(model.items), locale);
-  const item = createGraphicItem(label);
+  const depth = afterId ? (findGraphicItemDepth(model.items, afterId) ?? 1) : 1;
+  const item = createGraphicItem(nextPlaceholderLabel(model, layout, depth, locale));
 
-  if (!afterId) {
-    return clampGraphic({ ...model, items: [...model.items, item] });
+  const nextItems = afterId
+    ? mapSiblings(model.items, afterId, (siblings, index) => {
+        const next = siblings.slice();
+        next.splice(index + 1, 0, item);
+        return next;
+      })
+    : null;
+  const next = clampGraphic({ ...model, items: nextItems ?? [...model.items, item] }, { trim: false });
+  return { model: next, itemId: item.id };
+}
+
+/** Adds a last child below `parentId` in hierarchy layouts. */
+export function insertGraphicChild(
+  model: SmartGraphicModel,
+  parentId: string,
+  locale: Locale = 'en',
+): { model: SmartGraphicModel; itemId: string | null } {
+  if (!canAddGraphicChild(model, parentId)) {
+    return { model, itemId: null };
   }
+  const layout = getSmartGraphicLayout(model.layoutId);
+  const depth = (findGraphicItemDepth(model.items, parentId) ?? 1) + 1;
+  const item = createGraphicItem(nextPlaceholderLabel(model, layout, depth, locale));
+  const next = clampGraphic({
+    ...model,
+    items: mapItems(model.items, (entry) =>
+      entry.id === parentId ? { ...entry, children: [...entry.children, item] } : entry,
+    ),
+  }, { trim: false });
+  return { model: next, itemId: item.id };
+}
 
-  const nextItems = mapSiblings(model.items, afterId, (siblings, index) => {
-    const next = siblings.slice();
-    next.splice(index + 1, 0, item);
-    return next;
-  });
-  return clampGraphic({ ...model, items: nextItems ?? [...model.items, item] });
+export function canAddGraphicChild(model: SmartGraphicModel, parentId: string | null): boolean {
+  if (!parentId) return false;
+  const layout = getSmartGraphicLayout(model.layoutId);
+  if (!layout.supportsHierarchy || !canAddGraphicItem(model)) return false;
+  const depth = findGraphicItemDepth(model.items, parentId);
+  return depth !== null && depth < layout.maxDepth;
 }
 
 export function removeGraphicItem(model: SmartGraphicModel, id: string): SmartGraphicModel {
@@ -374,6 +531,45 @@ export function canDemoteGraphicItem(model: SmartGraphicModel, id: string | null
   return findDemoteTarget(model.items, id, layout.maxDepth, 1) !== null;
 }
 
+export function canPromoteGraphicItem(model: SmartGraphicModel, id: string | null): boolean {
+  if (!id || !getSmartGraphicLayout(model.layoutId).supportsHierarchy) return false;
+  return (findGraphicItemDepth(model.items, id) ?? 1) > 1;
+}
+
+export function canMoveGraphicItem(
+  model: SmartGraphicModel,
+  id: string | null,
+  direction: 'up' | 'down',
+): boolean {
+  if (!id) return false;
+  const siblings = findSiblings(model.items, id);
+  if (!siblings) return false;
+  const index = siblings.findIndex((item) => item.id === id);
+  return direction === 'up' ? index > 0 : index < siblings.length - 1;
+}
+
+/** The node to select after removing `id`: its first child, else a neighbor, else its parent. */
+export function graphicSelectionAfterRemoval(model: SmartGraphicModel, id: string): string | null {
+  const siblings = findSiblings(model.items, id);
+  if (!siblings) return null;
+  const index = siblings.findIndex((item) => item.id === id);
+  const removed = siblings[index];
+  if (removed.children.length) return removed.children[0].id;
+  const neighbor = siblings[index - 1] ?? siblings[index + 1];
+  if (neighbor) return neighbor.id;
+  return findParentId(model.items, id);
+}
+
+/** Depth of a node (1 = top level), or null when it is not in the tree. */
+export function findGraphicItemDepth(items: SmartGraphicItem[], id: string, depth = 1): number | null {
+  for (const item of items) {
+    if (item.id === id) return depth;
+    const nested = findGraphicItemDepth(item.children, id, depth + 1);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
 export function graphicToOutline(model: SmartGraphicModel): { title: string; items: GraphicOutlineItem[] } {
   const normalized = clampGraphic(model);
   return {
@@ -419,11 +615,14 @@ export function sanitizeGraphicText(
 
 function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale: Locale = 'en'): SmartGraphicModel {
   const layout = getSmartGraphicLayout(model.layoutId);
-  const sourceItems = layout.supportsHierarchy ? model.items : flattenGraphicItems(model.items);
+  const sourceItems = layout.supportsHierarchy
+    ? limitGraphicDepth(model.items, layout.maxDepth)
+    : flattenGraphicItems(model.items);
   let items = capItems(sourceItems, layout, options);
-  if (items.length < layout.minItems) {
-    const extras = Array.from({ length: layout.minItems - items.length }, (_, index) =>
-      createGraphicItem(placeholderLabel(layout.placeholderKind, items.length + index, locale)),
+  const count = countGraphicNodes(items);
+  if (count < layout.minItems) {
+    const extras = Array.from({ length: layout.minItems - count }, (_, index) =>
+      createGraphicItem(placeholderLabel(layout.placeholderKind, count + index, locale)),
     );
     items = [...items, ...extras];
   }
@@ -439,18 +638,29 @@ function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale
 
 function capItems(items: SmartGraphicItem[], layout: SmartGraphicLayoutDefinition, options: { trim: boolean }): SmartGraphicItem[] {
   const budget = { left: MAX_GRAPHIC_NODES };
-  return parseItems(items, 1, layout, budget, new Set(), options);
+  return parseItems(items, 1, layout.maxDepth, budget, new Set(), options);
+}
+
+/**
+ * Fits a tree into `maxDepth` levels without losing text: descendants below
+ * the deepest allowed level become following siblings at that level.
+ */
+function limitGraphicDepth(items: SmartGraphicItem[], maxDepth: number, depth = 1): SmartGraphicItem[] {
+  if (depth >= maxDepth) {
+    return items.flatMap((item) => [{ ...item, children: [] }, ...flattenGraphicItems(item.children)]);
+  }
+  return items.map((item) => ({ ...item, children: limitGraphicDepth(item.children, maxDepth, depth + 1) }));
 }
 
 function parseItems(
   value: unknown,
   depth: number,
-  layout: SmartGraphicLayoutDefinition,
+  maxDepth: number,
   budget: { left: number },
   usedIds: Set<string>,
   options: { trim: boolean },
 ): SmartGraphicItem[] {
-  if (!Array.isArray(value) || depth > layout.maxDepth || budget.left <= 0) {
+  if (!Array.isArray(value) || depth > maxDepth || budget.left <= 0) {
     return [];
   }
 
@@ -459,8 +669,7 @@ function parseItems(
     if (budget.left <= 0) break;
     if (!isRecord(entry)) continue;
     budget.left -= 1;
-    const allowChildren = layout.supportsHierarchy && depth < layout.maxDepth;
-    const children = allowChildren ? parseItems(entry.children, depth + 1, layout, budget, usedIds, options) : [];
+    const children = depth < maxDepth ? parseItems(entry.children, depth + 1, maxDepth, budget, usedIds, options) : [];
     items.push({
       id: sanitizeGraphicId(entry.id, usedIds),
       label: sanitizeGraphicText(entry.label, MAX_GRAPHIC_LABEL_LENGTH, options),
@@ -556,6 +765,45 @@ function mapSiblings(
       next[i] = { ...items[i], children: nested };
       return next;
     }
+  }
+  return null;
+}
+
+/**
+ * Placeholder for a new node. Single-kind layouts number by node count; layouts
+ * with a separate child kind number headings and details independently.
+ */
+function nextPlaceholderLabel(
+  model: SmartGraphicModel,
+  layout: SmartGraphicLayoutDefinition,
+  depth: number,
+  locale: Locale,
+): string {
+  const kind = placeholderKindAt(layout, depth);
+  if (!layout.childPlaceholderKind) {
+    return placeholderLabel(kind, countGraphicNodes(model.items), locale);
+  }
+  const index =
+    depth > 1
+      ? countGraphicNodes(model.items) - model.items.length
+      : model.items.length;
+  return placeholderLabel(kind, index, locale);
+}
+
+function findSiblings(items: SmartGraphicItem[], id: string): SmartGraphicItem[] | null {
+  if (items.some((item) => item.id === id)) return items;
+  for (const item of items) {
+    const nested = findSiblings(item.children, id);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function findParentId(items: SmartGraphicItem[], id: string, parentId: string | null = null): string | null {
+  for (const item of items) {
+    if (item.id === id) return parentId;
+    const nested = findParentId(item.children, id, item.id);
+    if (nested) return nested;
   }
   return null;
 }

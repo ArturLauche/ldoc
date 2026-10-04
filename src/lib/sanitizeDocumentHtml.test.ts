@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
+import {
+  SMART_GRAPHIC_LAYOUTS,
+  createStarterGraphic,
+  parseSmartGraphicJson,
+  serializeSmartGraphic,
+  updateItemLabel,
+} from './smartGraphic';
 
 describe('sanitizeDocumentHtml', () => {
   it('rejects control-obfuscated executable URLs while preserving image data and Unicode links', () => {
@@ -128,5 +135,31 @@ describe('sanitizeDocumentHtml', () => {
     );
     expect(oversized).toContain('Huge');
     expect(oversized).not.toContain('x'.repeat(50));
+  });
+
+  it('keeps every layout id through sanitization, including nested hierarchy text', () => {
+    for (const layout of SMART_GRAPHIC_LAYOUTS) {
+      const starter = createStarterGraphic(layout.id);
+      const sanitized = sanitizeDocumentHtml(
+        `<div data-lwrite-graphic='${serializeSmartGraphic(starter)}'><ul><li>stale copy</li></ul></div>`,
+      );
+      const element = new DOMParser().parseFromString(sanitized, 'text/html').querySelector('[data-lwrite-graphic]');
+      const parsed = parseSmartGraphicJson(element?.getAttribute('data-lwrite-graphic'));
+      expect(parsed?.layoutId).toBe(layout.id);
+      expect(parsed?.items).toEqual(starter.items);
+      // The readable fallback is rebuilt from the model, not kept from the input.
+      expect(sanitized).not.toContain('stale copy');
+      expect(element?.querySelectorAll('li')).toHaveLength(layout.starterCount);
+    }
+  });
+
+  it('escapes markup typed into new layouts', () => {
+    const swot = createStarterGraphic('matrix-swot');
+    const unsafe = updateItemLabel(swot, swot.items[0].children[0].id, '<img src=x onerror=alert(1)>');
+    const sanitized = sanitizeDocumentHtml(`<div data-lwrite-graphic='${serializeSmartGraphic(unsafe).replace(/'/g, '&#39;')}'></div>`);
+    const doc = new DOMParser().parseFromString(sanitized, 'text/html');
+    // The label stays text: in the JSON attribute and in the escaped outline.
+    expect(doc.querySelector('img')).toBeNull();
+    expect(sanitized).toContain('<li>&lt;img src=x onerror=alert(1)&gt;</li>');
   });
 });

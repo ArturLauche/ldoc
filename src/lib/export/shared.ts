@@ -1,3 +1,4 @@
+import { isSequentialGraphicLayout } from '@/lib/smartGraphic';
 import type {
   ExportBlock,
   ExportGraphicBlock,
@@ -252,13 +253,9 @@ export function graphicToFallbackBlocks(graphic: ExportGraphicBlock): ExportBloc
     });
   }
   if (graphic.items.length) {
-    blocks.push(graphicItemsToList(graphic.items, isOrderedGraphicLayout(graphic.layoutId)));
+    blocks.push(graphicItemsToList(graphic.items, isSequentialGraphicLayout(graphic.layoutId)));
   }
   return blocks.length ? blocks : [{ type: 'paragraph', runs: [{ text: '', marks: {} }] }];
-}
-
-function isOrderedGraphicLayout(layoutId: string): boolean {
-  return layoutId.startsWith('process') || layoutId.startsWith('cycle');
 }
 
 function graphicItemsToList(items: ExportGraphicItem[], ordered: boolean): ExportListBlock {
