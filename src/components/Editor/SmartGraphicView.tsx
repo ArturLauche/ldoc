@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { NodeViewWrapper, type ReactNodeViewProps } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { coerceGraphic, flattenGraphicItems, updateItemLabel } from '@/lib/smartGraphic';
@@ -12,7 +12,9 @@ export function SmartGraphicView({
   editor,
   getPos,
 }: ReactNodeViewProps) {
-  const graphic = coerceGraphic(node.attrs.graphic);
+  const stored: unknown = node.attrs.graphic;
+  // Parse once per stored value, not on every editor transaction.
+  const graphic = useMemo(() => coerceGraphic(stored), [stored]);
   const storedActiveId = useEditorState({
     editor,
     selector: ({ editor: current }) => current.storage.smartGraphic?.activeItemId as string | null,

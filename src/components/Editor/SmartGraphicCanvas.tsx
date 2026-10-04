@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import {
   GRAPHIC_PLACEHOLDER_KEYS,
   getSmartGraphicLayout,
+  placeholderKindAt,
+  type SmartGraphicItem,
   type SmartGraphicModel,
 } from '@/lib/smartGraphic';
 import { GraphicRenderContext, type GraphicRenderContextValue } from './graphics/graphicContext';
@@ -42,14 +44,24 @@ export function SmartGraphicCanvas({
   const rootRef = useRef<HTMLDivElement>(null);
   const layout = getSmartGraphicLayout(graphic.layoutId);
 
-  const strings = useMemo(
-    () => ({
+  const strings = useMemo(() => {
+    // Placeholder per item, by level: SWOT bullets read "Text", not "Topic".
+    const placeholders = new Map<string, string>();
+    const visit = (items: SmartGraphicItem[], depth: number) => {
+      const label = t(locale, GRAPHIC_PLACEHOLDER_KEYS[placeholderKindAt(layout, depth)]);
+      items.forEach((item) => {
+        placeholders.set(item.id, label);
+        visit(item.children, depth + 1);
+      });
+    };
+    visit(graphic.items, 1);
+    const fallback = t(locale, GRAPHIC_PLACEHOLDER_KEYS[layout.placeholderKind]);
+    return {
       versus: t(locale, 'graphicVersus'),
       overflow: t(locale, 'graphicOverflow'),
-      emptyLabel: t(locale, GRAPHIC_PLACEHOLDER_KEYS[layout.placeholderKind]),
-    }),
-    [locale, layout.placeholderKind],
-  );
+      emptyLabel: (id: string) => placeholders.get(id) ?? fallback,
+    };
+  }, [locale, layout, graphic.items]);
 
   const onLabelKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -67,8 +79,13 @@ export function SmartGraphicCanvas({
         rootRef.current?.querySelectorAll<HTMLTextAreaElement>('textarea[data-graphic-label]') ?? [],
       );
       const next = labels[labels.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
-      next?.focus();
-      next?.select();
+      if (!next) {
+        // Past the first or last shape, continue in the document.
+        onExit?.();
+        return;
+      }
+      next.focus();
+      next.select();
     },
     [onExit],
   );

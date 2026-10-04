@@ -6,8 +6,8 @@ export interface GraphicRenderContextValue {
   editable: boolean;
   activeId: string | null;
   style: SmartGraphicStyle;
-  /** Localized strings drawn inside diagrams. */
-  strings: { versus: string; overflow: string; emptyLabel: string };
+  /** Localized strings drawn inside diagrams; `emptyLabel` is per item (by level). */
+  strings: { versus: string; overflow: string; emptyLabel: (id: string) => string };
   onSelectItem?: (id: string) => void;
   onChangeLabel?: (id: string, label: string) => void;
   onLabelKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>, id: string) => void;
@@ -17,7 +17,7 @@ export const GraphicRenderContext = createContext<GraphicRenderContextValue>({
   editable: false,
   activeId: null,
   style: 'filled',
-  strings: { versus: 'vs', overflow: 'More items', emptyLabel: 'Text' },
+  strings: { versus: 'vs', overflow: 'More items', emptyLabel: () => 'Text' },
 });
 
 export function useGraphicRender(): GraphicRenderContextValue {

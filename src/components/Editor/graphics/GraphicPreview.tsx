@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState } from 'react';
 import type { SmartGraphicModel } from '@/lib/smartGraphic';
 import { cn } from '@/lib/utils';
 import { SmartGraphicCanvas } from '../SmartGraphicCanvas';
@@ -10,8 +10,16 @@ const PREVIEW_WIDTH = 580;
  * A scaled-down render of the real diagram, so previews match what gets
  * inserted. The canvas lays out at a fixed width and is scaled to fit the
  * frame; it stays hidden until measured to avoid a flash at full size.
+ * Memoized: galleries show many of these, and typing in the search field
+ * must not re-render diagrams whose model did not change.
  */
-export function GraphicPreview({ graphic, className }: { graphic: SmartGraphicModel; className?: string }) {
+export const GraphicPreview = memo(function GraphicPreview({
+  graphic,
+  className,
+}: {
+  graphic: SmartGraphicModel;
+  className?: string;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
@@ -52,4 +60,4 @@ export function GraphicPreview({ graphic, className }: { graphic: SmartGraphicMo
       </div>
     </div>
   );
-}
+});

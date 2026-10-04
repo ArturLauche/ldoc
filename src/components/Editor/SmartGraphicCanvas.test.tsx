@@ -153,6 +153,31 @@ describe('SmartGraphicCanvas', () => {
     expect(onChangeLabel).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
     expect(onExit).toHaveBeenCalledTimes(1);
+
+    // Past either end, Enter and Shift+Enter continue in the document.
+    await user.click(labels[0]);
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(onExit).toHaveBeenCalledTimes(2);
+    await user.click(labels[labels.length - 1]);
+    await user.keyboard('{Enter}');
+    expect(onExit).toHaveBeenCalledTimes(3);
+    expect(onChangeLabel).not.toHaveBeenCalled();
+  });
+
+  it('names empty labels after their level', () => {
+    const swot = createStarterGraphic('matrix-swot');
+    const [quadrant] = swot.items;
+    const emptied = {
+      ...swot,
+      items: [
+        { ...quadrant, label: '', children: [{ ...quadrant.children[0], label: '' }] },
+        ...swot.items.slice(1),
+      ],
+    };
+    renderCanvas(emptied);
+    expect(screen.getByRole('textbox', { name: 'Topic' })).toHaveAttribute('placeholder', 'Topic');
+    // Details are bullet points, not headings.
+    expect(screen.getByRole('textbox', { name: 'Text' })).toHaveAttribute('placeholder', 'Text');
   });
 
   it('localizes text drawn inside diagrams and empty-label placeholders', () => {

@@ -475,7 +475,7 @@ export function canAddGraphicChild(model: SmartGraphicModel, parentId: string | 
 }
 
 export function removeGraphicItem(model: SmartGraphicModel, id: string): SmartGraphicModel {
-  if (countGraphicNodes(model.items) <= getSmartGraphicLayout(model.layoutId).minItems) {
+  if (!canRemoveGraphicItem(model, id)) {
     return model;
   }
 
@@ -490,9 +490,9 @@ export function removeGraphicItem(model: SmartGraphicModel, id: string): SmartGr
 }
 
 export function moveGraphicItem(model: SmartGraphicModel, id: string, direction: 'up' | 'down'): SmartGraphicModel {
+  if (!canMoveGraphicItem(model, id, direction)) return model;
   const nextItems = mapSiblings(model.items, id, (siblings, index) => {
     const swapWith = direction === 'up' ? index - 1 : index + 1;
-    if (swapWith < 0 || swapWith >= siblings.length) return siblings;
     const next = siblings.slice();
     const current = next[index];
     next[index] = next[swapWith];
@@ -503,8 +503,8 @@ export function moveGraphicItem(model: SmartGraphicModel, id: string, direction:
 }
 
 export function demoteGraphicItem(model: SmartGraphicModel, id: string): SmartGraphicModel {
+  if (!canDemoteGraphicItem(model, id)) return model;
   const layout = getSmartGraphicLayout(model.layoutId);
-  if (!layout.supportsHierarchy) return model;
   const nextItems = demoteInTree(model.items, id, layout.maxDepth, 1);
   return nextItems ? clampGraphic({ ...model, items: nextItems }) : model;
 }
@@ -520,14 +520,25 @@ export function canAddGraphicItem(model: SmartGraphicModel): boolean {
   return countGraphicNodes(model.items) < getSmartGraphicLayout(model.layoutId).maxItems;
 }
 
-export function canRemoveGraphicItem(model: SmartGraphicModel): boolean {
-  return countGraphicNodes(model.items) > getSmartGraphicLayout(model.layoutId).minItems;
+/**
+ * Whether an item can go without dropping below the layout's minimum. With
+ * an `id`, also checks the top level: removing a top-level item lifts its
+ * children into its place, and the top level must keep `minItems` shapes.
+ */
+export function canRemoveGraphicItem(model: SmartGraphicModel, id?: string | null): boolean {
+  const { minItems } = getSmartGraphicLayout(model.layoutId);
+  if (countGraphicNodes(model.items) <= minItems) return false;
+  const index = id ? model.items.findIndex((item) => item.id === id) : -1;
+  if (index < 0) return true;
+  return model.items.length - 1 + model.items[index].children.length >= minItems;
 }
 
 export function canDemoteGraphicItem(model: SmartGraphicModel, id: string | null): boolean {
   if (!id) return false;
   const layout = getSmartGraphicLayout(model.layoutId);
   if (!layout.supportsHierarchy) return false;
+  // A top-level item may only move down while the top level keeps its minimum.
+  if (model.items.length <= layout.minItems && model.items.some((item) => item.id === id)) return false;
   return findDemoteTarget(model.items, id, layout.maxDepth, 1) !== null;
 }
 
@@ -619,8 +630,10 @@ function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale
     ? limitGraphicDepth(model.items, layout.maxDepth)
     : flattenGraphicItems(model.items);
   let items = capItems(sourceItems, layout, options);
-  const count = countGraphicNodes(items);
-  if (count < layout.minItems) {
+  // Renderers draw one shape per top-level item (quadrants, cards,
+  // milestones), so the minimum applies to the top level.
+  if (items.length < layout.minItems) {
+    const count = items.length;
     const extras = Array.from({ length: layout.minItems - count }, (_, index) =>
       createGraphicItem(placeholderLabel(layout.placeholderKind, count + index, locale)),
     );

@@ -56,7 +56,10 @@ export function SwotMatrix({ items }: LayoutRendererProps) {
             tone={solidTone(style === 'subtle' ? 'filled' : style, index)}
             className="rounded-none px-3 py-2.5 text-start font-semibold"
           />
-          <DetailList items={item.children} index={index} className="relative min-h-[3rem] p-2.5" />
+          {/* Reserves room even without details, so quadrants stay even. */}
+          <div className="relative min-h-[3rem] p-2.5">
+            <DetailList items={item.children} index={index} />
+          </div>
         </div>
       ))}
     </div>

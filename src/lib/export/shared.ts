@@ -258,6 +258,7 @@ export function graphicToFallbackBlocks(graphic: ExportGraphicBlock): ExportBloc
   return blocks.length ? blocks : [{ type: 'paragraph', runs: [{ text: '', marks: {} }] }];
 }
 
+/** Sequential layouts number their top level; nested details stay bullets, as drawn. */
 function graphicItemsToList(items: ExportGraphicItem[], ordered: boolean): ExportListBlock {
   return {
     type: 'list',
@@ -266,7 +267,7 @@ function graphicItemsToList(items: ExportGraphicItem[], ordered: boolean): Expor
     items: items.map((item) => ({
       blocks: [
         { type: 'paragraph' as const, runs: [{ text: item.label, marks: {} }] },
-        ...(item.children.length ? [graphicItemsToList(item.children, ordered)] : []),
+        ...(item.children.length ? [graphicItemsToList(item.children, false)] : []),
       ],
     })),
   };

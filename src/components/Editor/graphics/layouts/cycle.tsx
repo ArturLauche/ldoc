@@ -7,9 +7,12 @@ import type { LayoutRendererProps } from '../types';
 
 /**
  * Ring radii in % of the box: square when narrow (near-circle), 16:9 when
- * wide (an ellipse that uses the page width).
+ * wide (an ellipse that uses the page width). Narrow labels take a larger
+ * share of the width, so the narrow ring is slimmer to keep the side labels
+ * inside the box.
  */
 const RING_X = 37;
+const RING_X_NARROW = 32;
 const RING_Y = 38;
 const WIDE_ASPECT = 16 / 9;
 
@@ -35,32 +38,38 @@ export function BasicCycle({ items }: LayoutRendererProps) {
         preserveAspectRatio="none"
         className={cn('absolute inset-0 h-full w-full overflow-visible', dense && 'hidden @md:block')}
       >
-        <ellipse
-          cx="50"
-          cy="50"
-          rx={RING_X}
-          ry={RING_Y}
-          fill="none"
-          stroke="var(--sg-line)"
-          strokeWidth="2"
-          vectorEffect="non-scaling-stroke"
-        />
+        {[RING_X_NARROW, RING_X].map((radius) => (
+          <ellipse
+            key={radius}
+            cx="50"
+            cy="50"
+            rx={radius}
+            ry={RING_Y}
+            fill="none"
+            stroke="var(--sg-line)"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+            className={radius === RING_X ? 'hidden @md:inline' : '@md:hidden'}
+          />
+        ))}
       </svg>
       {angles.map((angle, index) => {
         const middle = angle + 180 / count;
-        const point = pointOnRing(middle, RING_X, RING_Y);
+        const narrow = pointOnRing(middle, RING_X_NARROW, RING_Y);
+        const wide = pointOnRing(middle, RING_X, RING_Y);
         return (
           <span
             key={`arrow-${items[index].id}`}
             aria-hidden="true"
             className={cn(
-              'absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center [rotate:var(--sg-turn-narrow)] @md:[rotate:var(--sg-turn-wide)]',
+              'absolute left-[var(--sg-xn)] top-[var(--sg-y)] flex -translate-x-1/2 -translate-y-1/2 items-center justify-center [rotate:var(--sg-turn-narrow)] @md:left-[var(--sg-x)] @md:[rotate:var(--sg-turn-wide)]',
               dense && 'hidden @md:flex',
             )}
             style={{
-              left: `${point.x}%`,
-              top: `${point.y}%`,
-              '--sg-turn-narrow': `${ringTangentDeg(middle, 1, RING_X, RING_Y)}deg`,
+              '--sg-xn': `${narrow.x}%`,
+              '--sg-x': `${wide.x}%`,
+              '--sg-y': `${wide.y}%`,
+              '--sg-turn-narrow': `${ringTangentDeg(middle, 1, RING_X_NARROW, RING_Y)}deg`,
               '--sg-turn-wide': `${ringTangentDeg(middle, WIDE_ASPECT, RING_X, RING_Y)}deg`,
             } as CSSProperties}
           >
@@ -70,6 +79,7 @@ export function BasicCycle({ items }: LayoutRendererProps) {
       })}
       {items.map((item, index) => {
         const point = pointOnRing(angles[index], RING_X, RING_Y);
+        const narrow = pointOnRing(angles[index], RING_X_NARROW, RING_Y);
         return (
           <GraphicNode
             key={item.id}
@@ -79,9 +89,9 @@ export function BasicCycle({ items }: LayoutRendererProps) {
               'flex min-h-[2.75rem] items-center justify-center rounded-xl px-3 py-2 text-center font-medium',
               dense
                 ? 'relative w-full @md:absolute @md:left-[var(--sg-x)] @md:top-[var(--sg-y)] @md:w-[22%] @md:-translate-x-1/2 @md:-translate-y-1/2'
-                : 'absolute left-[var(--sg-x)] top-[var(--sg-y)] w-[36%] -translate-x-1/2 -translate-y-1/2 @md:w-[24%]',
+                : 'absolute left-[var(--sg-xn)] top-[var(--sg-y)] w-[36%] -translate-x-1/2 -translate-y-1/2 @md:left-[var(--sg-x)] @md:w-[24%]',
             )}
-            style={{ '--sg-x': `${point.x}%`, '--sg-y': `${point.y}%` } as CSSProperties}
+            style={{ '--sg-xn': `${narrow.x}%`, '--sg-x': `${point.x}%`, '--sg-y': `${point.y}%` } as CSSProperties}
           >
             <GraphicLabel item={item} className="relative w-full" />
             {dense && index < count - 1 ? (

@@ -61,4 +61,16 @@ describe('graphic geometry', () => {
     expect(inverted.map((tier) => tier.width)).toEqual([100, 75, 50]);
     expect(inverted[0].clip).toContain('100% 0');
   });
+
+  it('stays finite for empty and single-item inputs', () => {
+    for (const count of [0, 1]) {
+      expect(Number.isFinite(satelliteStartAngle(count))).toBe(true);
+      expect(donutSegmentPath(0, count)).not.toContain('NaN');
+      const label = donutLabelPoint(0, count);
+      expect(Number.isFinite(label.x) && Number.isFinite(label.y)).toBe(true);
+      const tier = tierGeometry(0, count, 0.25);
+      expect(Number.isFinite(tier.width) && Number.isFinite(tier.inset)).toBe(true);
+      expect(tier.clip).not.toContain('NaN');
+    }
+  });
 });

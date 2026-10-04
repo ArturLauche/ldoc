@@ -135,11 +135,14 @@ function FlowRelationship({ items, direction }: LayoutRendererProps & { directio
   if (!single) return null;
   const manyStart = converging ? 0 : 1;
   const singleIndex = converging ? items.length - 1 : 0;
+  // Narrow: the group wraps into rows; a frame shows the fork joins all of them.
+  const framed = many.length > 2;
 
   const group = (
     <div
       className={cn(
         'grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2 @md:auto-rows-fr @md:grid-cols-1 @md:gap-2.5 @md:[&>*:last-child:nth-child(odd)]:col-span-1',
+        framed && 'rounded-xl p-2 [box-shadow:inset_0_0_0_1.5px_var(--sg-line)] @md:p-0 @md:[box-shadow:none]',
         converging ? 'order-1' : 'order-3',
       )}
     >
@@ -156,9 +159,9 @@ function FlowRelationship({ items, direction }: LayoutRendererProps & { directio
 
   const connector = (
     <div aria-hidden="true" className="relative order-2 h-10 @md:h-auto">
-      {/* Narrow: a fork between the two-column group and the single node. */}
+      {/* Narrow: a fork from the two group columns (layouts keep at least two) to the single node. */}
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full @md:hidden">
-        {(many.length > 1 ? [25, 75] : [50]).map((x) => (
+        {[25, 75].map((x) => (
           <path
             key={x}
             d={converging ? `M ${x} 0 C ${x} 55, 50 45, 50 100` : `M 50 0 C 50 55, ${x} 45, ${x} 100`}

@@ -25,6 +25,7 @@ import {
   MAX_GRAPHIC_NODES,
   SMART_GRAPHIC_CATEGORIES,
   canAddGraphicChild,
+  canDemoteGraphicItem,
   canMoveGraphicItem,
   canPromoteGraphicItem,
   countGraphicNodes,
@@ -424,6 +425,35 @@ describe('smartGraphic layout registry', () => {
     expect(sortedLabels(parsed!)).toEqual(sortedLabels(deep));
   });
 
+  it('keeps the minimum number of top-level shapes when nodes are nested', () => {
+    const tree = createStarterGraphic('hierarchy-tree');
+    expect(tree.items).toHaveLength(1);
+    // SWOT draws one quadrant per top-level item: the lifted tree fills one.
+    const swot = switchGraphicLayout(tree, 'matrix-swot');
+    expect(swot.items).toHaveLength(4);
+    expect(swot.items[0].children).toHaveLength(countGraphicNodes(tree.items) - 1);
+    expect(flattenGraphicLabels(swot)).toEqual(expect.arrayContaining(flattenGraphicLabels(tree)));
+    for (const layoutId of ['list-cards', 'timeline-vertical', 'timeline-alternating'] as const) {
+      expect(switchGraphicLayout(tree, layoutId).items).toHaveLength(2);
+    }
+
+    // An empty quadrant cannot go once four remain; details and quadrants
+    // whose details take their place can.
+    const lastQuadrant = swot.items[3];
+    expect(canRemoveGraphicItem(swot, lastQuadrant.id)).toBe(false);
+    expect(removeGraphicItem(swot, lastQuadrant.id)).toBe(swot);
+    expect(canRemoveGraphicItem(swot, swot.items[0].children[0].id)).toBe(true);
+    expect(canRemoveGraphicItem(swot, swot.items[0].id)).toBe(true);
+    expect(removeGraphicItem(swot, swot.items[0].id).items).toHaveLength(3 + swot.items[0].children.length);
+
+    // Nesting a quadrant under another would leave three: it stays put.
+    expect(canDemoteGraphicItem(swot, swot.items[1].id)).toBe(false);
+    expect(demoteGraphicItem(swot, swot.items[1].id)).toBe(swot);
+    const five = insertGraphicItem(swot, swot.items[3].id).model;
+    expect(canDemoteGraphicItem(five, five.items[4].id)).toBe(true);
+    expect(demoteGraphicItem(five, five.items[4].id).items).toHaveLength(4);
+  });
+
   it('numbers new headings and details separately in card-style layouts', () => {
     const cards = createStarterGraphic('list-cards');
     const detail = cards.items[0].children[1];
@@ -461,6 +491,9 @@ describe('smartGraphic layout registry', () => {
     expect(canMoveGraphicItem(org, first.id, 'down')).toBe(true);
     expect(canMoveGraphicItem(org, last.id, 'down')).toBe(false);
     expect(canMoveGraphicItem(org, null, 'down')).toBe(false);
+    // Moves past either end change nothing, so no edit is recorded.
+    expect(moveGraphicItem(org, first.id, 'up')).toBe(org);
+    expect(moveGraphicItem(org, last.id, 'down')).toBe(org);
     expect(canPromoteGraphicItem(org, root.id)).toBe(false);
     expect(canPromoteGraphicItem(org, middle.id)).toBe(true);
     expect(canPromoteGraphicItem(createStarterGraphic('list-block'), first.id)).toBe(false);

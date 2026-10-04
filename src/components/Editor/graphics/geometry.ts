@@ -23,7 +23,7 @@ export function ringAngles(count: number, startDeg = -90): number[] {
  * counts are rotated so nodes sit beside the hub, where a wide box has room.
  */
 export function satelliteStartAngle(count: number): number {
-  return count % 2 === 1 ? -90 : -90 + 180 / count;
+  return count % 2 === 1 ? -90 : -90 + 180 / Math.max(count, 1);
 }
 
 /** Point on an ellipse centered in the box, radii in % of each axis. */
@@ -55,7 +55,7 @@ export function donutSegmentPath(
   inner = 30,
   gapDeg = 1.5,
 ): string {
-  const span = 360 / count;
+  const span = 360 / Math.max(count, 1);
   const start = -90 + index * span + gapDeg;
   const end = -90 + (index + 1) * span - gapDeg;
   const middle = (outer + inner) / 2;
@@ -82,7 +82,7 @@ export function donutSegmentPath(
 
 /** Label anchor in the middle of a donut segment. */
 export function donutLabelPoint(index: number, count: number, outer = 48, inner = 30): Point {
-  const span = 360 / count;
+  const span = 360 / Math.max(count, 1);
   return pointOnRing(-90 + (index + 0.5) * span, (outer + inner) / 2);
 }
 
@@ -99,7 +99,7 @@ export interface TierGeometry {
  * of the narrow end as a fraction of the base (0 = a sharp point).
  */
 export function tierGeometry(index: number, count: number, apex: number, inverted = false): TierGeometry {
-  const narrowAt = (step: number) => apex + ((1 - apex) * step) / count;
+  const narrowAt = (step: number) => apex + ((1 - apex) * step) / Math.max(count, 1);
   const top = inverted ? narrowAt(count - index) : narrowAt(index);
   const bottom = inverted ? narrowAt(count - index - 1) : narrowAt(index + 1);
   const width = Math.max(top, bottom);

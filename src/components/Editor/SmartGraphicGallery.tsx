@@ -85,7 +85,7 @@ export function SmartGraphicGallery({
       )}
 
       <DialogContent
-        className="flex flex-col gap-0 overflow-hidden bg-background p-0 max-sm:h-[calc(var(--app-viewport-height,100dvh)-2.5rem)] sm:h-[min(46rem,90vh)] sm:w-[min(66rem,calc(100vw-2rem))] sm:max-w-none"
+        className="flex flex-col gap-0 overflow-hidden bg-background p-0 [--sheet-padding-bottom:0px] max-sm:h-[calc(var(--app-viewport-height,100dvh)-2.5rem)] sm:h-[min(46rem,90vh)] sm:w-[min(66rem,calc(100vw-2rem))] sm:max-w-none"
         onOpenAutoFocus={focusContainerOnTouch}
         onCloseAutoFocus={(event) => {
           if (!insertedRef.current) return;
@@ -164,7 +164,8 @@ function GalleryBody({
       orientation={wide ? 'vertical' : 'horizontal'}
       className="flex min-h-0 flex-1 flex-col sm:flex-row"
     >
-      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:w-56 sm:border-b-0 sm:border-e sm:bg-card/60 sm:px-3 sm:py-5">
+      {/* Scrolls on short screens (landscape phones) so every category stays reachable. */}
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-card/60 sm:px-3 sm:py-5">
         <DialogHeader className="space-y-1 pe-8 sm:px-2 sm:pe-2">
           <DialogTitle>{t('graphicGalleryTitle')}</DialogTitle>
           <DialogDescription className="text-xs sm:text-[0.8125rem]">{t('graphicGalleryDescription')}</DialogDescription>
@@ -174,7 +175,7 @@ function GalleryBody({
         </div>
         <TabsList
           aria-label={t('graphicGalleryCategories')}
-          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
+          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
         >
           {tabs.map((item) => (
             <TabsTrigger

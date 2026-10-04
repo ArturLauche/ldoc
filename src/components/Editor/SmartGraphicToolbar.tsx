@@ -219,7 +219,7 @@ export function SmartGraphicToolbar({
         disabledReason={
           !selectedId
             ? needsSelection
-            : canRemoveGraphicItem(graphic)
+            : canRemoveGraphicItem(graphic, selectedId)
               ? undefined
               : formatMessage(t('graphicMinItemsReason'), { count: layout.minItems })
         }

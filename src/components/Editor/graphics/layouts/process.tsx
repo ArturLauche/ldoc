@@ -4,6 +4,11 @@ import { fillVar, tint, useGraphicRender, useShapeText } from '../graphicContext
 import { Badge, GraphicLabel, GraphicNode, ShapeLayer } from '../primitives';
 import type { LayoutRendererProps } from '../types';
 
+/**
+ * Depth of a chevron's tip and notch. Steps overlap by 0.375rem (`-mt-1.5` /
+ * `-ms-1.5`), less than the notch, so each tip sits 0.5rem short of the next
+ * notch: an even, parallel separator between steps, as in classic chevrons.
+ */
 const NOTCH = '0.875rem';
 
 /** Row of interlocking chevrons; a downward stack of them in narrow editors. */

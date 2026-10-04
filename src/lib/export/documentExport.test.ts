@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { exportDocument } from './documentExport';
 import { extractExportDocumentFromHtml } from './model';
-import { createStarterGraphic, serializeSmartGraphic, updateGraphicTitle } from '@/lib/smartGraphic';
+import { createStarterGraphic, demoteGraphicItem, serializeSmartGraphic, updateGraphicTitle } from '@/lib/smartGraphic';
 
 const TINY_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
@@ -358,6 +358,21 @@ describe('exportDocument', () => {
     ).blob.text();
     expect(timelineText).toMatch(/1\.\s+Milestone 1/);
     expect(timelineText).toMatch(/4\.\s+Milestone 4/);
+
+    // Details under a milestone stay bullets, as the diagram draws them.
+    const detailed = demoteGraphicItem(timeline, timeline.items[1].id);
+    const detailedText = await (
+      await exportDocument({
+        html: `<div data-lwrite-graphic='${serializeSmartGraphic(detailed)}'></div>`,
+        name: 'Roadmap',
+        locale: 'en',
+        format: 'txt',
+      })
+    ).blob.text();
+    expect(detailedText).toMatch(/1\.\s+Milestone 1/);
+    expect(detailedText).toContain('Milestone 2');
+    expect(detailedText).not.toMatch(/\d\.\s+Milestone 2/);
+    expect(detailedText).toMatch(/2\.\s+Milestone 3/);
 
     const cards = createStarterGraphic('list-cards');
     const cardText = await (

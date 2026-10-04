@@ -4,12 +4,14 @@ import { useLocale } from '@/hooks/useLocale';
 import {
   canAddGraphicItem,
   canDemoteGraphicItem,
+  canMoveGraphicItem,
   canPromoteGraphicItem,
   canRemoveGraphicItem,
   countGraphicNodes,
   demoteGraphicItem,
   getSmartGraphicLayout,
   insertGraphicItem,
+  isSequentialGraphicLayout,
   moveGraphicItem,
   promoteGraphicItem,
   removeGraphicItem,
@@ -24,10 +26,12 @@ import { cn } from '@/lib/utils';
 interface Row {
   item: SmartGraphicItem;
   depth: number;
+  /** Index among its siblings. */
+  position: number;
 }
 
 function toRows(items: SmartGraphicItem[], depth = 0): Row[] {
-  return items.flatMap((item) => [{ item, depth }, ...toRows(item.children, depth + 1)]);
+  return items.flatMap((item, position) => [{ item, depth, position }, ...toRows(item.children, depth + 1)]);
 }
 
 /**
@@ -51,6 +55,8 @@ export function TextPane({
   const inputs = useRef(new Map<string, HTMLInputElement>());
   const pendingFocus = useRef<string | null>(null);
   const rows = toRows(graphic.items);
+  // Same rule as exports: sequential layouts number their top level.
+  const numbered = isSequentialGraphicLayout(graphic.layoutId);
 
   // Structural edits can remount inputs; restore focus to the edited item.
   useLayoutEffect(() => {
@@ -80,7 +86,7 @@ export function TextPane({
       commit(model, itemId);
       return;
     }
-    if (event.key === 'Backspace' && item.label === '' && canRemoveGraphicItem(graphic)) {
+    if (event.key === 'Backspace' && item.label === '' && canRemoveGraphicItem(graphic, item.id)) {
       event.preventDefault();
       const previous = rows[index - 1]?.item.id ?? rows[index + 1]?.item.id ?? null;
       commit(removeGraphicItem(graphic, item.id), previous);
@@ -95,8 +101,11 @@ export function TextPane({
       return;
     }
     if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      const direction = event.key === 'ArrowUp' ? 'up' : 'down';
+      // At either end the keys keep their usual text-field behavior.
+      if (!canMoveGraphicItem(graphic, item.id, direction)) return;
       event.preventDefault();
-      commit(moveGraphicItem(graphic, item.id, event.key === 'ArrowUp' ? 'up' : 'down'), item.id);
+      commit(moveGraphicItem(graphic, item.id, direction), item.id);
     }
   };
 
@@ -119,7 +128,7 @@ export function TextPane({
                 row.depth > 0 && 'border-s border-border',
               )}
             >
-              {layout.sequential && !layout.supportsHierarchy ? index + 1 : '•'}
+              {numbered && row.depth === 0 ? row.position + 1 : '•'}
             </span>
             <Input
               ref={(element) => {

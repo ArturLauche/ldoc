@@ -157,6 +157,10 @@ describe('smart graphic toolbar', () => {
 
     await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
     expect(graphic().items[0].children.map((item) => item.label)).toEqual(['Topic 6', 'Topic 2', 'Topic 3', 'Topic 5']);
+    // At the top of its level there is nothing to move: no edit, no undo step.
+    const before = editor.state.doc;
+    await user.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    expect(editor.state.doc).toBe(before);
 
     // Clearing an item and pressing Backspace removes it.
     const current = within(pane).getByRole('textbox', { name: 'Topic 6' });
@@ -164,6 +168,17 @@ describe('smart graphic toolbar', () => {
     await user.keyboard('{Backspace}');
     expect(flattenGraphicLabels(graphic())).toEqual(['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4', 'Topic 5']);
     await waitFor(() => expect(within(pane).getByRole('textbox', { name: 'Topic 1' })).toHaveFocus());
+  });
+
+  it('numbers milestones like exports do and keeps their details as bullets', async () => {
+    const user = setup('timeline-vertical');
+    await user.click(button('Text pane'));
+    const pane = screen.getByRole('dialog', { name: 'Text pane' });
+    await user.click(within(pane).getByRole('textbox', { name: 'Milestone 2' }));
+    await user.keyboard('{Tab}');
+    expect(graphic().items[0].children.map((item) => item.label)).toEqual(['Milestone 2']);
+    const marker = (name: string) => within(pane).getByRole('textbox', { name }).previousElementSibling?.textContent;
+    expect(['Milestone 1', 'Milestone 2', 'Milestone 3', 'Milestone 4'].map(marker)).toEqual(['1', '•', '2', '3']);
   });
 
   it('returns to the document with Escape and deletes the whole graphic', async () => {

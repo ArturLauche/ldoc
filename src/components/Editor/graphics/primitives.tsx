@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { AriaRole, CSSProperties, ReactNode } from 'react';
 import type { SmartGraphicItem } from '@/lib/smartGraphic';
 import { cn } from '@/lib/utils';
 import { accentTone, fillVar, shapeColors, solidTone, useGraphicRender } from './graphicContext';
@@ -9,13 +9,14 @@ export function GraphicLabel({ item, className }: { item: SmartGraphicItem; clas
   if (!editable) {
     return <span className={cn('block min-w-0 whitespace-pre-wrap', className)}>{item.label}</span>;
   }
+  const emptyLabel = strings.emptyLabel(item.id);
   return (
-    <span className={cn('sg-label', className)} data-value={item.label || strings.emptyLabel}>
+    <span className={cn('sg-label', className)} data-value={item.label || emptyLabel}>
       <textarea
         rows={1}
         value={item.label}
-        placeholder={strings.emptyLabel}
-        aria-label={item.label || strings.emptyLabel}
+        placeholder={emptyLabel}
+        aria-label={item.label || emptyLabel}
         data-graphic-label={item.id}
         enterKeyHint="next"
         onChange={(event) => onChangeLabel?.(item.id, event.target.value)}
@@ -36,7 +37,7 @@ interface GraphicNodeProps {
   tone?: CSSProperties | null;
   /** Content before/around the label (badges, detail lists). Defaults to the label. */
   children?: ReactNode;
-  role?: string;
+  role?: AriaRole;
 }
 
 /**
