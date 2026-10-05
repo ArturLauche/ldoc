@@ -28,7 +28,6 @@ export const defaultWarningMessages: Record<ExportWarningCode, string> = {
   'graphic-rendered-as-image':
     'Smart Graphics were embedded as pictures; their text is kept as alternative text.',
   'unsupported-style-dropped': 'Some styling was dropped because this format does not support it.',
-  'rtf-basic-format': 'RTF is exported as a basic compatibility format.',
   'link-not-supported-by-format': 'A hyperlink was exported as visible text because this format cannot keep links.',
 };
 

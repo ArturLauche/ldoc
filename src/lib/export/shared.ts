@@ -122,24 +122,12 @@ export function walkBlocks(blocks: ExportBlock[], visit: (block: ExportBlock) =>
   });
 }
 
-export function walkRuns(blocks: ExportBlock[], visit: (run: ExportInlineRun) => void): void {
-  walkBlocks(blocks, (block) => {
-    if (block.type === 'paragraph' || block.type === 'heading') {
-      block.runs.forEach(visit);
-    }
-  });
-}
-
 export function hashString(value: string): string {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
     hash = (hash * 31 + value.charCodeAt(i)) % 0xfffffff;
   }
   return hash.toString(16);
-}
-
-export function tableHasMergedCells(table: ExportTableBlock): boolean {
-  return table.rows.some((row) => row.cells.some((cell) => cell.colSpan > 1 || cell.rowSpan > 1));
 }
 
 export interface GridCell {

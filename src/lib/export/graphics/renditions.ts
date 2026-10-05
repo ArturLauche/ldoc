@@ -1,4 +1,5 @@
 import type { ExportFontRegistry } from '../fonts/registry';
+import { mapWithConcurrency } from '../resources';
 import { walkBlocks } from '../shared';
 import { DOCUMENT_STYLE } from '../typography';
 import type { ExportDocumentModel, ExportGraphicBlock, PreparedExportImage } from '../types';
@@ -8,8 +9,8 @@ import { noteSceneFonts, outlineSceneText } from './fonts';
 import { roundedRectPath, transformPath, type GraphicScene, type SceneItem } from './scene';
 import { sceneToSvg } from './svg';
 
-/** Pixel density of graphic bitmaps for office formats (crisp when printed). */
-const RASTER_SCALE = 2.5;
+/** Pixel density of graphic bitmaps for office formats (≈190 dpi in a printed text column). */
+const RASTER_SCALE = 2;
 const MAX_RASTER_PIXELS = 12_000_000;
 
 function translateItems(items: SceneItem[], dx: number, dy: number): SceneItem[] {
@@ -108,26 +109,26 @@ export async function prepareGraphicRenditions(
   walkBlocks(documentModel.blocks, (block) => {
     if (block.type === 'graphic' && block.scene) graphics.push(block);
   });
-  const cache = new Map<GraphicScene, { svg: Uint8Array; raster: PreparedExportImage | null }>();
-  for (const graphic of graphics) {
-    const scene = graphic.scene as GraphicScene;
-    let rendition = cache.get(scene);
-    if (!rendition) {
-      const framed = frameScene(scene);
-      const svg = sceneToSvg(framed, {
-        outline: (text) => outlineSceneText(registry, text),
-        fontStack: (family) => `'${family}', sans-serif`,
-      });
-      rendition = { svg: new TextEncoder().encode(svg), raster: await rasterizeSvg(svg, framed.width, framed.height) };
-      cache.set(scene, rendition);
-    }
-    if (rendition.raster) {
+  // Identical graphics share one capture, so one rendition per scene; bitmaps decode in parallel.
+  const scenes = Array.from(new Set(graphics.map((graphic) => graphic.scene as GraphicScene)));
+  const renditions = new Map<GraphicScene, { svg: Uint8Array; raster: PreparedExportImage | null }>();
+  await mapWithConcurrency(scenes, 3, async (scene) => {
+    const framed = frameScene(scene);
+    const svg = sceneToSvg(framed, {
+      outline: (text) => outlineSceneText(registry, text),
+      fontStack: (family) => `'${family}', sans-serif`,
+    });
+    renditions.set(scene, { svg: new TextEncoder().encode(svg), raster: await rasterizeSvg(svg, framed.width, framed.height) });
+  });
+  graphics.forEach((graphic) => {
+    const rendition = renditions.get(graphic.scene as GraphicScene);
+    if (rendition?.raster) {
       graphic.svg = rendition.svg;
       graphic.raster = rendition.raster;
     } else {
       // Without a bitmap the office formats fall back to the outline.
       delete graphic.scene;
     }
-  }
+  });
   if (graphics.some((graphic) => graphic.raster)) warnings.add('graphic-rendered-as-image');
 }

@@ -495,7 +495,8 @@ ${body}
         before,
         after,
         left,
-        align: 'center',
+        // Floats inside table cells (no frames there) keep their side.
+        align: image.float ?? 'center',
         inTable: scope.inTable,
         ...(leaf.listItem ? { firstLine: -18, list: this.listControls(leaf) } : {}),
       },

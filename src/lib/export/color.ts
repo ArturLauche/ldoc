@@ -177,8 +177,3 @@ export function toHex(value: string | RgbaColor | undefined | null): string | nu
   const solid = color.a < 1 ? flattenColor(color) : color;
   return [solid.r, solid.g, solid.b].map((channel) => channel.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
-
-export function isTransparent(value: string | undefined | null): boolean {
-  const color = resolveCssColor(value);
-  return !color || color.a === 0;
-}

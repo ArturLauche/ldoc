@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { extractExportDocumentFromHtml } from './model';
-import { prepareExportImages } from './images';
+import { prepareExportImages, readJpegOrientation } from './images';
 import { WarningCollector } from './warnings';
 
 const PNG = Uint8Array.from(
@@ -129,4 +129,46 @@ it('preserves the size warning when stream cancellation rejects', async () => {
     warnings,
   );
   expect(warnings.toArray()).toEqual([expect.objectContaining({ code: 'image-too-large' })]);
+});
+
+describe('HTML image embedding', () => {
+  it('embeds remote originals for HTML and reports images it cannot embed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        url.includes('ok')
+          ? Promise.resolve(new Response(PNG, { headers: { 'content-type': 'image/png' } }))
+          : Promise.reject(new TypeError('Failed to fetch')),
+      ),
+    );
+    const model = documentWithImages('<img src="https://images.example/ok.png" alt="Ok"><img src="https://images.example/blocked.png" alt="Blocked">');
+    const warnings = new WarningCollector('html');
+    await prepareExportImages(model, warnings, { mode: 'html' });
+    const [ok, blocked] = model.blocks;
+    expect(ok).toMatchObject({ type: 'image', original: { mimeType: 'image/png', bytes: PNG } });
+    expect(blocked).not.toHaveProperty('original');
+    expect(warnings.toArray()).toEqual([expect.objectContaining({ code: 'image-not-embedded', detail: 'Blocked' })]);
+  });
+});
+
+describe('readJpegOrientation', () => {
+  // SOI, APP1 "Exif" with a one-entry IFD holding Orientation (0x0112).
+  const exif = (orientation: number, little: boolean) => {
+    const u16 = (value: number) => (little ? [value & 0xff, value >> 8] : [value >> 8, value & 0xff]);
+    const u32 = (value: number) => (little ? [value & 0xff, (value >> 8) & 0xff, 0, 0] : [0, 0, (value >> 8) & 0xff, value & 0xff]);
+    const tiff = [...(little ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8), ...u16(1), ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0, ...u32(0)];
+    const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+    const length = payload.length + 2;
+    return Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, length >> 8, length & 0xff, ...payload, 0xff, 0xda, 0, 2]);
+  };
+
+  it('reads the EXIF orientation in either byte order', () => {
+    expect(readJpegOrientation(exif(6, true))).toBe(6);
+    expect(readJpegOrientation(exif(3, false))).toBe(3);
+  });
+
+  it('defaults to upright for missing or invalid values', () => {
+    expect(readJpegOrientation(exif(42, true))).toBe(1);
+    expect(readJpegOrientation(Uint8Array.from([0xff, 0xd8, 0xff, 0xda, 0, 2]))).toBe(1);
+  });
 });

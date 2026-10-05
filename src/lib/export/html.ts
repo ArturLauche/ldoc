@@ -82,7 +82,10 @@ function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollecto
     const original = images.get(src)?.original;
     if (original) image.setAttribute('src', `data:${original.mimeType};base64,${bytesToBase64(original.bytes)}`);
     if (!image.hasAttribute('alt')) image.setAttribute('alt', '');
-    if (!image.hasAttribute('data-align')) image.setAttribute('data-align', 'center');
+    if (!image.hasAttribute('data-align')) {
+      const legacy = (image.getAttribute('align') ?? '').toLowerCase();
+      image.setAttribute('data-align', legacy === 'left' || legacy === 'right' ? legacy : 'center');
+    }
   });
 
   // The editor wraps tables in a scroll container; so does the export.

@@ -164,15 +164,3 @@ export function transformPath(path: PathCommand[], matrix: [number, number, numb
     }
   });
 }
-
-/** Plain-text description of a scene's text, top to bottom, for alt text and fallbacks. */
-export function sceneText(scene: GraphicScene): string[] {
-  const texts: SceneText[] = [];
-  const visit = (items: SceneItem[]) =>
-    items.forEach((item) => {
-      if (item.kind === 'text') texts.push(item);
-      else if (item.kind === 'group') visit(item.items);
-    });
-  visit(scene.items);
-  return texts.map((text) => text.text);
-}

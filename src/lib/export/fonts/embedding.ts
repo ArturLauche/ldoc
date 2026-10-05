@@ -1,3 +1,4 @@
+import { BoundedCache } from '../resources';
 import type { ResolvedFamily } from './catalog';
 import { rangesContain } from './faces';
 import type { ExportFontRegistry, LoadedFont } from './registry';
@@ -48,8 +49,21 @@ function mostUsed(counts: Map<number, number>, predicate: (weight: number) => bo
   return best;
 }
 
+// A face covers whole unicode-range files, not the document's characters, so
+// it only depends on its inputs: repeated exports reuse it.
+const faceCache = new BoundedCache<EmbeddedFace>(24 * 1024 * 1024, (face) => face.bytes.byteLength);
+
 function buildFace(fonts: LoadedFont[], family: string, weight: number, familyName: string, styleName: string, bold: boolean): EmbeddedFace | null {
   if (!fonts.length || !fonts[0].font) return null;
+  const key = [family, weight, familyName, styleName, bold, ...fonts.map((font) => font.key)].join('|');
+  const cached = faceCache.get(key);
+  if (cached) return cached;
+  const face = buildFaceUncached(fonts, family, weight, familyName, styleName, bold);
+  faceCache.set(key, face);
+  return face;
+}
+
+function buildFaceUncached(fonts: LoadedFont[], family: string, weight: number, familyName: string, styleName: string, bold: boolean): EmbeddedFace {
   const sources = fonts.map((loaded) => {
     const codePoints = new Map<number, number>();
     loaded.font.characterSet.forEach((codePoint) => {

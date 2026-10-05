@@ -37,7 +37,6 @@ export type ExportWarningCode =
   | 'graphic-layout-simplified'
   | 'graphic-rendered-as-image'
   | 'unsupported-style-dropped'
-  | 'rtf-basic-format'
   | 'link-not-supported-by-format';
 
 export interface ExportWarning {
