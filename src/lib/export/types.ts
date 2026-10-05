@@ -1,4 +1,6 @@
 import type { Locale } from '@/lib/translations';
+import type { SmartGraphicModel } from '@/lib/smartGraphic';
+import type { GraphicScene } from './graphics/scene';
 
 export type ExportFormat = 'txt' | 'html' | 'rtf' | 'docx' | 'odt' | 'pdf';
 
@@ -23,11 +25,17 @@ export type ExportWarningCode =
   | 'image-decode-failed'
   | 'image-svg-rasterized'
   | 'image-svg-placeholder'
+  | 'image-not-embedded'
+  | 'font-unavailable'
+  | 'font-substituted'
+  | 'font-not-embedded'
   | 'pdf-font-fallback'
   | 'pdf-glyph-missing'
+  | 'pdf-glyph-rasterized'
   | 'unicode-not-fully-supported'
   | 'table-layout-simplified'
   | 'graphic-layout-simplified'
+  | 'graphic-rendered-as-image'
   | 'unsupported-style-dropped'
   | 'rtf-basic-format'
   | 'link-not-supported-by-format';
@@ -48,20 +56,35 @@ export interface ExportDocumentModel {
 
 export type ExportBlock =
   | ExportTextBlock
+  | ExportBlockquoteBlock
+  | ExportCodeBlock
   | ExportListBlock
   | ExportTableBlock
   | ExportImageBlock
   | ExportHorizontalRuleBlock
   | ExportGraphicBlock;
 
-export type ExportTextBlockType = 'paragraph' | 'heading' | 'blockquote';
+export type ExportTextBlockType = 'paragraph' | 'heading';
 export type ExportAlignment = 'left' | 'center' | 'right' | 'justify';
 
+/** A paragraph or heading: one run of inline content. */
 export interface ExportTextBlock {
   type: ExportTextBlockType;
   runs: ExportInlineRun[];
   level?: 1 | 2 | 3;
   align?: ExportAlignment;
+}
+
+/** A quotation; contains paragraphs, lists and other blocks, like the editor's node. */
+export interface ExportBlockquoteBlock {
+  type: 'blockquote';
+  blocks: ExportBlock[];
+}
+
+/** Preformatted code; whitespace and line breaks are significant. */
+export interface ExportCodeBlock {
+  type: 'code-block';
+  text: string;
 }
 
 export interface ExportListBlock {
@@ -79,6 +102,10 @@ export interface ExportTableBlock {
   type: 'table';
   rows: ExportTableRow[];
   borders?: 'visible' | 'hidden';
+  /** Column widths in CSS px from the editor's column resizing (null = flexible). */
+  columnWidths?: Array<number | null>;
+  /** True when every column has a width: the table is that wide instead of filling the page. */
+  fixedWidth?: boolean;
 }
 
 export interface ExportTableRow {
@@ -91,6 +118,8 @@ export interface ExportTableCell {
   rowSpan: number;
   blocks: ExportBlock[];
   backgroundColor?: string;
+  /** Text color the editor applies on filled cells for contrast. */
+  color?: string;
   align?: ExportAlignment;
 }
 
@@ -104,15 +133,28 @@ export interface ExportGraphicBlock {
   layoutId: string;
   title: string;
   items: ExportGraphicItem[];
+  /** The normalized model, for re-rendering and lossless HTML round trips. */
+  model?: SmartGraphicModel;
+  /** Vector drawing captured from the editor's renderer (browser only). */
+  scene?: GraphicScene;
+  /** Raster rendition of `scene` for formats without vector support. */
+  raster?: PreparedExportImage;
+  /** SVG rendition of `scene` with text as outlines (office formats). */
+  svg?: Uint8Array;
 }
 
 export interface ExportImageBlock {
   type: 'image';
   src: string;
   alt: string;
+  /** Width as % of the text column (editor `data-width`). */
   widthPercent?: number;
   align?: ExportAlignment;
+  /** Left/right images float with text wrapping beside them, as in the editor. */
+  float?: 'left' | 'right';
   prepared?: PreparedExportImage;
+  /** Original bytes, kept for HTML export when they are a web-safe format. */
+  original?: { bytes: Uint8Array; mimeType: string };
 }
 
 export interface PreparedExportImage {
@@ -142,10 +184,16 @@ export interface ExportInlineMarks {
   strike?: boolean;
   subscript?: boolean;
   superscript?: boolean;
+  /** Inline code (`<code>`). */
+  code?: boolean;
   color?: string;
   highlight?: string;
+  /** First family of the CSS `font-family` value. */
   fontFamily?: string;
+  /** CSS font-size value (px, pt, em, rem, %). */
   fontSize?: string;
+  /** CSS line-height value set with the spacing control. */
+  lineHeight?: string;
 }
 
 export interface ExportLink {

@@ -48,7 +48,10 @@
 
 /* Quiet slate chrome and an opaque writing surface; the document is the focus. */
 @layer base {
-  :root {
+  /* `.lwrite-print-theme` pins these light tokens inside a subtree; exports
+     render documents and Smart Graphics with it even in dark mode. */
+  :root,
+  .lwrite-print-theme {
     --background: 210 20% 96%;
     --foreground: 222 30% 16%;
     --card: 0 0% 100%;
@@ -992,23 +995,23 @@ header.app-bar {
   --sg-1: #374151; --sg-2: #1f2937; --sg-3: #4b5563; --sg-4: #334155; --sg-5: #475569; --sg-6: #52525b;
   --sg-on: #ffffff;
 }
-.dark .lwrite-graphic-canvas[data-color='blue'] {
+.dark .lwrite-graphic-canvas[data-color='blue']:not(.lwrite-print-theme *) {
   --sg-1: #93c5fd; --sg-2: #60a5fa; --sg-3: #bfdbfe; --sg-4: #7dd3fc; --sg-5: #a5b4fc; --sg-6: #c7d2fe;
   --sg-on: #0f172a;
 }
-.dark .lwrite-graphic-canvas[data-color='green'] {
+.dark .lwrite-graphic-canvas[data-color='green']:not(.lwrite-print-theme *) {
   --sg-1: #86efac; --sg-2: #6ee7b7; --sg-3: #bbf7d0; --sg-4: #5eead4; --sg-5: #a7f3d0; --sg-6: #bef264;
   --sg-on: #0f172a;
 }
-.dark .lwrite-graphic-canvas[data-color='orange'] {
+.dark .lwrite-graphic-canvas[data-color='orange']:not(.lwrite-print-theme *) {
   --sg-1: #fdba74; --sg-2: #fbbf24; --sg-3: #fed7aa; --sg-4: #fca5a5; --sg-5: #fcd34d; --sg-6: #fde68a;
   --sg-on: #0f172a;
 }
-.dark .lwrite-graphic-canvas[data-color='purple'] {
+.dark .lwrite-graphic-canvas[data-color='purple']:not(.lwrite-print-theme *) {
   --sg-1: #d8b4fe; --sg-2: #c4b5fd; --sg-3: #e9d5ff; --sg-4: #f0abfc; --sg-5: #ddd6fe; --sg-6: #a78bfa;
   --sg-on: #0f172a;
 }
-.dark .lwrite-graphic-canvas[data-color='gray'] {
+.dark .lwrite-graphic-canvas[data-color='gray']:not(.lwrite-print-theme *) {
   --sg-1: #d1d5db; --sg-2: #9ca3af; --sg-3: #e5e7eb; --sg-4: #cbd5e1; --sg-5: #94a3b8; --sg-6: #d4d4d8;
   --sg-on: #0f172a;
 }
