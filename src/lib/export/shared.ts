@@ -11,14 +11,23 @@ import type {
   ExportTableBlock,
   ExportTableCell,
 } from './types';
+import type { WarningCollector } from './warnings';
 
 export function escapeXml(value: string): string {
-  return value
+  return stripInvalidXmlChars(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+/** XML 1.0 forbids most C0 controls and lone surrogates; Office refuses files containing them. */
+export function stripInvalidXmlChars(value: string): string {
+  return value
+    // eslint-disable-next-line no-control-regex -- Removing characters XML cannot carry.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '')
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (match) => (match.length === 2 ? match : ''));
 }
 
 export function escapeHtmlText(value: string): string {
@@ -34,62 +43,57 @@ export function escapeXmlAttr(value: string): string {
   return escapeXml(value).replace(/\r?\n/g, ' ');
 }
 
-export function normalizeFontFamilyValue(value: string): string {
-  return value.split(',')[0]?.trim().replace(/['"]/g, '') ?? '';
+/**
+ * Where a document link points, as export formats address it. Model links
+ * follow the editor's policy (`normalizeLinkUrl`): web and mail addresses,
+ * fragments and relative paths, which stay relative to the exported file.
+ */
+export type LinkTarget =
+  | { kind: 'web'; href: string }
+  | { kind: 'relative'; href: string }
+  /** `top`: an empty fragment or `#top`, which browsers scroll to the start of the document. */
+  | { kind: 'fragment'; name: string; top: boolean };
+
+export function linkTarget(href: string): LinkTarget {
+  if (href.startsWith('#')) {
+    let name = href.slice(1);
+    try {
+      name = decodeURIComponent(name);
+    } catch {
+      // Keep a malformed escape as written.
+    }
+    return { kind: 'fragment', name, top: name === '' || name.toLowerCase() === 'top' };
+  }
+  return /^[a-z][a-z\d+.-]*:/i.test(href) ? { kind: 'web', href } : { kind: 'relative', href };
 }
 
-export function normalizeColorToHex(color?: string): string | null {
-  if (!color) return null;
-  const trimmed = color.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith('#')) {
-    const hex = trimmed.slice(1);
-    if (/^[0-9a-f]{3}$/i.test(hex)) {
-      return hex
-        .split('')
-        .map((char) => char + char)
-        .join('')
-        .toUpperCase();
-    }
-    if (/^[0-9a-f]{6}$/i.test(hex)) {
-      return hex.toUpperCase();
-    }
-    return null;
-  }
-
-  const rgbMatch = trimmed.match(/^rgba?\(([^)]+)\)$/i);
-  if (rgbMatch) {
-    const parts = rgbMatch[1].split(',').map((part) => Number.parseFloat(part.trim()));
-    if (parts.length >= 3 && parts.slice(0, 3).every((part) => Number.isFinite(part))) {
-      return parts
-        .slice(0, 3)
-        .map((value) => Math.max(0, Math.min(255, Math.round(value))))
-        .map((value) => value.toString(16).padStart(2, '0'))
-        .join('')
-        .toUpperCase();
-    }
-  }
-
-  if (typeof document === 'undefined') return null;
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.fillStyle = trimmed;
-  return normalizeColorToHex(ctx.fillStyle);
+/**
+ * The link a document format can follow, or undefined for a fragment other
+ * than the start of the document. LWrite documents carry no element ids (the
+ * sanitizer drops them), so such a fragment has no target in any format; its
+ * text keeps the link's look, and the export says so.
+ */
+export function followableHref(href: string, warnings: WarningCollector): string | undefined {
+  const target = linkTarget(href);
+  if (target.kind !== 'fragment' || target.top) return href;
+  warnings.add(
+    'link-not-supported-by-format',
+    href,
+    'A link to a place in the document was kept as text because the document has no place with that name.',
+  );
+  return undefined;
 }
 
-export function resolvePtFromCssSize(value?: string): number | null {
-  if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return null;
-  const numeric = Number.parseFloat(trimmed);
-  if (!Number.isFinite(numeric) || numeric <= 0) return null;
-
-  if (trimmed.endsWith('pt')) return numeric;
-  if (trimmed.endsWith('px')) return numeric * 0.75;
-  if (trimmed.endsWith('rem')) return numeric * 12;
-  if (trimmed.endsWith('em')) return numeric * 12;
-  return numeric;
+/** A URI as 7-bit ASCII (PDF URI actions), percent-encoding everything else. */
+export function asciiUri(href: string): string {
+  return href.replace(/[^\x21-\x7e]/gu, (character) => {
+    try {
+      return encodeURIComponent(character);
+    } catch {
+      // A lone surrogate has no UTF-8 form.
+      return '%EF%BF%BD';
+    }
+  });
 }
 
 export function getVisibleTextFromRuns(runs: ExportInlineRun[], includeLinks = false): string {
@@ -103,19 +107,23 @@ export function getVisibleTextFromRuns(runs: ExportInlineRun[], includeLinks = f
     .join('');
 }
 
+const MARK_KEYS: Array<keyof ExportInlineMarks> = [
+  'bold',
+  'italic',
+  'underline',
+  'strike',
+  'subscript',
+  'superscript',
+  'code',
+  'color',
+  'highlight',
+  'fontFamily',
+  'fontSize',
+  'lineHeight',
+];
+
 export function sameMarks(a: ExportInlineMarks, b: ExportInlineMarks): boolean {
-  return (
-    !!a.bold === !!b.bold &&
-    !!a.italic === !!b.italic &&
-    !!a.underline === !!b.underline &&
-    !!a.strike === !!b.strike &&
-    !!a.subscript === !!b.subscript &&
-    !!a.superscript === !!b.superscript &&
-    (a.color ?? '') === (b.color ?? '') &&
-    (a.highlight ?? '') === (b.highlight ?? '') &&
-    (a.fontFamily ?? '') === (b.fontFamily ?? '') &&
-    (a.fontSize ?? '') === (b.fontSize ?? '')
-  );
+  return MARK_KEYS.every((key) => (a[key] ?? false) === (b[key] ?? false));
 }
 
 export function sameLink(a?: ExportLink, b?: ExportLink): boolean {
@@ -134,7 +142,7 @@ export function normalizeRuns(runs: ExportInlineRun[]): ExportInlineRun[] {
     normalized.push({
       text: run.text,
       marks: { ...run.marks },
-      link: run.link ? { ...run.link } : undefined,
+      ...(run.link ? { link: { ...run.link } } : {}),
     });
   });
   return normalized;
@@ -144,27 +152,26 @@ export function hasVisibleText(runs: ExportInlineRun[]): boolean {
   return runs.some((run) => run.text.replace(/\s+/g, '').length > 0);
 }
 
-export function imagePlaceholderRuns(image: ExportImageBlock): ExportInlineRun[] {
-  const label = image.alt.trim() || 'Image';
-  return [{ text: `[Image: ${label}]`, marks: {} }];
+export function imageLabel(image: ExportImageBlock): string {
+  return image.alt.trim() || 'Image';
 }
 
+export function imagePlaceholderRuns(image: ExportImageBlock): ExportInlineRun[] {
+  return [{ text: `[Image: ${imageLabel(image)}]`, marks: {} }];
+}
+
+/** Visits every block, including those inside lists, quotes and table cells. */
 export function walkBlocks(blocks: ExportBlock[], visit: (block: ExportBlock) => void): void {
   blocks.forEach((block) => {
     visit(block);
     if (block.type === 'list') {
       block.items.forEach((item) => walkBlocks(item.blocks, visit));
     }
+    if (block.type === 'blockquote') {
+      walkBlocks(block.blocks, visit);
+    }
     if (block.type === 'table') {
       block.rows.forEach((row) => row.cells.forEach((cell) => walkBlocks(cell.blocks, visit)));
-    }
-  });
-}
-
-export function walkRuns(blocks: ExportBlock[], visit: (run: ExportInlineRun) => void): void {
-  walkBlocks(blocks, (block) => {
-    if (block.type === 'paragraph' || block.type === 'heading' || block.type === 'blockquote') {
-      block.runs.forEach(visit);
     }
   });
 }
@@ -177,70 +184,105 @@ export function hashString(value: string): string {
   return hash.toString(16);
 }
 
-export function tableHasMergedCells(table: ExportTableBlock): boolean {
-  return table.rows.some((row) => row.cells.some((cell) => cell.colSpan > 1 || cell.rowSpan > 1));
+export interface GridCell {
+  cell: ExportTableCell;
+  row: number;
+  column: number;
+  rowSpan: number;
+  colSpan: number;
+}
+
+export interface TableGrid {
+  columnCount: number;
+  rowCount: number;
+  /** Cells by origin, in row order. */
+  cells: GridCell[];
+  /** `slots[row][column]` → the cell covering it (origin or merged area). */
+  slots: Array<Array<GridCell | undefined>>;
+}
+
+/**
+ * Lays cells out on the HTML table grid: spans take slots from following rows
+ * and columns, and later cells skip occupied slots. Spans are clipped to the
+ * table, so a malformed rowspan cannot create phantom rows.
+ */
+export function buildTableGrid(table: ExportTableBlock): TableGrid {
+  const slots: Array<Array<GridCell | undefined>> = table.rows.map(() => []);
+  const cells: GridCell[] = [];
+  const rowCount = table.rows.length;
+  table.rows.forEach((row, rowIndex) => {
+    let column = 0;
+    row.cells.forEach((cell) => {
+      while (slots[rowIndex][column]) column += 1;
+      const rowSpan = Math.max(1, Math.min(cell.rowSpan, rowCount - rowIndex));
+      const gridCell: GridCell = { cell, row: rowIndex, column, rowSpan, colSpan: Math.max(1, cell.colSpan) };
+      cells.push(gridCell);
+      for (let r = 0; r < rowSpan; r += 1) {
+        for (let c = 0; c < gridCell.colSpan; c += 1) {
+          slots[rowIndex + r][column + c] = gridCell;
+        }
+      }
+      column += gridCell.colSpan;
+    });
+  });
+  const columnCount = Math.max(1, ...slots.map((row) => row.length));
+  return { columnCount, rowCount, cells, slots };
 }
 
 export interface ExpandedTableCell {
   cell: ExportTableCell;
   colSpan: number;
   vMerge?: 'restart' | 'continue';
+  column: number;
 }
 
+/** Rows of cells per grid row, with vertical-merge continuation entries (WordprocessingML/RTF model). */
 export function expandTableGrid(table: ExportTableBlock): { colCount: number; rows: ExpandedTableCell[][] } {
-  const occupancy: Array<Array<{ cell: ExportTableCell; originRow: number; originCol: number } | undefined>> = [];
-
-  table.rows.forEach((row, rowIndex) => {
-    if (!occupancy[rowIndex]) occupancy[rowIndex] = [];
-    let col = 0;
-    row.cells.forEach((cell) => {
-      while (occupancy[rowIndex][col]) {
-        col += 1;
-      }
-      for (let rowOffset = 0; rowOffset < cell.rowSpan; rowOffset += 1) {
-        if (!occupancy[rowIndex + rowOffset]) occupancy[rowIndex + rowOffset] = [];
-        for (let colOffset = 0; colOffset < cell.colSpan; colOffset += 1) {
-          occupancy[rowIndex + rowOffset][col + colOffset] = {
-            cell,
-            originRow: rowIndex,
-            originCol: col,
-          };
-        }
-      }
-      col += cell.colSpan;
-    });
-  });
-
-  const colCount = Math.max(1, ...occupancy.map((row) => row.length), 1);
-  const rows = occupancy.map((row, rowIndex) => {
+  const grid = buildTableGrid(table);
+  const rows = grid.slots.map((slots, rowIndex) => {
     const cells: ExpandedTableCell[] = [];
-    let col = 0;
-    while (col < colCount) {
-      const occupant = row[col];
+    for (let column = 0; column < grid.columnCount; ) {
+      const occupant = slots[column];
       if (!occupant) {
-        col += 1;
+        column += 1;
         continue;
       }
-      if (occupant.originCol !== col) {
-        col += 1;
+      if (occupant.column !== column) {
+        column += 1;
         continue;
       }
       cells.push({
         cell: occupant.cell,
-        colSpan: occupant.cell.colSpan,
-        vMerge:
-          occupant.cell.rowSpan > 1
-            ? occupant.originRow === rowIndex
-              ? 'restart'
-              : 'continue'
-            : undefined,
+        colSpan: occupant.colSpan,
+        column,
+        vMerge: occupant.rowSpan > 1 ? (occupant.row === rowIndex ? 'restart' : 'continue') : undefined,
       });
-      col += occupant.cell.colSpan;
+      column += occupant.colSpan;
     }
     return cells;
   });
+  return { colCount: grid.columnCount, rows };
+}
 
-  return { colCount, rows };
+/**
+ * Column widths in px for a table drawn `availableWidth` wide: the editor's
+ * resized columns keep their widths (scaled down when too wide), the rest share
+ * what remains, like `table-layout: fixed`.
+ */
+export function resolveColumnWidths(table: ExportTableBlock, columnCount: number, availableWidth: number, minWidth = 48): number[] {
+  const declared = Array.from({ length: columnCount }, (_, index) => table.columnWidths?.[index] ?? null);
+  const fixedTotal = declared.reduce<number>((sum, width) => sum + (width ?? 0), 0);
+  const flexible = declared.filter((width) => width === null).length;
+  if (!flexible) {
+    const scale = fixedTotal > availableWidth ? availableWidth / fixedTotal : 1;
+    return declared.map((width) => (width ?? 0) * scale);
+  }
+  const remaining = availableWidth - fixedTotal;
+  const share = remaining / flexible;
+  if (share >= minWidth) return declared.map((width) => width ?? share);
+  // Fixed columns leave too little room: scale everything to fit.
+  const total = fixedTotal + flexible * minWidth;
+  return declared.map((width) => ((width ?? minWidth) * availableWidth) / total);
 }
 
 export function graphicToFallbackBlocks(graphic: ExportGraphicBlock): ExportBlock[] {
@@ -273,3 +315,61 @@ function graphicItemsToList(items: ExportGraphicItem[], ordered: boolean): Expor
   };
 }
 
+/** One-line text alternative for a graphic: title, then items in reading order. */
+export function graphicAltText(graphic: ExportGraphicBlock): string {
+  const labels: string[] = [];
+  const visit = (items: ExportGraphicItem[], depth: number) =>
+    items.forEach((item) => {
+      if (item.label.trim()) labels.push(`${depth ? '– ' : ''}${item.label.trim()}`);
+      visit(item.children, depth + 1);
+    });
+  visit(graphic.items, 0);
+  const title = graphic.title.trim();
+  return [title, labels.join('; ')].filter(Boolean).join(': ') || 'Smart Graphic';
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
+
+const HEX_DIGITS = Uint8Array.from('0123456789abcdef', (digit) => digit.charCodeAt(0));
+
+/**
+ * Lowercase hex, with a line break after every `perLine` bytes (RTF pictures).
+ * Written into one byte buffer, so a 10 MB image costs one 20 MB string.
+ */
+export function bytesToHex(bytes: Uint8Array, perLine = 0): string {
+  const breaks = perLine > 0 && bytes.length > 0 ? Math.floor((bytes.length - 1) / perLine) : 0;
+  const out = new Uint8Array(bytes.length * 2 + breaks);
+  let position = 0;
+  for (let index = 0; index < bytes.length; index += 1) {
+    if (breaks && index > 0 && index % perLine === 0) out[position++] = 10;
+    out[position++] = HEX_DIGITS[bytes[index] >> 4];
+    out[position++] = HEX_DIGITS[bytes[index] & 15];
+  }
+  return new TextDecoder().decode(out);
+}
+
+const LANGUAGE_TAGS: Record<string, string> = {
+  en: 'en-US',
+  de: 'de-DE',
+  es: 'es-ES',
+  fr: 'fr-FR',
+  it: 'it-IT',
+  pt: 'pt-PT',
+  nl: 'nl-NL',
+  ja: 'ja-JP',
+  zh: 'zh-CN',
+  ar: 'ar-SA',
+  ru: 'ru-RU',
+};
+
+/** BCP 47 tag with region for document metadata (Office and ODF want one). */
+export function languageTag(locale: string): string {
+  return LANGUAGE_TAGS[locale] ?? locale;
+}

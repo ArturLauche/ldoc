@@ -83,6 +83,13 @@ export type DocumentStorageResult<T> =
   (image validation, 10 MB limit), `fileNames.ts` (`buildExportFileName`),
   `export/documentExport.ts` (`exportDocument({ html, name, locale, format })`
   for `txt|html|rtf|docx|odt|pdf`; lazy-load JSZip).
+- Export pipeline (`src/lib/export/`): `model.ts` (one shared model) → `typography.ts`
+  (`DOCUMENT_STYLE`: the editor's measured `.prose` metrics, margin collapsing, line boxes;
+  keep in sync with `src/index.css`) → per-format writers (`pdf/`, `docx/`, `odt.ts`, `rtf.ts`,
+  `html.ts`, `txt.ts`). `fonts/` loads only the self-hosted faces/subsets the text uses and
+  builds static instances (PDF subsets, Office embedding); `graphics/` captures Smart Graphics
+  from `SmartGraphicCanvas` as vector scenes (no second layout system). Tests stub font fetches
+  with `src/test/exportAssets.ts`; `tests/browser/export.spec.ts` compares HTML export with the editor.
 
 ## Git and PR workflow
 

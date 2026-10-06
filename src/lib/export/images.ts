@@ -1,10 +1,14 @@
+import { IMAGE_MIME_PATTERN } from '@/lib/media';
+import { mapWithConcurrency } from './resources';
 import type { ExportDocumentModel, ExportImageBlock, PreparedExportImage } from './types';
 import { walkBlocks } from './shared';
-import type { WarningCollector } from './warnings';
+import { WarningCollector } from './warnings';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 16_000_000;
 const IMAGE_TIMEOUT_MS = 15_000;
+/** Parallel remote downloads per export. */
+const IMAGE_CONCURRENCY = 4;
 
 type ParsedImageSource = {
   bytes: Uint8Array;
@@ -12,9 +16,22 @@ type ParsedImageSource = {
   detail: string;
 };
 
+export interface PrepareImagesOptions {
+  /**
+   * `raster`: decode to PNG/JPEG for DOCX, ODT, RTF and PDF.
+   * `html`: keep original bytes; only remote images are downloaded (to embed them).
+   */
+  mode: 'raster' | 'html';
+}
+
+/**
+ * Downloads and normalizes each distinct image source once per export, with
+ * bounded concurrency. Blocks sharing a source share the prepared bytes.
+ */
 export async function prepareExportImages(
   documentModel: ExportDocumentModel,
   warnings: WarningCollector,
+  options: PrepareImagesOptions = { mode: 'raster' },
 ): Promise<ExportDocumentModel> {
   const images: ExportImageBlock[] = [];
   walkBlocks(documentModel.blocks, (block) => {
@@ -23,17 +40,43 @@ export async function prepareExportImages(
 
   // Cache only for this export: repeated logos share one download and decode,
   // while a later export still sees changes to remote images.
-  const preparedBySource = new Map<string, PreparedExportImage | undefined>();
-  for (const image of images) {
-    if (image.src && preparedBySource.has(image.src)) {
-      image.prepared = preparedBySource.get(image.src);
-      continue;
+  const bySource = new Map<string, ExportImageBlock[]>();
+  images.forEach((image) => {
+    const list = bySource.get(image.src) ?? [];
+    list.push(image);
+    bySource.set(image.src, list);
+  });
+  const sources = Array.from(bySource.entries());
+  await mapWithConcurrency(sources, IMAGE_CONCURRENCY, async ([src, blocks]) => {
+    if (options.mode === 'html') {
+      const original = await prepareOriginal(src, blocks[0], warnings);
+      if (original) blocks.forEach((block) => (block.original = original));
+      return;
     }
-    image.prepared = await prepareImage(image, warnings);
-    if (image.src) preparedBySource.set(image.src, image.prepared);
-  }
+    const prepared = await prepareImage(blocks[0], warnings);
+    blocks.forEach((block) => {
+      if (prepared) block.prepared = prepared;
+      else delete block.prepared;
+    });
+  });
 
   return documentModel;
+}
+
+/** HTML keeps data URLs as they are and embeds remote images it can download. */
+async function prepareOriginal(
+  src: string,
+  image: ExportImageBlock,
+  warnings: WarningCollector,
+): Promise<ExportImageBlock['original'] | undefined> {
+  if (!src || src.startsWith('data:')) return undefined;
+  // One specific warning replaces the download diagnostics: the file keeps the link.
+  const parsed = await fetchRemoteImage(src, new WarningCollector('html'));
+  if (!parsed || parsed.bytes.byteLength > MAX_IMAGE_BYTES || !IMAGE_MIME_PATTERN.test(parsed.mimeType)) {
+    warnings.add('image-not-embedded', image.alt || src);
+    return undefined;
+  }
+  return { bytes: parsed.bytes, mimeType: parsed.mimeType };
 }
 
 async function prepareImage(
@@ -123,7 +166,7 @@ async function fetchRemoteImage(
     const contentType = normalizeMimeType(
       response.headers.get('content-type') ?? inferMimeTypeFromPath(src),
     );
-    return { bytes, mimeType: contentType, detail: src };
+    return { bytes, mimeType: sniffMimeType(bytes) ?? contentType, detail: src };
   } catch (error) {
     warnings.add(error instanceof TypeError ? 'image-remote-cors' : 'image-fetch-failed', src);
     return undefined;
@@ -171,6 +214,13 @@ async function readBoundedImage(
   return bytes;
 }
 
+/** Trust the bytes over a server's Content-Type for the formats exporters embed directly. */
+function sniffMimeType(bytes: Uint8Array): string | null {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  return null;
+}
+
 async function normalizePreparedImage(
   parsed: ParsedImageSource,
   warnings: WarningCollector,
@@ -181,6 +231,13 @@ async function normalizePreparedImage(
     if (!dimensions || !dimensions.width || !dimensions.height) {
       warnings.add('image-decode-failed', parsed.detail);
       return undefined;
+    }
+    // Browsers apply EXIF rotation; document formats would show the raw pixels.
+    const orientation = mimeType === 'image/png' ? 1 : readJpegOrientation(parsed.bytes);
+    if (orientation > 1) {
+      const rotated = await rasterizeImage(parsed, 'image/jpeg');
+      if (rotated) return rotated;
+      warnings.add('image-orientation-ignored', parsed.detail);
     }
     return {
       bytes: parsed.bytes,
@@ -193,7 +250,7 @@ async function normalizePreparedImage(
 
   // Decode the bytes already fetched; loading the remote URL again can fail
   // independently, wastes bandwidth, and bypasses the download size check.
-  const rasterized = await rasterizeImage(parsed);
+  const rasterized = await rasterizeImage(parsed, 'image/png');
   if (rasterized) {
     warnings.add(
       mimeType === 'image/svg+xml' ? 'image-svg-rasterized' : 'image-format-unsupported',
@@ -253,12 +310,13 @@ function readPngDimensions(bytes: Uint8Array): { width: number; height: number }
 function readJpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
   let offset = 2;
-  while (offset < bytes.length) {
+  while (offset + 3 < bytes.length) {
     if (bytes[offset] !== 0xff) return null;
     const marker = bytes[offset + 1];
     const length = (bytes[offset + 2] << 8) + bytes[offset + 3];
     if (length < 2) return null;
-    if (marker >= 0xc0 && marker <= 0xc3 && offset + 8 < bytes.length) {
+    // SOF markers carry the frame size (C4, C8 and CC are not frames).
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc && offset + 8 < bytes.length) {
       return {
         height: (bytes[offset + 5] << 8) + bytes[offset + 6],
         width: (bytes[offset + 7] << 8) + bytes[offset + 8],
@@ -269,6 +327,46 @@ function readJpegDimensions(bytes: Uint8Array): { width: number; height: number 
   return null;
 }
 
+/** EXIF orientation (1–8) from a JPEG's APP1 segment; 1 when absent. */
+export function readJpegOrientation(bytes: Uint8Array): number {
+  let offset = 2;
+  while (offset + 4 <= bytes.length && bytes[offset] === 0xff) {
+    const marker = bytes[offset + 1];
+    const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+    if (marker === 0xda || length < 2) break;
+    const end = Math.min(bytes.length, offset + 2 + length);
+    const exif = offset + 4;
+    if (marker === 0xe1 && exif + 6 <= end && String.fromCharCode(...bytes.subarray(exif, exif + 4)) === 'Exif' && bytes[exif + 4] === 0 && bytes[exif + 5] === 0) {
+      return exifOrientation(bytes, exif + 6, end);
+    }
+    offset += 2 + length;
+  }
+  return 1;
+}
+
+/** Orientation tag of the first TIFF IFD inside an APP1 segment; every read stays inside `end`. */
+function exifOrientation(bytes: Uint8Array, tiff: number, end: number): number {
+  if (tiff + 8 > end) return 1;
+  const order = String.fromCharCode(bytes[tiff], bytes[tiff + 1]);
+  if (order !== 'II' && order !== 'MM') return 1;
+  const little = order === 'II';
+  const read16 = (at: number) => (little ? bytes[at] | (bytes[at + 1] << 8) : (bytes[at] << 8) | bytes[at + 1]);
+  const read32 = (at: number) => (little ? read16(at) + read16(at + 2) * 0x10000 : read16(at) * 0x10000 + read16(at + 2));
+  if (read16(tiff + 2) !== 42) return 1;
+  const ifd = tiff + read32(tiff + 4);
+  if (ifd + 2 > end) return 1;
+  const entries = read16(ifd);
+  for (let index = 0; index < entries; index += 1) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end) break;
+    if (read16(entry) === 0x0112) {
+      const value = read16(entry + 8);
+      return value >= 1 && value <= 8 ? value : 1;
+    }
+  }
+  return 1;
+}
+
 function readUint32(bytes: Uint8Array, offset: number): number {
   return (
     bytes[offset] * 0x1000000 +
@@ -276,7 +374,8 @@ function readUint32(bytes: Uint8Array, offset: number): number {
   );
 }
 
-function rasterizeImage(parsed: ParsedImageSource): Promise<PreparedExportImage | undefined> {
+/** Decodes with the browser (which applies EXIF rotation) and re-encodes. */
+function rasterizeImage(parsed: ParsedImageSource, output: 'image/png' | 'image/jpeg'): Promise<PreparedExportImage | undefined> {
   if (
     typeof document === 'undefined' ||
     typeof Image === 'undefined' ||
@@ -324,14 +423,14 @@ function rasterizeImage(parsed: ParsedImageSource): Promise<PreparedExportImage 
             (buffer) =>
               finish({
                 bytes: new Uint8Array(buffer),
-                mimeType: 'image/png',
-                extension: 'png',
+                mimeType: output,
+                extension: output === 'image/png' ? 'png' : 'jpg',
                 width,
                 height,
               }),
             () => finish(),
           );
-        }, 'image/png');
+        }, output, 0.92);
       } catch {
         finish();
       }
