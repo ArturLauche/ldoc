@@ -8,6 +8,7 @@ import {
   graphicAltText,
   graphicToFallbackBlocks,
   imageLabel,
+  followableHref,
   imagePlaceholderRuns,
   linkTarget,
   resolveColumnWidths,
@@ -64,6 +65,8 @@ export class DocxBodyWriter {
   private nextDrawing = 1;
   private nextAnchorHeight = 251658240;
   private readonly hyperlinks = new Map<string, string>();
+  /** A link goes to the start of the document (`#` or `#top`). */
+  linksToTop = false;
   private readonly imageRelationships = new Map<PreparedExportImage | Uint8Array, string>();
 
   constructor(
@@ -219,19 +222,13 @@ export class DocxBodyWriter {
     let index = 0;
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href) {
+      const address = href ? this.linkAddress(href) : null;
+      if (href && address) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(this.run(runs[index].text, runs[index].style, base, true));
           index += 1;
         }
-        const target = linkTarget(href);
-        // Fragments link to bookmarks (`_top` is Word's start of the document);
-        // relative paths stay relative to the saved file, as in the editor.
-        const address =
-          target.kind === 'fragment'
-            ? `w:anchor="${escapeXmlAttr(target.top ? '_top' : target.name)}"`
-            : `r:id="${this.hyperlink(href)}"`;
         out.push(`<w:hyperlink ${address} w:history="1">${group.join('')}</w:hyperlink>`);
         continue;
       }
@@ -239,6 +236,20 @@ export class DocxBodyWriter {
       index += 1;
     }
     return out.join('');
+  }
+
+  /**
+   * Where a hyperlink points: a relationship for addresses and paths (relative
+   * paths stay relative to the saved file), or the `top` bookmark for the start
+   * of the document. null for a fragment with no target (`followableHref`).
+   */
+  private linkAddress(href: string): string | null {
+    if (!followableHref(href, this.warnings)) return null;
+    if (linkTarget(href).kind === 'fragment') {
+      this.linksToTop = true;
+      return 'w:anchor="top"';
+    }
+    return `r:id="${this.hyperlink(href)}"`;
   }
 
   run(text: string, style: RunStyle, base: TextBaseStyle, link: boolean): string {
@@ -420,6 +431,11 @@ export class DocxBodyWriter {
  * Spacing: before/after in px; the line is the CSS line box in px ("at least"),
  * `single` for picture paragraphs, or null for the style's default.
  */
+/** Puts a `top` bookmark at the start of the first paragraph. */
+export function withTopBookmark(body: string): string {
+  return body.replace(/<w:p>(<w:pPr>.*?<\/w:pPr>)?/, (paragraph) => `${paragraph}<w:bookmarkStart w:id="0" w:name="top"/><w:bookmarkEnd w:id="0"/>`);
+}
+
 /** A 1pt paragraph: anchors floats above a table, and keeps consecutive tables apart. */
 function hairlineParagraph(floats: string[]): string {
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>${floats.join('')}</w:p>`;

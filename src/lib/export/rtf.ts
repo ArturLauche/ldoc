@@ -16,6 +16,7 @@ import {
   graphicAltText,
   graphicToFallbackBlocks,
   imageLabel,
+  followableHref,
   imagePlaceholderRuns,
   linkTarget,
   resolveColumnWidths,
@@ -70,7 +71,9 @@ export async function renderRtf(documentModel: ExportDocumentModel, warnings: Wa
   }
 
   const writer = new RtfWriter(pageGeometry(documentModel.locale), warnings);
-  const body = writer.flow(documentModel.blocks, 'root', { indent: 0, inTable: false }).join('\n');
+  let body = writer.flow(documentModel.blocks, 'root', { indent: 0, inTable: false }).join('\n');
+  // A bookmark before the first paragraph's properties marks the start of its text.
+  if (writer.linksToTop) body = `{\\*\\bkmkstart top}{\\*\\bkmkend top}${body}`;
   if (writer.usesBundledFonts) warnings.add('font-not-embedded');
   const rtf = writer.document(body, documentModel.name, documentModel.locale);
   return new Blob([rtf], { type: 'application/rtf' });
@@ -146,6 +149,8 @@ class RtfWriter {
   private readonly listOverrides: string[] = [];
   private readonly listIds = new Map<ExportListBlock, number>();
   usesBundledFonts = false;
+  /** A link goes to the start of the document (`#` or `#top`). */
+  linksToTop = false;
 
   constructor(
     private readonly geometry: PageGeometry,
@@ -367,18 +372,16 @@ ${body}
     let index = 0;
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href) {
+      if (href && followableHref(href, this.warnings)) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(this.styledRun(runs[index].text, runs[index].style));
           index += 1;
         }
-        // Fragments link to bookmarks (`_top`: the start of the document); paths stay relative.
-        const target = linkTarget(href);
-        const instruction =
-          target.kind === 'fragment'
-            ? `HYPERLINK \\\\l "${rtfText((target.top ? '_top' : target.name).replace(/"/g, ''))}"`
-            : `HYPERLINK "${rtfText(href.replace(/"/g, '%22'))}"`;
+        // The start of the document is a `top` bookmark; paths stay relative to the file.
+        const fragment = linkTarget(href).kind === 'fragment';
+        if (fragment) this.linksToTop = true;
+        const instruction = fragment ? 'HYPERLINK \\\\l "top"' : `HYPERLINK "${rtfText(href.replace(/"/g, '%22'))}"`;
         out.push(`{\\field{\\*\\fldinst{${instruction}}}{\\fldrslt{${group.join('')}}}}`);
         continue;
       }

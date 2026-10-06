@@ -11,6 +11,7 @@ import type {
   ExportTableBlock,
   ExportTableCell,
 } from './types';
+import type { WarningCollector } from './warnings';
 
 export function escapeXml(value: string): string {
   return stripInvalidXmlChars(value)
@@ -64,6 +65,23 @@ export function linkTarget(href: string): LinkTarget {
     return { kind: 'fragment', name, top: name === '' || name.toLowerCase() === 'top' };
   }
   return /^[a-z][a-z\d+.-]*:/i.test(href) ? { kind: 'web', href } : { kind: 'relative', href };
+}
+
+/**
+ * The link a document format can follow, or undefined for a fragment other
+ * than the start of the document. LWrite documents carry no element ids (the
+ * sanitizer drops them), so such a fragment has no target in any format; its
+ * text keeps the link's look, and the export says so.
+ */
+export function followableHref(href: string, warnings: WarningCollector): string | undefined {
+  const target = linkTarget(href);
+  if (target.kind !== 'fragment' || target.top) return href;
+  warnings.add(
+    'link-not-supported-by-format',
+    href,
+    'A link to a place in the document was kept as text because the document has no place with that name.',
+  );
+  return undefined;
 }
 
 /** A URI as 7-bit ASCII (PDF URI actions), percent-encoding everything else. */

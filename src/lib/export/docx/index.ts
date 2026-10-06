@@ -7,7 +7,7 @@ import { noteDocumentFonts } from '../textUsage';
 import { pageGeometry } from '../typography';
 import type { ExportDocumentModel } from '../types';
 import type { WarningCollector } from '../warnings';
-import { DocxBodyWriter } from './body';
+import { DocxBodyWriter, withTopBookmark } from './body';
 import {
   RELATIONSHIP_TYPES,
   appXml,
@@ -46,7 +46,8 @@ export async function renderDocx(documentModel: ExportDocumentModel, warnings: W
     { id: 'rId4', type: RELATIONSHIP_TYPES.fontTable, target: 'fontTable.xml' },
   ];
   const writer = new DocxBodyWriter(fixed.length + 1, geometry, warnings);
-  const body = writer.flow(documentModel.blocks, 'root', { indent: 0 }) || '<w:p/>';
+  let body = writer.flow(documentModel.blocks, 'root', { indent: 0 }) || '<w:p/>';
+  if (writer.linksToTop) body = withTopBookmark(body);
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}${body.endsWith('</w:tbl>') ? '<w:p/>' : ''}${sectionXml(geometry)}</w:body></w:document>`;
 

@@ -119,31 +119,42 @@ next()</code></pre>
 
 describe('links in editable formats', () => {
   const LINKS = '<p><a href="https://example.com/">Web</a> <a href="./notes.txt">Sibling</a> <a href="../up/plan.odt">Parent</a> <a href="/root">Root</a> <a href="#details">Fragment</a> <a href="#top">Top</a></p>';
+  // LWrite documents carry no element ids, so `#details` has no target in any format.
+  const deadFragment = [expect.objectContaining({ code: 'link-not-supported-by-format', detail: '#details' })];
 
-  it('DOCX: relative paths as relationships, fragments as bookmarks', async () => {
-    const zip = await unzip((await exportAs('docx', LINKS)).blob);
+  it('DOCX: relative paths as relationships, #top to a bookmark at the start', async () => {
+    const result = await exportAs('docx', LINKS);
+    const zip = await unzip(result.blob);
     const rels = (await zip.file('word/_rels/document.xml.rels')?.async('string')) ?? '';
     ['https://example.com/', './notes.txt', '../up/plan.odt', '/root'].forEach((target) =>
       expect(rels).toContain(`Target="${target}" TargetMode="External"`),
     );
     const document = (await zip.file('word/document.xml')?.async('string')) ?? '';
-    expect(document).toContain('<w:hyperlink w:anchor="details"');
-    expect(document).toContain('<w:hyperlink w:anchor="_top"');
-    expect(document.match(/<w:hyperlink /g)).toHaveLength(6);
+    expect(document).toContain('<w:hyperlink w:anchor="top"');
+    expect(document).toMatch(/<w:body><w:p><w:pPr>.*?<\/w:pPr><w:bookmarkStart w:id="0" w:name="top"\/><w:bookmarkEnd w:id="0"\/>/);
+    // The dead fragment keeps the link's look as plain text.
+    expect(document.match(/<w:hyperlink /g)).toHaveLength(5);
+    expect(document).toMatch(/<w:r><w:rPr>[^]*?<w:u w:val="single"\/>[^]*?<\/w:rPr><w:t xml:space="preserve">Fragment<\/w:t><\/w:r>/);
+    expect(result.warnings).toEqual(deadFragment);
   });
 
   it('ODT: paths relative to the file climb out of the package; #top has a bookmark', async () => {
-    const content = (await (await unzip((await exportAs('odt', LINKS)).blob)).file('content.xml')?.async('string')) ?? '';
+    const result = await exportAs('odt', LINKS);
+    const content = (await (await unzip(result.blob)).file('content.xml')?.async('string')) ?? '';
     const hrefs = Array.from(content.matchAll(/<text:a [^>]*xlink:href="([^"]+)"/g), (match) => match[1]);
-    expect(hrefs).toEqual(['https://example.com/', '../notes.txt', '../../up/plan.odt', '/root', '#details', '#top']);
+    expect(hrefs).toEqual(['https://example.com/', '../notes.txt', '../../up/plan.odt', '/root', '#top']);
     expect(content).toContain('<text:bookmark text:name="top"/>');
+    expect(result.warnings).toEqual(deadFragment);
   });
 
-  it('RTF: hyperlink fields for paths, bookmark switches for fragments', async () => {
-    const rtf = await (await exportAs('rtf', LINKS)).blob.text();
+  it('RTF: hyperlink fields for paths, #top to a bookmark at the start', async () => {
+    const result = await exportAs('rtf', LINKS);
+    const rtf = await result.blob.text();
     ['https://example.com/', './notes.txt', '../up/plan.odt', '/root'].forEach((target) => expect(rtf).toContain(`HYPERLINK "${target}"`));
-    expect(rtf).toContain('HYPERLINK \\\\l "details"');
-    expect(rtf).toContain('HYPERLINK \\\\l "_top"');
+    expect(rtf).toContain('HYPERLINK \\\\l "top"');
+    expect(rtf).toContain('{\\*\\bkmkstart top}{\\*\\bkmkend top}\\pard');
+    expect(rtf).not.toContain('details');
+    expect(result.warnings).toEqual([...deadFragment, expect.objectContaining({ code: 'font-not-embedded' })]);
   });
 
   it('PDF: URI actions for paths, the start for #top, and a warning for other fragments', async () => {
@@ -155,9 +166,10 @@ describe('links in editable formats', () => {
       return uri instanceof PDFString || uri instanceof PDFHexString ? uri.decodeText() : action.get(PDFName.of('S'))?.toString();
     });
     expect(uris).toEqual(['https://example.com/', './notes.txt', '../up/plan.odt', '/root', '/GoTo']);
-    expect(result.warnings).toEqual([expect.objectContaining({ code: 'link-not-supported-by-format', detail: '#details' })]);
+    expect(result.warnings).toEqual(deadFragment);
   });
 });
+
 
 describe('TXT export', () => {
   it('keeps structure readable: headings, blank lines and link addresses', async () => {

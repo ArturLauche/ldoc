@@ -19,6 +19,7 @@ import {
   graphicToFallbackBlocks,
   imageLabel,
   imagePlaceholderRuns,
+  followableHref,
   languageTag,
   linkTarget,
   resolveColumnWidths,
@@ -459,14 +460,15 @@ class OdtWriter {
     const span = (text: string, style: RunStyle) => (text ? `<text:span text:style-name="${this.textStyle(style)}">${encoder.encode(text)}</text:span>` : '');
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href) {
+      const target = href ? this.odfHref(href) : null;
+      if (href && target) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(span(runs[index].text, runs[index].style));
           index += 1;
         }
         out.push(
-          `<text:a xlink:type="simple" xlink:href="${escapeXmlAttr(this.odfHref(href))}" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">${group.join('')}</text:a>`,
+          `<text:a xlink:type="simple" xlink:href="${escapeXmlAttr(target)}" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">${group.join('')}</text:a>`,
         );
         continue;
       }
@@ -478,14 +480,15 @@ class OdtWriter {
 
   /**
    * ODF resolves relative references against the package as a folder, so a
-   * path relative to the saved file climbs out of it first. Fragments name
-   * bookmarks; the start of the document gets one.
+   * path relative to the saved file climbs out of it first. The start of the
+   * document is a `top` bookmark; other fragments have no target (`followableHref`).
    */
-  private odfHref(href: string): string {
+  private odfHref(href: string): string | null {
+    if (!followableHref(href, this.warnings)) return null;
     const target = linkTarget(href);
     if (target.kind === 'fragment') {
-      if (target.top) this.linksToTop = true;
-      return `#${target.top ? 'top' : target.name}`;
+      this.linksToTop = true;
+      return '#top';
     }
     if (target.kind === 'relative' && !href.startsWith('/')) return asciiUri(`../${href.replace(/^\.\//, '')}`);
     return asciiUri(href);

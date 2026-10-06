@@ -352,7 +352,7 @@ class PageCanvas {
     const context = this.env.document.context;
     this.links.forEach(({ href, rect }) => {
       const target = linkTarget(href);
-      // Fragments reaching the PDF go to the start of the document (see `pdfLinkHref`).
+      // Fragments reaching the PDF go to the start of the document (see `followableHref`).
       const first = this.env.document.getPage(0);
       const action =
         target.kind === 'fragment'
