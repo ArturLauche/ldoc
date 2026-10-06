@@ -152,7 +152,13 @@ describe('links in editable formats', () => {
     const rtf = await result.blob.text();
     ['https://example.com/', './notes.txt', '../up/plan.odt', '/root'].forEach((target) => expect(rtf).toContain(`HYPERLINK "${target}"`));
     expect(rtf).toContain('HYPERLINK \\\\l "top"');
-    expect(rtf).toContain('{\\*\\bkmkstart top}{\\*\\bkmkend top}\\pard');
+    // Inside the first paragraph, after its properties, as Word writes bookmarks.
+    expect(rtf).toMatch(/\\pard\\plain[^ {]* \{\\\*\\bkmkstart top\}\{\\\*\\bkmkend top\}\{\\field/);
+    expect(rtf.match(/bkmkstart/g)).toHaveLength(1);
+    // Graphic outlines further down render in document order, after the first paragraph.
+    const graphic = `<div data-lwrite-graphic='${serializeSmartGraphic(createStarterGraphic('process-chevron'))}'></div>`;
+    const later = await (await exportAs('rtf', `<p>First</p>${graphic}<p><a href="#top">Top</a></p>`)).blob.text();
+    expect(later).toMatch(/ \{\\\*\\bkmkstart top\}\{\\\*\\bkmkend top\}\{[^}]*First\}/);
     expect(rtf).not.toContain('details');
     expect(result.warnings).toEqual([...deadFragment, expect.objectContaining({ code: 'font-not-embedded' })]);
   });

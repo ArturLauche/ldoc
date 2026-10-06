@@ -71,9 +71,8 @@ export async function renderRtf(documentModel: ExportDocumentModel, warnings: Wa
   }
 
   const writer = new RtfWriter(pageGeometry(documentModel.locale), warnings);
-  let body = writer.flow(documentModel.blocks, 'root', { indent: 0, inTable: false }).join('\n');
-  // A bookmark before the first paragraph's properties marks the start of its text.
-  if (writer.linksToTop) body = `{\\*\\bkmkstart top}{\\*\\bkmkend top}${body}`;
+  writer.topBookmark = linksToTop(documentModel.blocks);
+  const body = writer.flow(documentModel.blocks, 'root', { indent: 0, inTable: false }).join('\n');
   if (writer.usesBundledFonts) warnings.add('font-not-embedded');
   const rtf = writer.document(body, documentModel.name, documentModel.locale);
   return new Blob([rtf], { type: 'application/rtf' });
@@ -149,8 +148,9 @@ class RtfWriter {
   private readonly listOverrides: string[] = [];
   private readonly listIds = new Map<ExportListBlock, number>();
   usesBundledFonts = false;
-  /** A link goes to the start of the document (`#` or `#top`). */
-  linksToTop = false;
+  /** Write a `top` bookmark at the start of the first paragraph's text (`#` and `#top` links). */
+  topBookmark = false;
+  private bookmarked = false;
 
   constructor(
     private readonly geometry: PageGeometry,
@@ -258,8 +258,8 @@ ${body}
             parts.push({ render: (after) => this.graphicParagraph(block, leaf, before, after, scope) });
           } else {
             this.warnings.add('graphic-layout-simplified');
-            const fallback = this.flow(graphicToFallbackBlocks(block), container === 'cell' ? 'cell' : 'blockquote', scope);
-            parts.push({ render: () => fallback.join('\n') });
+            // Rendered in turn, like every part, so paragraphs are written in document order.
+            parts.push({ render: () => this.flow(graphicToFallbackBlocks(block), container === 'cell' ? 'cell' : 'blockquote', scope).join('\n') });
           }
           break;
         case 'table': {
@@ -331,7 +331,14 @@ ${body}
   /** One paragraph; `content` is already RTF. Paragraphs in cells end with `\cell` where the flow ends. */
   private paragraphGroup(options: ParagraphOptions, content: string): string {
     const mark = options.markSize ? `\\fs${options.markSize}` : '';
-    return `${this.paragraphProperties(options)}${mark} ${content}\\par`;
+    return `${this.paragraphProperties(options)}${mark} ${this.startOfText()}${content}\\par`;
+  }
+
+  /** The `top` bookmark, inside the first paragraph after its properties, as Word writes bookmarks. */
+  private startOfText(): string {
+    if (!this.topBookmark || this.bookmarked) return '';
+    this.bookmarked = true;
+    return '{\\*\\bkmkstart top}{\\*\\bkmkend top}';
   }
 
   private context(block: ExportTextBlock, leaf: FlowLeaf, scope: FlowScope): TextContext {
@@ -379,9 +386,8 @@ ${body}
           index += 1;
         }
         // The start of the document is a `top` bookmark; paths stay relative to the file.
-        const fragment = linkTarget(href).kind === 'fragment';
-        if (fragment) this.linksToTop = true;
-        const instruction = fragment ? 'HYPERLINK \\\\l "top"' : `HYPERLINK "${rtfText(href.replace(/"/g, '%22'))}"`;
+        const instruction =
+          linkTarget(href).kind === 'fragment' ? 'HYPERLINK \\\\l "top"' : `HYPERLINK "${rtfText(href.replace(/"/g, '%22'))}"`;
         out.push(`{\\field{\\*\\fldinst{${instruction}}}{\\fldrslt{${group.join('')}}}}`);
         continue;
       }
@@ -526,7 +532,7 @@ ${body}
     const indent = this.indent(leaf, scope);
     const x = image.float === 'right' ? indent + available - width : indent;
     const frame = `\\pard\\plain\\phmrg\\posx${twips(x)}\\pvpara\\posy${twips(DOCUMENT_STYLE.image.floatMargin)}\\absw${twips(width)}\\dxfrtext${twips(DOCUMENT_STYLE.image.floatGap)}\\dfrmtxtx${twips(DOCUMENT_STYLE.image.floatGap)}\\dfrmtxty${twips(DOCUMENT_STYLE.image.floatMargin)}\\wraparound\\sb0\\sa0`;
-    return `${frame} ${this.picture(prepared, width, height, image.alt || imageLabel(image))}\\par`;
+    return `${frame} ${this.startOfText()}${this.picture(prepared, width, height, image.alt || imageLabel(image))}\\par`;
   }
 
   private graphicParagraph(graphic: ExportGraphicBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
@@ -618,4 +624,18 @@ function cellPlainText(blocks: ExportBlock[]): string {
     else if (block.type === 'code-block') parts.push(block.text);
   });
   return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/** True when a link goes to the start of the document (`#` or `#top`). */
+function linksToTop(blocks: ExportBlock[]): boolean {
+  let found = false;
+  walkBlocks(blocks, (block) => {
+    if ((block.type === 'paragraph' || block.type === 'heading') && block.runs.some((run) => run.link && isTopLink(run.link.href))) found = true;
+  });
+  return found;
+}
+
+function isTopLink(href: string): boolean {
+  const target = linkTarget(href);
+  return target.kind === 'fragment' && target.top;
 }
