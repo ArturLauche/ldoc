@@ -98,6 +98,10 @@ export type DocumentStorageResult<T> =
   squash/merge as `#48`–`#50`); keep the diff focused and the route surface intentional.
 - For this task type docs-only change: commit `AGENTS.md` directly and push to `main`.
 - `.github/workflows/validate.yml` runs clean install, peer graph, full validation, audit, and Chromium persistence checks. Cloudflare Pages independently builds the preview. Browser tests use the production `dist` build; install browsers with `npx playwright install chromium` (or `chromium firefox webkit` for full local checks).
+- On PRs, failing Cloudflare Pages builds can be expected and are not a
+  blocker: the build only works with the `SKIP_DEPENDENCY_INSTALL` variable,
+  which applies to builds but not to preview deployments, so PR previews may
+  fail.
 
 ## Boundaries
 
