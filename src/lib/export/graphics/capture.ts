@@ -18,6 +18,7 @@ import {
 } from './cssGeometry';
 import {
   ellipsePath,
+  isFinitePath,
   polygonPath,
   roundedRectPath,
   transformPath,
@@ -80,6 +81,14 @@ function fontAscent(style: CSSStyleDeclaration, fontSize: number): number {
   }
   ascentCache.set(key, ascent);
   return ascent;
+}
+
+/**
+ * An SVG paint or border color. Browsers resolve `currentColor` in computed
+ * styles; the keyword is mapped to the element's color in case one does not.
+ */
+function paintColor(value: string, style: CSSStyleDeclaration): RgbaColor | null {
+  return resolveCssColor(/^currentcolor$/i.test(value.trim()) ? style.color : value);
 }
 
 function withOpacity(color: RgbaColor, opacity: number): RgbaColor {
@@ -201,7 +210,7 @@ function paintBorders(
   const side = (name: 'Top' | 'Right' | 'Bottom' | 'Left') => {
     const width = Number.parseFloat(style.getPropertyValue(`border-${name.toLowerCase()}-width`)) || 0;
     const borderStyle = style.getPropertyValue(`border-${name.toLowerCase()}-style`);
-    const color = resolveCssColor(style.getPropertyValue(`border-${name.toLowerCase()}-color`));
+    const color = paintColor(style.getPropertyValue(`border-${name.toLowerCase()}-color`), style);
     return width > 0 && borderStyle !== 'none' && borderStyle !== 'hidden' && visible(color)
       ? { width, color: withOpacity(color, context.opacity), dashed: borderStyle === 'dashed' || borderStyle === 'dotted' }
       : null;
@@ -430,7 +439,7 @@ function captureSvg(svg: SVGSVGElement, context: CaptureContext, locale: string)
     if (!matrix) return;
     if (tag === 'text') {
       const text = textTransform(element.textContent ?? '', style, locale).trim();
-      const color = resolveCssColor(style.fill);
+      const color = paintColor(style.fill, style);
       if (!text || !visible(color)) return;
       const rect = element.getBoundingClientRect();
       const scale = Math.sqrt(Math.abs(matrix[0] * matrix[3] - matrix[1] * matrix[2])) || 1;
@@ -480,9 +489,10 @@ function captureSvg(svg: SVGSVGElement, context: CaptureContext, locale: string)
     }
     if (!path.length) return;
     const transformed = transformPath(path, matrix);
-    const fillColor = style.fill === 'none' ? null : resolveCssColor(style.fill);
+    if (!isFinitePath(transformed)) return;
+    const fillColor = style.fill === 'none' ? null : paintColor(style.fill, style);
     const fillOpacity = Number.parseFloat(style.fillOpacity || '1');
-    const strokeColor = style.stroke === 'none' ? null : resolveCssColor(style.stroke);
+    const strokeColor = style.stroke === 'none' ? null : paintColor(style.stroke, style);
     const strokeOpacity = Number.parseFloat(style.strokeOpacity || '1');
     const scale = Math.sqrt(Math.abs(matrix[0] * matrix[3] - matrix[1] * matrix[2])) || 1;
     const rawStrokeWidth = Number.parseFloat(style.strokeWidth) || 1;
@@ -581,30 +591,34 @@ async function mountGraphic(model: SmartGraphicModel, width: number, locale: Loc
   host.style.cssText = `position:fixed;left:-${width * 4}px;top:0;width:${width}px;pointer-events:none;contain:layout style;direction:ltr;font-variant-ligatures:none;`;
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => {
-    root.render(
-      createElement(
-        LocaleContext.Provider,
-        { value: { locale, setLocale: () => undefined, t: (key) => t(locale, key) } },
-        createElement(SmartGraphicCanvas, { graphic: model }),
-      ),
-    );
-  });
-  const canvas = host.querySelector<HTMLElement>('.lwrite-graphic-canvas');
-  if (!canvas) {
+  const unmount = () => {
     root.unmount();
     host.remove();
+  };
+  try {
+    flushSync(() => {
+      root.render(
+        createElement(
+          LocaleContext.Provider,
+          { value: { locale, setLocale: () => undefined, t: (key) => t(locale, key) } },
+          createElement(SmartGraphicCanvas, { graphic: model }),
+        ),
+      );
+    });
+  } catch (error) {
+    // A failed render must not leave the offscreen host in the editor's page.
+    unmount();
+    throw error;
+  }
+  const canvas = host.querySelector<HTMLElement>('.lwrite-graphic-canvas');
+  if (!canvas) {
+    unmount();
     throw new Error('Smart Graphic did not render');
   }
-  return {
-    host,
-    canvas,
-    unmount: () => {
-      root.unmount();
-      host.remove();
-    },
-  };
+  return { host, canvas, unmount };
 }
+
+const FRAME_TIMEOUT_MS = 100;
 
 /** Waits until every font used inside the element is loaded, so line breaks are final. */
 async function settleFonts(element: HTMLElement): Promise<void> {
@@ -616,7 +630,11 @@ async function settleFonts(element: HTMLElement): Promise<void> {
   });
   await Promise.all(Array.from(fonts).map((font) => document.fonts.load(font).catch(() => [])));
   await document.fonts.ready;
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  // One frame for layout; background tabs pause animation frames, so do not wait for long.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+    setTimeout(resolve, FRAME_TIMEOUT_MS);
+  });
 }
 
 /** Renders `model` with the editor's renderer at `width` CSS px and returns its drawing. */

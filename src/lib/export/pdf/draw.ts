@@ -44,6 +44,7 @@ import { resolveFamily } from '../fonts/catalog';
 import type { ExportFontRegistry } from '../fonts/registry';
 import { shapeText } from '../fonts/shaping';
 import { ellipsePath, isGradient, roundedRectPath, type GraphicScene, type PathCommand, type SceneItem, type SceneLinearGradient, type SceneText } from '../graphics/scene';
+import { asciiUri, linkTarget } from '../shared';
 import { DOCUMENT_STYLE, PX_TO_PT, type PageGeometry, type RunStyle } from '../typography';
 import type { PreparedExportImage } from '../types';
 import type { FontMetrics, PdfFontSet, PdfTextFont } from './fonts';
@@ -144,12 +145,14 @@ class PageCanvas {
     return name;
   }
 
-  shading(gradient: SceneLinearGradient, map: (x: number, y: number) => [number, number]): PDFName {
+  /** An axial shading of the gradient's colors (`channel: 'alpha'`: its opacity, in gray). */
+  private shadingObject(gradient: SceneLinearGradient, map: (x: number, y: number) => [number, number], channel: 'color' | 'alpha'): PDFRef {
     const context = this.env.document.context;
     const [x1, y1] = map(gradient.x1, gradient.y1);
     const [x2, y2] = map(gradient.x2, gradient.y2);
     const stops = gradient.stops;
-    const fn = (a: RgbaColor, b: RgbaColor) => context.obj({ FunctionType: 2, Domain: [0, 1], C0: rgbaOf(a), C1: rgbaOf(b), N: 1 });
+    const values = (color: RgbaColor) => (channel === 'color' ? rgbaOf(color) : [color.a]);
+    const fn = (a: RgbaColor, b: RgbaColor) => context.obj({ FunctionType: 2, Domain: [0, 1], C0: values(a), C1: values(b), N: 1 });
     const functions = stops.slice(1).map((stop, index) => fn(stops[index].color, stop.color));
     const shadingFunction =
       functions.length === 1
@@ -161,13 +164,19 @@ class PageCanvas {
             Bounds: stops.slice(1, -1).map((stop) => stop.offset),
             Encode: functions.flatMap(() => [0, 1]),
           });
-    const shading = context.obj({
-      ShadingType: 2,
-      ColorSpace: 'DeviceRGB',
-      Coords: [x1, y1, x2, y2],
-      Function: shadingFunction,
-      Extend: [true, true],
-    });
+    return context.register(
+      context.obj({
+        ShadingType: 2,
+        ColorSpace: channel === 'color' ? 'DeviceRGB' : 'DeviceGray',
+        Coords: [x1, y1, x2, y2],
+        Function: shadingFunction,
+        Extend: [true, true],
+      }),
+    );
+  }
+
+  shading(gradient: SceneLinearGradient, map: (x: number, y: number) => [number, number]): PDFName {
+    const context = this.env.document.context;
     const resources = this.page.node.normalizedEntries().Resources;
     let dict = resources.lookupMaybe(PDFName.of('Shading'), PDFDict);
     if (!dict) {
@@ -176,8 +185,28 @@ class PageCanvas {
     }
     this.shadingCount += 1;
     const name = PDFName.of(`Sh${this.shadingCount}`);
-    dict.set(name, context.register(shading));
+    dict.set(name, this.shadingObject(gradient, map, 'color'));
     return name;
+  }
+
+  /**
+   * The graphics state that gives a gradient its stops' opacity: a constant
+   * alpha when they share one, else a luminosity soft mask of their alphas.
+   */
+  gradientAlpha(gradient: SceneLinearGradient, map: (x: number, y: number) => [number, number]): PDFName | null {
+    const alphas = gradient.stops.map((stop) => stop.color.a);
+    if (alphas.every((alpha) => Math.abs(alpha - alphas[0]) < 0.001)) return this.alpha(alphas[0]);
+    const context = this.env.document.context;
+    const { width, height } = this.page.getSize();
+    const mask = context.formXObject([PDFOperator.of(PDFOperatorNames.ShadingFill, [PDFName.of('Sh0')])], {
+      BBox: [0, 0, width, height],
+      Group: { Type: 'Group', S: 'Transparency', CS: 'DeviceGray' },
+      Resources: { Shading: { Sh0: this.shadingObject(gradient, map, 'alpha') } },
+    });
+    return this.page.node.newExtGState(
+      'GS',
+      context.obj({ Type: 'ExtGState', SMask: { Type: 'Mask', S: 'Luminosity', G: context.register(mask) } }),
+    );
   }
 
   path(commands: PathCommand[], map: (x: number, y: number) => [number, number]): void {
@@ -225,7 +254,7 @@ class PageCanvas {
   }
 
   link(href: string, x: number, top: number, width: number, height: number): void {
-    if (!/^(https?:|mailto:)/i.test(href) || width <= 0) return;
+    if (width <= 0) return;
     const rect: [number, number, number, number] = [this.x(x), this.y(top + height), this.x(x + width), this.y(top)];
     const last = this.links[this.links.length - 1];
     if (last && last.href === href && Math.abs(last.rect[1] - rect[1]) < 0.5 && Math.abs(last.rect[2] - rect[0]) < 2) {
@@ -278,7 +307,8 @@ class PageCanvas {
       segmentStarted = true;
     };
     glyphs.forEach((glyph) => {
-      const extra = options.spaceExtra && /^\s+$/u.test(glyph.text) && glyph.text !== ' ' ? options.spaceExtra : 0;
+      // Justification widens every space but the non-breaking one (as `layoutInline` counts them).
+      const extra = options.spaceExtra && /^\s+$/u.test(glyph.text) && glyph.text !== '\u00a0' ? options.spaceExtra : 0;
       const advance = glyph.advance + extra;
       if (glyph.xOffset || glyph.yOffset) {
         flushSegment();
@@ -321,13 +351,14 @@ class PageCanvas {
     this.page.pushOperators(...this.ops);
     const context = this.env.document.context;
     this.links.forEach(({ href, rect }) => {
-      const annotation = context.obj({
-        Type: 'Annot',
-        Subtype: 'Link',
-        Rect: rect,
-        Border: [0, 0, 0],
-        A: { Type: 'Action', S: 'URI', URI: PDFString.of(href) },
-      });
+      const target = linkTarget(href);
+      // Fragments reaching the PDF go to the start of the document (see `pdfLinkHref`).
+      const first = this.env.document.getPage(0);
+      const action =
+        target.kind === 'fragment'
+          ? { Type: 'Action', S: 'GoTo', D: [first.ref, 'XYZ', null, first.getHeight(), null] }
+          : { Type: 'Action', S: 'URI', URI: PDFString.of(asciiUri(href)) };
+      const annotation = context.obj({ Type: 'Annot', Subtype: 'Link', Rect: rect, Border: [0, 0, 0], A: action });
       this.page.node.addAnnot(context.register(annotation));
     });
   }
@@ -503,6 +534,8 @@ export function drawScene(canvas: PageCanvas, scene: GraphicScene, x: number, y:
       if (item.fill) {
         canvas.ops.push(pushGraphicsState());
         if (isGradient(item.fill)) {
+          const gs = canvas.gradientAlpha(item.fill, map);
+          if (gs) canvas.ops.push(setGraphicsState(gs));
           canvas.path(item.path, map);
           canvas.ops.push(clip(), endPath(), PDFOperator.of(PDFOperatorNames.ShadingFill, [canvas.shading(item.fill, map)]));
         } else {

@@ -42,6 +42,42 @@ export function escapeXmlAttr(value: string): string {
   return escapeXml(value).replace(/\r?\n/g, ' ');
 }
 
+/**
+ * Where a document link points, as export formats address it. Model links
+ * follow the editor's policy (`normalizeLinkUrl`): web and mail addresses,
+ * fragments and relative paths, which stay relative to the exported file.
+ */
+export type LinkTarget =
+  | { kind: 'web'; href: string }
+  | { kind: 'relative'; href: string }
+  /** `top`: an empty fragment or `#top`, which browsers scroll to the start of the document. */
+  | { kind: 'fragment'; name: string; top: boolean };
+
+export function linkTarget(href: string): LinkTarget {
+  if (href.startsWith('#')) {
+    let name = href.slice(1);
+    try {
+      name = decodeURIComponent(name);
+    } catch {
+      // Keep a malformed escape as written.
+    }
+    return { kind: 'fragment', name, top: name === '' || name.toLowerCase() === 'top' };
+  }
+  return /^[a-z][a-z\d+.-]*:/i.test(href) ? { kind: 'web', href } : { kind: 'relative', href };
+}
+
+/** A URI as 7-bit ASCII (PDF URI actions), percent-encoding everything else. */
+export function asciiUri(href: string): string {
+  return href.replace(/[^\x21-\x7e]/gu, (character) => {
+    try {
+      return encodeURIComponent(character);
+    } catch {
+      // A lone surrogate has no UTF-8 form.
+      return '%EF%BF%BD';
+    }
+  });
+}
+
 export function getVisibleTextFromRuns(runs: ExportInlineRun[], includeLinks = false): string {
   return normalizeRuns(runs)
     .map((run) => {
@@ -283,13 +319,22 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function bytesToHex(bytes: Uint8Array): string {
-  const digits = '0123456789abcdef';
-  const out = new Array<string>(bytes.length);
+const HEX_DIGITS = Uint8Array.from('0123456789abcdef', (digit) => digit.charCodeAt(0));
+
+/**
+ * Lowercase hex, with a line break after every `perLine` bytes (RTF pictures).
+ * Written into one byte buffer, so a 10 MB image costs one 20 MB string.
+ */
+export function bytesToHex(bytes: Uint8Array, perLine = 0): string {
+  const breaks = perLine > 0 && bytes.length > 0 ? Math.floor((bytes.length - 1) / perLine) : 0;
+  const out = new Uint8Array(bytes.length * 2 + breaks);
+  let position = 0;
   for (let index = 0; index < bytes.length; index += 1) {
-    out[index] = digits[bytes[index] >> 4] + digits[bytes[index] & 15];
+    if (breaks && index > 0 && index % perLine === 0) out[position++] = 10;
+    out[position++] = HEX_DIGITS[bytes[index] >> 4];
+    out[position++] = HEX_DIGITS[bytes[index] & 15];
   }
-  return out.join('');
+  return new TextDecoder().decode(out);
 }
 
 const LANGUAGE_TAGS: Record<string, string> = {

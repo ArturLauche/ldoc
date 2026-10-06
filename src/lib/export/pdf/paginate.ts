@@ -31,10 +31,13 @@ function bottomOf(atom: Atom): number {
   return atom.y + atom.height + atom.insetAfter;
 }
 
-/** The first atom of the next paragraph or block after a keep-with-next chain. */
+/**
+ * The first atom after a keep-with-next chain (heading lines, then a table's
+ * header rows): a heading stays with the first body row below its table header.
+ */
 function nextKeepTarget(atoms: Atom[], index: number): number {
   let next = index + 1;
-  while (next < atoms.length && atoms[next].keepWithNext && atoms[next].kind !== 'table') next += 1;
+  while (next < atoms.length && atoms[next].keepWithNext) next += 1;
   return Math.min(next, atoms.length - 1);
 }
 
@@ -63,8 +66,10 @@ export function paginate(galley: Galley, pageHeight: number): Page[] {
 
     if (!breakBefore && hasContent && atom.keepWithNext) {
       const target = atoms[nextKeepTarget(atoms, index)];
-      // Keep a heading with the first line of the following block.
-      if (target !== atom && target.kind === 'line' && !fits(target)) breakBefore = true;
+      // Keep a heading with the first line, row, image or graphic that follows it,
+      // unless that is a table row too tall for a page, which is split here anyway.
+      const splitsHere = target.kind === 'table' && target.height > pageHeight - repeatedHeaderHeight(galley, target);
+      if (target !== atom && !splitsHere && !fits(target)) breakBefore = true;
     }
     if (!breakBefore && hasContent && atom.kind === 'line' && atom.paragraph.count >= 2) {
       const { index: line, count } = atom.paragraph;

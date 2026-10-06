@@ -24,6 +24,9 @@ export interface SvgOptions {
   idPrefix?: string;
 }
 
+/** Attribute names callers may add to the root element (letters, digits, `-`, `:`). */
+const ATTRIBUTE_NAME = /^[a-z][a-z0-9:-]*$/i;
+
 let svgCounter = 0;
 
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -146,6 +149,7 @@ export function sceneToSvg(scene: GraphicScene, options: SvgOptions = {}): strin
   const width = round(scene.width);
   const height = round(scene.height);
   const extra = Object.entries(options.attributes ?? {})
+    .filter(([name]) => ATTRIBUTE_NAME.test(name))
     .map(([name, value]) => ` ${name}="${escapeXml(value)}"`)
     .join('');
   const title = options.title ? `<title>${escapeXml(options.title)}</title>` : '';

@@ -44,6 +44,10 @@ describe('sfnt writer', () => {
     expect(reparsed.numGlyphs).toBe(5);
     expect(reparsed.familyName).toBe('DM Sans');
     expect(reparsed['OS/2']?.usWeightClass).toBe(600);
+    // The upstream copyright and license notices stay in the instance's name table.
+    expect(reparsed.getName('copyright')).toBe(instance.getName('copyright'));
+    expect(reparsed.getName('copyright')).toContain('DM Sans Project Authors');
+    expect(reparsed.getName('license')).toContain('Open Font License');
     const original = instance.glyphForCodePoint(0x48);
     const copy = reparsed.glyphForCodePoint(0x48);
     expect(copy.id).toBe(built.glyphMaps[0].get(original.id));

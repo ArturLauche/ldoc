@@ -14,6 +14,7 @@ import type {
   ExportTextBlock,
 } from './types';
 import { hasVisibleText, normalizeRuns } from './shared';
+import { normalizeLinkUrl } from '@/lib/links';
 import { primaryFamilyName } from './fonts/catalog';
 import type { Locale } from '@/lib/translations';
 import { parseSmartGraphicFromDom, parseSmartGraphicJson } from '@/lib/smartGraphic';
@@ -29,8 +30,9 @@ const BLOCK_TAGS = new Set(['blockquote', 'div', 'h1', 'h2', 'h3', 'hr', 'img', 
 
 // Placeholder for whitespace that came from source line breaks: it is a
 // space inside a paragraph but trimmed at paragraph edges (HTML formatting),
-// while spaces the author typed are kept.
-const SOFT_SPACE = '';
+// while spaces the author typed are kept. The HTML parser drops U+0000 from
+// text, so the placeholder cannot collide with document characters.
+const SOFT_SPACE = '\u0000';
 
 /**
  * Builds the format-neutral document model from sanitized editor HTML. This
@@ -101,22 +103,22 @@ function parseElementAsBlocks(element: HTMLElement, inherited: ExportInlineMarks
     case 'h3':
       return parseParagraphElement(element, 'heading', inherited, Number(tag.slice(1)) as 1 | 2 | 3);
     case 'pre':
-      return [{ type: 'code-block', text: (element.textContent ?? '').replace(/\r\n?/g, '\n').replace(/\n$/, '') }];
+      return [{ type: 'code-block', text: preformattedText(element).replace(/\r\n?/g, '\n').replace(/\n$/, '') }];
     case 'blockquote': {
-      const blocks = parseChildrenAsBlocks(element, inherited);
+      const blocks = parseChildrenAsBlocks(element, containerMarks(element, inherited));
       return [{ type: 'blockquote', blocks: blocks.length ? blocks : [emptyParagraph()] }];
     }
     case 'ul':
     case 'ol':
-      return [parseList(element as HTMLOListElement | HTMLUListElement, inherited)];
+      return [parseList(element as HTMLOListElement | HTMLUListElement, containerMarks(element, inherited))];
     case 'hr':
       return [{ type: 'horizontal-rule' }];
     case 'img':
       return [parseImage(element as HTMLImageElement)];
     case 'table':
-      return [parseTable(element as HTMLTableElement)];
+      return [parseTable(element as HTMLTableElement, inherited)];
     default:
-      return parseChildrenAsBlocks(element, inherited);
+      return parseChildrenAsBlocks(element, containerMarks(element, inherited));
   }
 }
 
@@ -165,13 +167,14 @@ function parseList(element: HTMLOListElement | HTMLUListElement, inherited: Expo
   const items = Array.from(element.children)
     .filter((child): child is HTMLLIElement => child.tagName.toLowerCase() === 'li')
     .map((item) => {
-      const blocks = parseChildrenAsBlocks(item, inherited);
+      const blocks = parseChildrenAsBlocks(item, containerMarks(item, inherited));
       return { blocks: blocks.length ? blocks : [emptyParagraph()] };
     });
   return { type: 'list', ordered, start, items };
 }
 
-function parseTable(table: HTMLTableElement): ExportTableBlock {
+function parseTable(table: HTMLTableElement, inherited: ExportInlineMarks): ExportTableBlock {
+  const tableMarks = containerMarks(table, inherited);
   const sectionRows = [
     ...Array.from(table.tHead?.rows ?? []),
     ...Array.from(table.tBodies).flatMap((body) => Array.from(body.rows)),
@@ -182,8 +185,11 @@ function parseTable(table: HTMLTableElement): ExportTableBlock {
       cells: Array.from(row.children)
         .filter((cell): cell is HTMLTableCellElement => cell.tagName === 'TD' || cell.tagName === 'TH')
         .map((cell): ExportTableCell => {
-          const blocks = parseChildrenAsBlocks(cell);
           const background = cell.getAttribute('data-background-color') || cell.style.backgroundColor || undefined;
+          // Text inherits the cell's styles; a filled cell's color is its contrast ink (below).
+          const marks = containerMarks(cell, tableMarks);
+          if (background && cell.style.color) delete marks.color;
+          const blocks = parseChildrenAsBlocks(cell, marks);
           return {
             header: cell.tagName === 'TH',
             colSpan: clampSpan(cell.colSpan),
@@ -196,12 +202,12 @@ function parseTable(table: HTMLTableElement): ExportTableBlock {
         }),
     }))
     .filter((row) => row.cells.length);
-  const { widths, fixed } = parseColumnWidths(table, rows);
+  const widths = parseColumnWidths(table, rows);
   return {
     type: 'table',
     borders: table.getAttribute('data-borders') === 'hidden' ? 'hidden' : 'visible',
     rows,
-    ...(widths.some((width) => width !== null) ? { columnWidths: widths, fixedWidth: fixed } : {}),
+    ...(widths.some((width) => width !== null) ? { columnWidths: widths } : {}),
   };
 }
 
@@ -213,10 +219,7 @@ function clampSpan(value: number): number {
  * Column widths as the editor computes them (TipTap `createColGroup`): the
  * first row's `colwidth` attributes, else the `<col>` widths.
  */
-function parseColumnWidths(
-  table: HTMLTableElement,
-  rows: Array<{ cells: ExportTableCell[] }>,
-): { widths: Array<number | null>; fixed: boolean } {
+function parseColumnWidths(table: HTMLTableElement, rows: Array<{ cells: ExportTableCell[] }>): Array<number | null> {
   const firstRow = table.rows[0];
   const widths: Array<number | null> = [];
   if (firstRow) {
@@ -240,7 +243,7 @@ function parseColumnWidths(
   }
   const columnCount = Math.max(widths.length, ...rows.map((row) => row.cells.reduce((sum, cell) => sum + cell.colSpan, 0)));
   while (widths.length < columnCount) widths.push(null);
-  return { widths: widths.slice(0, columnCount), fixed: widths.length > 0 && widths.every((width) => width !== null) };
+  return widths.slice(0, columnCount);
 }
 
 function parseImage(img: HTMLImageElement): ExportImageBlock {
@@ -296,8 +299,6 @@ function parseLegacySmartDiagram(element: HTMLElement): ExportBlock {
   };
 }
 
-const SAFE_HREF = /^(?:https?:\/\/|mailto:|#|\/)/i;
-
 function collectInlineRuns(
   node: Node,
   inheritedMarks: ExportInlineMarks,
@@ -321,8 +322,9 @@ function collectInlineRuns(
   let base = inheritedMarks;
   let link = inheritedLink;
   if (tag === 'a') {
+    // The editor's own link policy: web and mail addresses, fragments and relative paths.
     const href = (element.getAttribute('href') ?? '').trim();
-    if (href && SAFE_HREF.test(href)) {
+    if (href && normalizeLinkUrl(href)) {
       link = { href, ...(element.getAttribute('title') ? { title: element.getAttribute('title') as string } : {}) };
       // The link's own color replaces colors set around it, as in the editor.
       base = { ...inheritedMarks, color: undefined };
@@ -363,6 +365,28 @@ function getInlineMarksFromElement(element: HTMLElement): ExportInlineMarks {
   if (css.verticalAlign === 'sub') marks.subscript = true;
 
   return marks;
+}
+
+/**
+ * Styles a block container (cell, list, quote, div) passes on to its text.
+ * Its background fills the box rather than highlighting text, so it is not a mark.
+ */
+function containerMarks(element: HTMLElement, inherited: ExportInlineMarks): ExportInlineMarks {
+  const own = getInlineMarksFromElement(element);
+  delete own.highlight;
+  return mergeMarks(inherited, own);
+}
+
+/** Text of a code block; line breaks may be newlines or `<br>` elements. */
+function preformattedText(element: HTMLElement): string {
+  let text = '';
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? '';
+    else if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'BR') text += '\n';
+    else node.childNodes.forEach(visit);
+  };
+  element.childNodes.forEach(visit);
+  return text;
 }
 
 function mergeMarks(base: ExportInlineMarks, override: ExportInlineMarks): ExportInlineMarks {

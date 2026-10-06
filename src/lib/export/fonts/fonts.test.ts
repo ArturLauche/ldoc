@@ -5,8 +5,8 @@ import { WarningCollector } from '../warnings';
 import { resolveFamily } from './catalog';
 import { createFontKey, obfuscateFont, odfFaces, wordFaces } from './embedding';
 import { matchFontFace, parseFontFaceCss, parseUnicodeRanges, rangesContain } from './faces';
-import { loadFontkit } from './fontkit';
-import { ExportFontRegistry } from './registry';
+import { loadFontkit, type FontkitFont } from './fontkit';
+import { ExportFontRegistry, type FaceResolution, type LoadedFont } from './registry';
 import { shapeText, splitGraphemes } from './shaping';
 
 let assets: ReturnType<typeof serveExportAssets>;
@@ -93,6 +93,24 @@ describe('ExportFontRegistry', () => {
     expect(warnings.toArray().map((warning) => warning.code)).toContain('font-unavailable');
   });
 
+  it('draws a family whose stylesheet fails to load with the loaded document font', async () => {
+    const served = globalThis.fetch;
+    globalThis.fetch = (input, init) => (String(input).includes('/fonts/lora.css') ? Promise.reject(new Error('offline')) : served(input, init));
+    try {
+      const warnings = new WarningCollector('pdf');
+      const registry = new ExportFontRegistry(warnings);
+      registry.note(style('Lora'), 'Serif only');
+      await registry.load({ instances: true, fallback: false });
+      const resolution = registry.resolve(style('Lora'));
+      expect(resolution.family.name).toBe('DM Sans');
+      expect(resolution.fonts.length).toBeGreaterThan(0);
+      expect(resolution.standard).toBeUndefined();
+      expect(warnings.toArray()).toEqual([expect.objectContaining({ code: 'font-unavailable', detail: 'Lora' })]);
+    } finally {
+      globalThis.fetch = served;
+    }
+  });
+
   it('loads Noto Sans for characters the selected font lacks', async () => {
     const registry = new ExportFontRegistry(new WarningCollector('pdf'));
     registry.note(style('DM Sans'), 'Ελληνικά');
@@ -107,6 +125,28 @@ describe('ExportFontRegistry', () => {
 describe('shaping', () => {
   it('splits grapheme clusters without Intl.Segmenter', () => {
     expect(splitGraphemes('é👍🏽👩‍💻🇩🇪a')).toEqual(['é', '👍🏽', '👩‍💻', '🇩🇪', 'a']);
+  });
+
+  it('maps reordered and inserted glyphs to their text clusters', () => {
+    // A shaper that draws "कि" as [ि, क] (pre-base vowel) and inserts a glyph without code points.
+    const glyph = (id: number, codePoints: number[]) => ({ id, codePoints });
+    const font = {
+      unitsPerEm: 1000,
+      hasGlyphForCodePoint: () => true,
+      layout: () => ({
+        glyphs: [glyph(1, [0x61]), glyph(2, [0x93f]), glyph(3, [0x915]), glyph(4, []), glyph(5, [0x62])],
+        positions: [100, 200, 300, 50, 400].map((xAdvance) => ({ xAdvance, yAdvance: 0, xOffset: 0, yOffset: 0 })),
+      }),
+    } as unknown as FontkitFont;
+    const loaded: LoadedFont = { key: 'k', family: 'Stub', renderWeight: 400, font, ranges: [[0, 0x10ffff]], sourceBytes: new Uint8Array(), sourceUrl: '', fallback: false, italic: false };
+    const resolution: FaceResolution = { requested: resolveFamily('DM Sans'), family: resolveFamily('DM Sans'), cssWeight: 400, renderWeight: 400, syntheticBold: false, syntheticItalic: false, fonts: [loaded] };
+    const [segment] = shapeText('a\u0915\u093fb', resolution, null);
+    expect(segment.glyphs.map((shaped) => shaped.cluster)).toEqual([0, 1, 1, 1, 3]);
+    expect(segment.clusters).toEqual([
+      { start: 0, end: 1, advance: 100 },
+      { start: 1, end: 3, advance: 550 },
+      { start: 3, end: 4, advance: 400 },
+    ]);
   });
 
   it('keeps ligatures off, as the editor does', async () => {

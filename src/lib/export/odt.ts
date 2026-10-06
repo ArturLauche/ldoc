@@ -11,6 +11,7 @@ import { odfFaces } from './fonts/embedding';
 import { ExportFontRegistry } from './fonts/registry';
 import { noteGraphicFonts, prepareGraphicRenditions } from './graphics/renditions';
 import {
+  asciiUri,
   buildTableGrid,
   escapeXml,
   escapeXmlAttr,
@@ -19,6 +20,7 @@ import {
   imageLabel,
   imagePlaceholderRuns,
   languageTag,
+  linkTarget,
   resolveColumnWidths,
 } from './shared';
 import { noteDocumentFonts, styledRuns } from './textUsage';
@@ -51,6 +53,14 @@ import type {
 } from './types';
 import type { WarningCollector } from './warnings';
 
+/** An embedded font file: its editor family, and the family name inside the file. */
+interface FontFile {
+  path: string;
+  bytes: Uint8Array;
+  family: string;
+  face: string;
+}
+
 /**
  * ODT (ODF 1.3): named styles mirroring the editor (headings with outline
  * levels, quotations, table text, preformatted text), automatic styles for
@@ -67,16 +77,25 @@ export async function renderOdt(documentModel: ExportDocumentModel, warnings: Wa
   await registry.load({ instances: true, fallback: false });
   await prepareGraphicRenditions(documentModel, registry, warnings);
 
-  const geometry = pageGeometry(documentModel.locale);
-  const writer = new OdtWriter(geometry, warnings);
-  const body = writer.flow(documentModel.blocks, 'root', { indent: 0 });
-
   // Embedded fonts: every weight of every self-hosted family the text uses.
-  const fontFiles: Array<{ path: string; bytes: Uint8Array; family: string }> = [];
-  odfFaces(registry).forEach((face, index) => {
+  const faces = odfFaces(registry);
+  const fontFiles: FontFile[] = faces.map((face, index) => {
     const slug = `${face.familyName}-${face.styleName}`.replace(/[^A-Za-z0-9-]+/g, '');
-    fontFiles.push({ path: `Fonts/${slug || 'font'}-${index + 1}.ttf`, bytes: face.bytes, family: face.family });
+    return { path: `Fonts/${slug || 'font'}-${index + 1}.ttf`, bytes: face.bytes, family: face.family, face: face.familyName };
   });
+  // LibreOffice has no medium weight (css::awt::FontWeight): text the editor
+  // draws with a 500 face names that face's own family instead.
+  const mediumFaces = new Map(faces.filter((face) => face.weight === 500).map((face) => [face.family, face.familyName]));
+  const namedFace = (style: RunStyle): string | null => {
+    const name = mediumFaces.get(style.family.name);
+    return name && registry.resolve({ family: style.family, weight: style.weight, italic: false }).renderWeight === 500 ? name : null;
+  };
+
+  const geometry = pageGeometry(documentModel.locale);
+  const writer = new OdtWriter(geometry, warnings, namedFace);
+  let body = writer.flow(documentModel.blocks, 'root', { indent: 0 });
+  if (writer.linksToTop) body = withTopBookmark(body);
+
   writer.useFamily(resolveFamily(DEFAULT_DOCUMENT_FAMILY));
   const fontDecls = writer.fontFaceDecls(fontFiles);
   const language = languageTag(documentModel.locale);
@@ -187,12 +206,18 @@ class OdtWriter {
   private readonly styleXml: string[] = [];
   private readonly counters = new Map<string, number>();
   private pendingFloats: string[] = [];
+  /** A link goes to the start of the document (`#` or `#top`). */
+  linksToTop = false;
   private nextFrame = 1;
   private nextTable = 1;
+
+  /** Faces referenced by their own family name, with the family they belong to. */
+  private readonly namedFaces = new Map<string, ResolvedFamily>();
 
   constructor(
     private readonly geometry: PageGeometry,
     private readonly warnings: WarningCollector,
+    private readonly namedFace: (style: RunStyle) => string | null = () => null,
   ) {}
 
   useFamily(family: ResolvedFamily): string {
@@ -237,9 +262,11 @@ class OdtWriter {
   }
 
   private textStyle(style: RunStyle): string {
-    const font = escapeXmlAttr(this.useFamily(style.family));
+    const face = this.namedFace(style);
+    if (face) this.namedFaces.set(face, style.family);
+    const font = escapeXmlAttr(face ?? this.useFamily(style.family));
     const size = pt(style.superscript || style.subscript ? style.parentSizePx : style.sizePx);
-    const weight = style.weight === 400 ? 'normal' : style.weight === 700 ? 'bold' : String(style.weight);
+    const weight = face || style.weight === 400 ? 'normal' : style.weight === 700 ? 'bold' : String(style.weight);
     const attributes = [
       `style:font-name="${font}"`,
       `style:font-name-asian="${font}"`,
@@ -432,14 +459,14 @@ class OdtWriter {
     const span = (text: string, style: RunStyle) => (text ? `<text:span text:style-name="${this.textStyle(style)}">${encoder.encode(text)}</text:span>` : '');
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href && /^(https?:|mailto:)/i.test(href)) {
+      if (href) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(span(runs[index].text, runs[index].style));
           index += 1;
         }
         out.push(
-          `<text:a xlink:type="simple" xlink:href="${escapeXmlAttr(href)}" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">${group.join('')}</text:a>`,
+          `<text:a xlink:type="simple" xlink:href="${escapeXmlAttr(this.odfHref(href))}" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">${group.join('')}</text:a>`,
         );
         continue;
       }
@@ -447,6 +474,21 @@ class OdtWriter {
       index += 1;
     }
     return out.join('');
+  }
+
+  /**
+   * ODF resolves relative references against the package as a folder, so a
+   * path relative to the saved file climbs out of it first. Fragments name
+   * bookmarks; the start of the document gets one.
+   */
+  private odfHref(href: string): string {
+    const target = linkTarget(href);
+    if (target.kind === 'fragment') {
+      if (target.top) this.linksToTop = true;
+      return `#${target.top ? 'top' : target.name}`;
+    }
+    if (target.kind === 'relative' && !href.startsWith('/')) return asciiUri(`../${href.replace(/^\.\//, '')}`);
+    return asciiUri(href);
   }
 
   private code(block: ExportCodeBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
@@ -592,18 +634,23 @@ class OdtWriter {
     );
   }
 
-  fontFaceDecls(fontFiles: Array<{ path: string; family: string }>): string {
-    const faces = Array.from(this.families.values()).map((family) => {
-      const files = fontFiles.filter((file) => file.family === family.name);
+  /** One declaration per family with its embedded files; named faces get their own. */
+  fontFaceDecls(fontFiles: FontFile[]): string {
+    const declaration = (name: string, family: ResolvedFamily, files: FontFile[]) => {
       const source = files.length
         ? `<svg:font-face-src>${files
             .map((file) => `<svg:font-face-uri xlink:href="${file.path}" xlink:type="simple"><svg:font-face-format svg:string="truetype"/></svg:font-face-uri>`)
             .join('')}</svg:font-face-src>`
         : '';
-      const generic = officeFontClass(family);
-      const name = escapeXmlAttr(family.name);
-      return `<style:font-face style:name="${name}" svg:font-family="'${name.replace(/'/g, '')}'" style:font-family-generic="${generic === 'decorative' ? 'decorative' : generic}" style:font-pitch="${isMonospaceFamily(family) ? 'fixed' : 'variable'}">${source}</style:font-face>`;
-    });
+      const escaped = escapeXmlAttr(name);
+      return `<style:font-face style:name="${escaped}" svg:font-family="'${escaped.replace(/'/g, '')}'" style:font-family-generic="${officeFontClass(family)}" style:font-pitch="${isMonospaceFamily(family) ? 'fixed' : 'variable'}">${source}</style:font-face>`;
+    };
+    const faces = [
+      ...Array.from(this.families.values()).map((family) =>
+        declaration(family.name, family, fontFiles.filter((file) => file.family === family.name && !this.namedFaces.has(file.face))),
+      ),
+      ...Array.from(this.namedFaces).map(([face, family]) => declaration(face, family, fontFiles.filter((file) => file.face === face))),
+    ];
     return `<office:font-face-decls>${faces.join('')}</office:font-face-decls>`;
   }
 
@@ -669,4 +716,11 @@ function manifestXml(media: Array<{ path: string; mimeType: string }>, fonts: Ar
   ].join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>${entries}</manifest:manifest>`;
+}
+
+/** Puts a `top` bookmark at the start of the first paragraph. */
+function withTopBookmark(body: string): string {
+  return body.replace(/<text:(p|h)\b([^>]*?)(\/?)>/, (_match, tag: string, attributes: string, empty: string) =>
+    empty ? `<text:${tag}${attributes}><text:bookmark text:name="top"/></text:${tag}>` : `<text:${tag}${attributes}><text:bookmark text:name="top"/>`,
+  );
 }

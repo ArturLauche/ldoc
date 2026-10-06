@@ -17,6 +17,7 @@ import {
   graphicToFallbackBlocks,
   imageLabel,
   imagePlaceholderRuns,
+  linkTarget,
   resolveColumnWidths,
   walkBlocks,
 } from './shared';
@@ -366,14 +367,19 @@ ${body}
     let index = 0;
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href && /^(https?:|mailto:)/i.test(href)) {
+      if (href) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(this.styledRun(runs[index].text, runs[index].style));
           index += 1;
         }
-        const target = rtfText(href.replace(/"/g, '%22'));
-        out.push(`{\\field{\\*\\fldinst{HYPERLINK "${target}"}}{\\fldrslt{${group.join('')}}}}`);
+        // Fragments link to bookmarks (`_top`: the start of the document); paths stay relative.
+        const target = linkTarget(href);
+        const instruction =
+          target.kind === 'fragment'
+            ? `HYPERLINK \\\\l "${rtfText((target.top ? '_top' : target.name).replace(/"/g, ''))}"`
+            : `HYPERLINK "${rtfText(href.replace(/"/g, '%22'))}"`;
+        out.push(`{\\field{\\*\\fldinst{${instruction}}}{\\fldrslt{${group.join('')}}}}`);
         continue;
       }
       out.push(this.styledRun(runs[index].text, runs[index].style));
@@ -471,7 +477,7 @@ ${body}
 
   private picture(image: PreparedExportImage, widthPx: number, heightPx: number, description: string): string {
     const blip = image.mimeType === 'image/png' ? '\\pngblip' : '\\jpegblip';
-    const hex = bytesToHex(image.bytes).replace(/(.{128})/g, '$1\n');
+    const hex = bytesToHex(image.bytes, 64);
     const properties = `{\\*\\picprop{\\sp{\\sn wzDescription}{\\sv ${rtfText(description)}}}}`;
     return `{\\pict${properties}${blip}\\picw${image.width}\\pich${image.height}\\picwgoal${twips(widthPx)}\\pichgoal${twips(heightPx)}\n${hex}}`;
   }

@@ -88,6 +88,8 @@ export interface FontkitFont {
   bbox: FontkitBBox;
   familyName: string;
   postscriptName: string | null;
+  /** A `name` table string (`copyright`, `license`, `licenseURL`, …). */
+  getName(key: string, lang?: string): string | null;
   variationAxes: Record<string, { min: number; default: number; max: number }>;
   directory: { tag?: string; tables: Record<string, FontkitTableEntry | undefined> };
   'OS/2'?: {
@@ -117,10 +119,17 @@ export interface FontkitModule {
 
 let fontkitPromise: Promise<FontkitModule> | null = null;
 
-/** fontkit is large (brotli, shaping tables); load it once, only during an export. */
+/**
+ * fontkit is large (brotli, shaping tables); load it once, only during an
+ * export. A failed load (e.g. a chunk request while offline) is retried next time.
+ */
 export function loadFontkit(): Promise<FontkitModule> {
   fontkitPromise ??= import('@pdf-lib/fontkit').then(
     (module) => (module.default ?? module) as unknown as FontkitModule,
+    (error: unknown) => {
+      fontkitPromise = null;
+      throw error;
+    },
   );
   return fontkitPromise;
 }

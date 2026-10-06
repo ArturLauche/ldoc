@@ -54,7 +54,7 @@ function mostUsed(counts: Map<number, number>, predicate: (weight: number) => bo
 const faceCache = new BoundedCache<EmbeddedFace>(24 * 1024 * 1024, (face) => face.bytes.byteLength);
 
 function buildFace(fonts: LoadedFont[], family: string, weight: number, familyName: string, styleName: string, bold: boolean): EmbeddedFace | null {
-  if (!fonts.length || !fonts[0].font) return null;
+  if (!fonts.length) return null;
   const key = [family, weight, familyName, styleName, bold, ...fonts.map((font) => font.key)].join('|');
   const cached = faceCache.get(key);
   if (cached) return cached;
@@ -125,7 +125,8 @@ export function wordFaces(registry: ExportFontRegistry): Map<string, { regular?:
 /**
  * ODF carries numeric weights, so every weight the document uses gets its own
  * face: 400/700 as the family's Regular/Bold, others as "Family SemiBold" etc.
- * with typographic names, which LibreOffice matches by weight.
+ * with typographic names, which LibreOffice matches by weight (except 500,
+ * which the ODT writer references by the face's own family name).
  */
 export function odfFaces(registry: ExportFontRegistry): EmbeddedFace[] {
   const faces: EmbeddedFace[] = [];

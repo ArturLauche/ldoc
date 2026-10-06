@@ -26,6 +26,7 @@ export type ExportWarningCode =
   | 'image-svg-rasterized'
   | 'image-svg-placeholder'
   | 'image-not-embedded'
+  | 'image-orientation-ignored'
   | 'font-unavailable'
   | 'font-substituted'
   | 'font-not-embedded'
@@ -101,10 +102,11 @@ export interface ExportTableBlock {
   type: 'table';
   rows: ExportTableRow[];
   borders?: 'visible' | 'hidden';
-  /** Column widths in CSS px from the editor's column resizing (null = flexible). */
+  /**
+   * Column widths in CSS px from the editor's column resizing (null = flexible).
+   * When every column has a width the table is that wide instead of filling the page.
+   */
   columnWidths?: Array<number | null>;
-  /** True when every column has a width: the table is that wide instead of filling the page. */
-  fixedWidth?: boolean;
 }
 
 export interface ExportTableRow {

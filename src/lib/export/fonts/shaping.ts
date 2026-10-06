@@ -95,6 +95,48 @@ export function shapeText(text: string, resolution: FaceResolution, fallback: Lo
   return segments;
 }
 
+function codeUnits(codePoints: number[]): number {
+  return codePoints.reduce((length, codePoint) => length + (codePoint > 0xffff ? 2 : 1), 0);
+}
+
+/**
+ * UTF-16 offset of the text each glyph comes from, found by its code points
+ * rather than by counting, so reordered glyphs and glyphs the shaper inserts
+ * (no code points: they join the glyph before) keep the map in step.
+ */
+function glyphTextIndices(text: string, glyphs: Array<{ codePoints: number[] }>): number[] {
+  const offsets: number[] = [];
+  const codePoints: number[] = [];
+  for (let offset = 0; offset < text.length; ) {
+    const codePoint = text.codePointAt(offset) as number;
+    offsets.push(offset);
+    codePoints.push(codePoint);
+    offset += codePoint > 0xffff ? 2 : 1;
+  }
+  const used = new Uint8Array(codePoints.length);
+  let low = 0;
+  const result: number[] = [];
+  glyphs.forEach((glyph) => {
+    let found = -1;
+    const first = glyph.codePoints[0];
+    // Reordering stays local; a bounded window keeps long runs linear.
+    for (let index = low; first !== undefined && index < Math.min(codePoints.length, low + 16); index += 1) {
+      if (!used[index] && codePoints[index] === first) {
+        found = index;
+        break;
+      }
+    }
+    if (found < 0) {
+      result.push(result.length ? result[result.length - 1] : 0);
+      return;
+    }
+    for (let index = found; index < Math.min(codePoints.length, found + glyph.codePoints.length); index += 1) used[index] = 1;
+    while (low < codePoints.length && used[low]) low += 1;
+    result.push(offsets[found]);
+  });
+  return result;
+}
+
 function shapeSegment(text: string, font: LoadedFont | null, start: number): ShapedSegment {
   if (!font) {
     const clusters = splitGraphemes(text).reduce<Array<{ start: number; end: number; advance: number }>>((all, grapheme) => {
@@ -105,27 +147,40 @@ function shapeSegment(text: string, font: LoadedFont | null, start: number): Sha
     return { font: null, text, start, end: start + text.length, glyphs: [], clusters };
   }
   const run = font.font.layout(text, NO_LIGATURES);
-  const glyphs: ShapedGlyph[] = [];
-  const clusterAdvance = new Map<number, number>();
-  let cursor = 0;
+  const indices = glyphTextIndices(text, run.glyphs);
+  // A cluster is a run of glyphs whose text ranges touch or overlap: reordered
+  // marks (Indic pre-base vowels) and inserted glyphs join their neighbors.
+  const groups: Array<{ from: number; to: number; advance: number }> = [];
+  const glyphGroup: number[] = [];
   run.glyphs.forEach((glyph, index) => {
-    const position = run.positions[index];
-    const cluster = Math.min(cursor, text.length);
-    glyphs.push({
-      id: glyph.id,
-      advance: position.xAdvance,
-      xOffset: position.xOffset,
-      yOffset: position.yOffset,
-      cluster: start + cluster,
-    });
-    clusterAdvance.set(cluster, (clusterAdvance.get(cluster) ?? 0) + position.xAdvance);
-    cursor += glyph.codePoints.reduce((length, codePoint) => length + (codePoint > 0xffff ? 2 : 1), 0);
+    const from = indices[index];
+    const to = from + Math.max(1, codeUnits(glyph.codePoints));
+    const last = groups[groups.length - 1];
+    if (last && (from < last.to || from === last.from)) {
+      last.from = Math.min(last.from, from);
+      last.to = Math.max(last.to, to);
+      last.advance += run.positions[index].xAdvance;
+    } else {
+      groups.push({ from, to, advance: run.positions[index].xAdvance });
+    }
+    glyphGroup.push(groups.length - 1);
   });
-  const starts = Array.from(clusterAdvance.keys()).sort((a, b) => a - b);
-  const clusters = starts.map((clusterStart, index) => ({
+  // Clusters tile the text: characters the shaper dropped belong to the cluster before them.
+  if (groups.length) groups[0].from = 0;
+  const glyphs: ShapedGlyph[] = run.glyphs.map((glyph, index) => ({
+    id: glyph.id,
+    advance: run.positions[index].xAdvance,
+    xOffset: run.positions[index].xOffset,
+    yOffset: run.positions[index].yOffset,
+    cluster: start + groups[glyphGroup[index]].from,
+  }));
+  const starts = new Map<number, number>();
+  groups.forEach((group) => starts.set(group.from, (starts.get(group.from) ?? 0) + group.advance));
+  const ordered = Array.from(starts.keys()).sort((a, b) => a - b);
+  const clusters = ordered.map((clusterStart, index) => ({
     start: start + clusterStart,
-    end: start + (starts[index + 1] ?? text.length),
-    advance: clusterAdvance.get(clusterStart) ?? 0,
+    end: start + (ordered[index + 1] ?? text.length),
+    advance: starts.get(clusterStart) ?? 0,
   }));
   if (!clusters.length && text.length) clusters.push({ start, end: start + text.length, advance: 0 });
   return { font, text, start, end: start + text.length, glyphs, clusters };

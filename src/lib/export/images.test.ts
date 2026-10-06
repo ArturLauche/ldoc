@@ -171,4 +171,44 @@ describe('readJpegOrientation', () => {
     expect(readJpegOrientation(exif(42, true))).toBe(1);
     expect(readJpegOrientation(Uint8Array.from([0xff, 0xd8, 0xff, 0xda, 0, 2]))).toBe(1);
   });
+
+  it('ignores truncated or malformed EXIF data instead of reading past it', () => {
+    const valid = exif(6, true);
+    // Cut inside the IFD entry: the tag lies beyond the segment's bytes.
+    expect(readJpegOrientation(valid.slice(0, 26))).toBe(1);
+    // An unknown byte order or a missing TIFF magic number.
+    const badOrder = valid.slice();
+    badOrder[12] = 0x58;
+    expect(readJpegOrientation(badOrder)).toBe(1);
+    const badMagic = valid.slice();
+    badMagic[14] = 41;
+    expect(readJpegOrientation(badMagic)).toBe(1);
+    // An IFD offset pointing outside the segment.
+    const farIfd = valid.slice();
+    farIfd[16] = 0xff;
+    expect(readJpegOrientation(farIfd)).toBe(1);
+  });
+
+  it('reports a rotation it cannot apply', async () => {
+    const jpeg = Array.from(exif(6, true).slice(0, -4));
+    // A JPEG with a frame header (SOF0, 2×1 px) after the EXIF segment.
+    const sof = [0xff, 0xc0, 0, 11, 8, 0, 1, 0, 2, 1, 1, 0x11, 0, 0xff, 0xda, 0, 2];
+    const src = `data:image/jpeg;base64,${btoa(String.fromCharCode(...jpeg, ...sof))}`;
+    // The browser cannot decode the photo, so it cannot be redrawn upright.
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          queueMicrotask(() => this.onerror?.());
+        }
+      },
+    );
+    const warnings = new WarningCollector('docx');
+    const model = await prepareExportImages(documentWithImages(`<img src="${src}" alt="Photo">`), warnings);
+    // The photo keeps its stored orientation, with a warning.
+    expect(warnings.toArray().map((warning) => warning.code)).toEqual(['image-orientation-ignored']);
+    expect(model.blocks[0]).toMatchObject({ prepared: { mimeType: 'image/jpeg', width: 2, height: 1 } });
+  });
 });

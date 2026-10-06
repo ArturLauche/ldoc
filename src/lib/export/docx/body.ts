@@ -1,6 +1,7 @@
 import { toHex } from '../color';
 import { MONOSPACE_FAMILY, resolveFamily, type ResolvedFamily } from '../fonts/catalog';
 import {
+  asciiUri,
   escapeXml,
   escapeXmlAttr,
   expandTableGrid,
@@ -8,6 +9,7 @@ import {
   graphicToFallbackBlocks,
   imageLabel,
   imagePlaceholderRuns,
+  linkTarget,
   resolveColumnWidths,
 } from '../shared';
 import { styledRuns } from '../textUsage';
@@ -82,7 +84,7 @@ export class DocxBodyWriter {
   private hyperlink(href: string): string {
     let id = this.hyperlinks.get(href);
     if (!id) {
-      id = this.relationship(RELATIONSHIP_TYPES.hyperlink, href, true);
+      id = this.relationship(RELATIONSHIP_TYPES.hyperlink, asciiUri(href), true);
       this.hyperlinks.set(href, id);
     }
     return id;
@@ -136,12 +138,11 @@ export class DocxBodyWriter {
           } else {
             this.warnings.add('graphic-layout-simplified');
             const fallback = graphicToFallbackBlocks(block);
-            parts.push({ xml: () => floats.join('') + this.flow(fallback, container === 'cell' ? 'cell' : 'blockquote', scope) });
+            if (floats.length) parts.push({ xml: () => hairlineParagraph(floats) });
+            parts.push({ xml: () => this.flow(fallback, container === 'cell' ? 'cell' : 'blockquote', scope) });
           }
           break;
         case 'table': {
-          // Word needs a paragraph between consecutive tables, or it merges them.
-          if (parts[parts.length - 1]?.table) parts.push({ xml: () => '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>' });
           const gap = before;
           const previous = parts[parts.length - 1];
           if (previous && !previous.table) {
@@ -149,7 +150,10 @@ export class DocxBodyWriter {
             const render = previous.xml;
             previous.xml = (after) => render(Math.max(after, gap));
           }
-          parts.push({ xml: () => floats.join('') + this.table(block, leaf, scope), table: true });
+          // Floats before a table anchor in a hairline paragraph above it. Word also
+          // needs a paragraph between consecutive tables, or it merges them.
+          if (floats.length || previous?.table) parts.push({ xml: () => hairlineParagraph(floats) });
+          parts.push({ xml: () => this.table(block, leaf, scope), table: true });
           break;
         }
         default:
@@ -215,13 +219,20 @@ export class DocxBodyWriter {
     let index = 0;
     while (index < runs.length) {
       const href = runs[index].run.link?.href;
-      if (href && /^(https?:|mailto:)/i.test(href)) {
+      if (href) {
         const group: string[] = [];
         while (index < runs.length && runs[index].run.link?.href === href) {
           group.push(this.run(runs[index].text, runs[index].style, base, true));
           index += 1;
         }
-        out.push(`<w:hyperlink r:id="${this.hyperlink(href)}" w:history="1">${group.join('')}</w:hyperlink>`);
+        const target = linkTarget(href);
+        // Fragments link to bookmarks (`_top` is Word's start of the document);
+        // relative paths stay relative to the saved file, as in the editor.
+        const address =
+          target.kind === 'fragment'
+            ? `w:anchor="${escapeXmlAttr(target.top ? '_top' : target.name)}"`
+            : `r:id="${this.hyperlink(href)}"`;
+        out.push(`<w:hyperlink ${address} w:history="1">${group.join('')}</w:hyperlink>`);
         continue;
       }
       out.push(this.run(runs[index].text, runs[index].style, base, false));
@@ -250,8 +261,9 @@ export class DocxBodyWriter {
     const size = halfPoints(style.superscript || style.subscript ? style.parentSizePx : style.sizePx);
     if (size !== halfPoints(base.sizePx)) props.push(`<w:sz w:val="${size}"/><w:szCs w:val="${size}"/>`);
     // Arbitrary highlight colors are run shading; w:highlight only has 16 colors.
-    if (style.highlight) props.push(`<w:shd w:val="clear" w:color="auto" w:fill="${style.highlight}"/>`);
+    // CT_RPr order: u, then shd, then vertAlign.
     if (style.underline && !link) props.push('<w:u w:val="single"/>');
+    if (style.highlight) props.push(`<w:shd w:val="clear" w:color="auto" w:fill="${style.highlight}"/>`);
     if (style.superscript) props.push('<w:vertAlign w:val="superscript"/>');
     else if (style.subscript) props.push('<w:vertAlign w:val="subscript"/>');
     const rPr = props.length ? `<w:rPr>${props.join('')}</w:rPr>` : '';
@@ -408,6 +420,11 @@ export class DocxBodyWriter {
  * Spacing: before/after in px; the line is the CSS line box in px ("at least"),
  * `single` for picture paragraphs, or null for the style's default.
  */
+/** A 1pt paragraph: anchors floats above a table, and keeps consecutive tables apart. */
+function hairlineParagraph(floats: string[]): string {
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>${floats.join('')}</w:p>`;
+}
+
 function spacing(before: number, after: number, line: number | 'single' | null): string {
   const rule =
     line === 'single' ? ' w:line="240" w:lineRule="auto"' : line !== null ? ` w:line="${twips(line)}" w:lineRule="atLeast"` : '';

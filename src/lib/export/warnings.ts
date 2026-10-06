@@ -9,8 +9,9 @@ export const defaultWarningMessages: Record<ExportWarningCode, string> = {
   'image-decode-failed': 'An image could not be decoded and was replaced with alt text.',
   'image-svg-rasterized': 'An SVG image was converted to a bitmap before export.',
   'image-svg-placeholder': 'An SVG image was replaced with alt text.',
+  'image-orientation-ignored': 'A photo could not be turned upright as it is shown, so it keeps its original orientation.',
   'image-not-embedded':
-    'A remote image could not be embedded, so the exported file still loads it from its original address.',
+    'A remote image could not be embedded and was replaced with its alt text, linked to the image.',
   'font-unavailable':
     'A font could not be loaded, so text in it was exported with the default document font.',
   'font-substituted':

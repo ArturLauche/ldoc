@@ -1,10 +1,10 @@
 import { parseSmartGraphicFromDom, parseSmartGraphicJson, serializeSmartGraphic } from '@/lib/smartGraphic';
 import { cssGenericFamily, resolveFamily } from './fonts/catalog';
 import { matchFontFace, type UnicodeRange } from './fonts/faces';
-import { ExportFontRegistry } from './fonts/registry';
+import { ExportFontRegistry, loadFontLicense } from './fonts/registry';
 import { noteGraphicFonts } from './graphics/renditions';
 import { sceneToSvg } from './graphics/svg';
-import { bytesToBase64, escapeHtmlText, graphicAltText, walkBlocks } from './shared';
+import { bytesToBase64, escapeHtmlText, graphicAltText, imagePlaceholderRuns, walkBlocks } from './shared';
 import { noteDocumentFonts } from './textUsage';
 import { DOCUMENT_STYLE, EDITOR_COLUMN_WIDTH, pageGeometry } from './typography';
 import type { ExportDocumentModel, ExportGraphicBlock, ExportImageBlock } from './types';
@@ -15,7 +15,7 @@ import type { WarningCollector } from './warnings';
  * loss) styled like the editor's page, with everything it needs inside the
  * file: the fonts it uses (only the faces and unicode-range subsets the text
  * needs), images as data URLs, and Smart Graphics as inline SVG. A content
- * security policy blocks scripts and any font or style from elsewhere.
+ * security policy blocks scripts and anything loaded from elsewhere.
  */
 export async function renderHtml(documentModel: ExportDocumentModel, warnings: WarningCollector): Promise<Blob> {
   const registry = new ExportFontRegistry(warnings);
@@ -24,14 +24,24 @@ export async function renderHtml(documentModel: ExportDocumentModel, warnings: W
   await registry.load({ instances: false, fallback: false });
 
   const body = buildBody(documentModel, warnings);
-  const css = `${fontFaceCss(registry)}${documentCss(documentModel)}`;
+  // Embedded fonts carry their license and copyright notice (OFL condition 2).
+  const licenses = new Map<string, string>();
+  await Promise.all(
+    registry.families
+      .filter((usage) => registry.facesOf(usage.family.name))
+      .map(async (usage) => {
+        const license = await loadFontLicense(usage.family.name);
+        if (license) licenses.set(usage.family.name, license);
+      }),
+  );
+  const css = `${fontFaceCss(registry, licenses)}${documentCss(documentModel)}`;
   const language = escapeHtmlText(documentModel.locale);
   const html = `<!DOCTYPE html>
 <html lang="${language}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="light">
 <meta name="generator" content="LWrite">
 <title>${escapeHtmlText(documentModel.name.trim() || 'Untitled')}</title>
@@ -77,10 +87,25 @@ function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollecto
     anchor.setAttribute('rel', 'noopener noreferrer');
   });
 
+  const dataUrls = new Map<string, string>();
   root.querySelectorAll('img').forEach((image) => {
     const src = image.getAttribute('src') ?? '';
-    const original = images.get(src)?.original;
-    if (original) image.setAttribute('src', `data:${original.mimeType};base64,${bytesToBase64(original.bytes)}`);
+    if (!src.startsWith('data:')) {
+      const block = images.get(src);
+      if (!block?.original) {
+        // The file never loads anything from elsewhere: an image it could not
+        // embed becomes its alt text, linked to the image's address.
+        image.replaceWith(missingImage(parsed, src, block ?? { type: 'image', src, alt: image.getAttribute('alt') ?? '' }));
+        return;
+      }
+      const { mimeType, bytes } = block.original;
+      let url = dataUrls.get(src);
+      if (!url) {
+        url = `data:${mimeType};base64,${bytesToBase64(bytes)}`;
+        dataUrls.set(src, url);
+      }
+      image.setAttribute('src', url);
+    }
     if (!image.hasAttribute('alt')) image.setAttribute('alt', '');
     if (!image.hasAttribute('data-align')) {
       const legacy = (image.getAttribute('align') ?? '').toLowerCase();
@@ -132,6 +157,21 @@ function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollecto
   });
 }
 
+function missingImage(doc: Document, src: string, image: ExportImageBlock): HTMLElement {
+  const paragraph = doc.createElement('p');
+  const label = imagePlaceholderRuns(image)[0].text;
+  if (/^https?:\/\//i.test(src)) {
+    const link = doc.createElement('a');
+    link.href = src;
+    link.rel = 'noopener noreferrer';
+    link.textContent = label;
+    paragraph.appendChild(link);
+  } else {
+    paragraph.textContent = label;
+  }
+  return paragraph;
+}
+
 function unicodeRangeCss(ranges: UnicodeRange[]): string {
   return ranges
     .map(([low, high]) => {
@@ -150,13 +190,14 @@ function isWoff2(bytes: Uint8Array): boolean {
  * for consecutive weights that share a file (one variable font declared per
  * weight) are merged into one weight range so the file is embedded once.
  */
-function fontFaceCss(registry: ExportFontRegistry): string {
+function fontFaceCss(registry: ExportFontRegistry, licenses: Map<string, string>): string {
   const rules: string[] = [];
   registry.families.forEach((usage) => {
     const familyName = usage.family.name;
     const faces = registry.facesOf(familyName);
     if (!faces) return;
-    const files = new Map(registry.loadedFonts(familyName).map((font) => [font.sourceUrl, font.sourceBytes]));
+    const firstRule = rules.length;
+    const files = new Map(registry.loadedFiles(familyName).map((file) => [file.sourceUrl, file.sourceBytes]));
     // Faces the text's weights select; each embedded rule must contain one.
     const used = new Set(Array.from(usage.weights.keys()).map((weight) => matchFontFace(faces, weight)?.face));
     const groups = new Map<string, { style: string; url: string; ranges: UnicodeRange[]; weights: WeightRange[] }>();
@@ -181,6 +222,8 @@ function fontFaceCss(registry: ExportFontRegistry): string {
           );
         });
     });
+    const license = licenses.get(familyName);
+    if (license && rules.length > firstRule) rules.splice(firstRule, 0, `/*! ${familyName}\n\n${license.replace(/\*\//g, '* /')}\n*/`);
   });
   return rules.length ? `${rules.join('\n')}\n` : '';
 }

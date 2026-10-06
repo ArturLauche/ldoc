@@ -19,18 +19,22 @@ export interface FontStyleRequest {
   italic: boolean;
 }
 
-/** One loaded font file at one weight. */
-export interface LoadedFont {
+/** A downloaded font file at one weight (HTML embeds these as they are). */
+export interface LoadedFile {
   key: string;
   family: string;
   renderWeight: number;
-  /** fontkit font, TrueType, instanced at `renderWeight`. */
-  font: FontkitFont;
   /** `unicode-range` of the source rule. */
   ranges: UnicodeRange[];
   /** Original file bytes as served (WOFF2 or TTF). */
   sourceBytes: Uint8Array;
   sourceUrl: string;
+}
+
+/** A file parsed for drawing and embedding (loads with `instances`). */
+export interface LoadedFont extends LoadedFile {
+  /** fontkit font, TrueType, instanced at `renderWeight`. */
+  font: FontkitFont;
   /** True for the Noto Sans fallback, whose italic faces are real italics. */
   fallback: boolean;
   italic: boolean;
@@ -73,8 +77,26 @@ const binaryCache = new BoundedCache<Uint8Array>(12 * 1024 * 1024, (bytes) => by
 const trueTypeCache = new BoundedCache<Uint8Array>(16 * 1024 * 1024, (bytes) => bytes.byteLength);
 const inflight = new Map<string, Promise<Uint8Array>>();
 
+const licenseCache = new Map<string, string>();
+
+/** The bundled upstream license text (with its copyright notice) of a self-hosted family. */
+export async function loadFontLicense(family: string): Promise<string | null> {
+  const slug = slugForFamily(family);
+  const cached = licenseCache.get(slug);
+  if (cached) return cached;
+  try {
+    const text = (await fetchSameOrigin(`/fonts/licenses/${slug}.txt`, (response) => response.text())).replace(/\r\n?/g, '\n').trim();
+    if (!text) return null;
+    licenseCache.set(slug, text);
+    return text;
+  } catch {
+    return null;
+  }
+}
+
 /** Test hook: forget cached font resources. */
 export function clearFontCaches(): void {
+  licenseCache.clear();
   stylesheetCache.clear();
   binaryCache.clear();
   trueTypeCache.clear();
@@ -120,6 +142,7 @@ export class ExportFontRegistry {
   private readonly usage = new Map<string, FamilyUsage>();
   private readonly faces = new Map<string, FontFaceDefinition[]>();
   private readonly unavailable = new Set<string>();
+  private readonly files = new Map<string, LoadedFile>();
   private readonly loaded = new Map<string, LoadedFont>();
   private readonly fallbackFonts = new Map<string, LoadedFont>();
   private fontkit: FontkitModule | null = null;
@@ -156,24 +179,35 @@ export class ExportFontRegistry {
   async load(options: RegistryLoadOptions): Promise<void> {
     this.options = options;
     this.loadedOnce = true;
+    const loadFaces = async (family: ResolvedFamily) => {
+      try {
+        this.faces.set(family.name, await loadStylesheetFaces(family.name));
+      } catch {
+        this.unavailable.add(family.name);
+        this.warnings.add('font-unavailable', family.name);
+      }
+    };
     // Unknown families render in the document font; make sure it is loaded.
     const bundled = new Map<string, ResolvedFamily>();
     this.usage.forEach((entry) => {
       const family = entry.family.kind === 'bundled' ? entry.family : entry.family.kind === 'unknown' ? resolveFamily(DEFAULT_DOCUMENT_FAMILY) : null;
       if (family) bundled.set(family.name, family);
     });
-    await Promise.all(
-      Array.from(bundled.values()).map(async (family) => {
-        try {
-          this.faces.set(family.name, await loadStylesheetFaces(family.name));
-        } catch {
-          this.unavailable.add(family.name);
-          this.warnings.add('font-unavailable', family.name);
-        }
-      }),
-    );
+    await Promise.all(Array.from(bundled.values()).map(loadFaces));
+    // So do families whose stylesheet failed: their text uses the document font.
+    const documentFamily = resolveFamily(DEFAULT_DOCUMENT_FAMILY);
+    if (!this.faces.has(documentFamily.name) && !this.unavailable.has(documentFamily.name) && this.unavailable.size) {
+      await loadFaces(documentFamily);
+    }
 
-    if (options.instances) this.fontkit = await loadFontkit();
+    if (options.instances) {
+      try {
+        this.fontkit = await loadFontkit();
+      } catch {
+        // Without the font engine nothing can be drawn or embedded with the real fonts.
+        this.warnings.add('font-unavailable', 'fontkit', 'The font engine could not be loaded, so this export uses standard fonts instead of embedding the document fonts.');
+      }
+    }
     const jobs = this.plannedFiles();
     await mapWithConcurrency(jobs, 4, async (job) => {
       try {
@@ -226,25 +260,14 @@ export class ExportFontRegistry {
 
   private async loadFile(family: string, url: string, ranges: UnicodeRange[], renderWeight: number): Promise<void> {
     const key = `${family}|${url}|${renderWeight}`;
-    if (this.loaded.has(key)) return;
+    if (this.files.has(key)) return;
     const sourceBytes = await loadBinary(url);
-    let font: FontkitFont | null = null;
-    if (this.fontkit) {
-      const trueType = this.trueTypeFor(url, sourceBytes, this.fontkit);
-      const base = this.fontkit.create(trueType);
-      font = base.variationAxes?.wght ? base.getVariation({ wght: renderWeight }) : base;
-    }
-    this.loaded.set(key, {
-      key,
-      family,
-      renderWeight,
-      font: font as FontkitFont,
-      ranges,
-      sourceBytes,
-      sourceUrl: url,
-      fallback: false,
-      italic: false,
-    });
+    const file: LoadedFile = { key, family, renderWeight, ranges, sourceBytes, sourceUrl: url };
+    this.files.set(key, file);
+    if (!this.fontkit) return;
+    const base = this.fontkit.create(this.trueTypeFor(url, sourceBytes, this.fontkit));
+    const font = base.variationAxes?.wght ? base.getVariation({ wght: renderWeight }) : base;
+    this.loaded.set(key, { ...file, font, fallback: false, italic: false });
   }
 
   private trueTypeFor(url: string, bytes: Uint8Array, fontkit: FontkitModule): Uint8Array {
@@ -365,9 +388,9 @@ export class ExportFontRegistry {
     return this.faces.get(family);
   }
 
-  /** Loaded files for one family, any weight. */
-  loadedFonts(family?: string): LoadedFont[] {
-    return Array.from(this.loaded.values()).filter((font) => !family || font.family === family);
+  /** Downloaded files for one family, any weight. */
+  loadedFiles(family?: string): LoadedFile[] {
+    return Array.from(this.files.values()).filter((file) => !family || file.family === family);
   }
 
   isUnavailable(family: string): boolean {

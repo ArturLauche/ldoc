@@ -1,5 +1,5 @@
 import type { GraphicScene } from '../graphics/scene';
-import { buildTableGrid, graphicToFallbackBlocks, imagePlaceholderRuns, resolveColumnWidths } from '../shared';
+import { buildTableGrid, graphicToFallbackBlocks, imagePlaceholderRuns, linkTarget, resolveColumnWidths } from '../shared';
 import { styledRuns } from '../textUsage';
 import {
   DOCUMENT_STYLE,
@@ -311,6 +311,22 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
   });
 }
 
+/**
+ * The link a PDF can follow: addresses and paths (relative to the PDF, as the
+ * spec resolves URI actions), or the start of the document. Other fragments
+ * name places the PDF has no destination for.
+ */
+function pdfLinkHref(builder: GalleyBuilder, href: string): string | undefined {
+  const target = linkTarget(href);
+  if (target.kind !== 'fragment' || target.top) return href;
+  builder.env.warnings.add(
+    'link-not-supported-by-format',
+    href,
+    'A link to a place in the document was kept as text because the PDF has no destination with that name.',
+  );
+  return undefined;
+}
+
 function layoutText(
   builder: GalleyBuilder,
   block: ExportTextBlock,
@@ -320,11 +336,10 @@ function layoutText(
 ): void {
   const context = textContext(frame, block);
   const base = textBaseStyle(context);
-  const runs: StyledRun[] = styledRuns({ runs: block.runs, context }).map(({ text, style, run }) => ({
-    text,
-    style,
-    ...(run.link?.href ? { href: run.link.href } : {}),
-  }));
+  const runs: StyledRun[] = styledRuns({ runs: block.runs, context }).map(({ text, style, run }) => {
+    const href = run.link?.href ? pdfLinkHref(builder, run.link.href) : undefined;
+    return { text, style, ...(href ? { href } : {}) };
+  });
   if (quotes?.open || quotes?.close) {
     const quoteStyle = styledRuns({ runs: [{ text: '', marks: {} }], context })[0].style;
     if (quotes.open) runs.unshift({ text: DOCUMENT_STYLE.blockquote.open, style: quoteStyle });

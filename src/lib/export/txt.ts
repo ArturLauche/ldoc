@@ -17,13 +17,13 @@ function textWidth(value: string): number {
   return Array.from(value).length;
 }
 
-/** Blocks separated by one blank line. */
-function blocksToText(blocks: ExportBlock[]): string[] {
+/** Blocks separated by one blank line; in a list item, a nested list follows directly. */
+function blocksToText(blocks: ExportBlock[], inListItem = false): string[] {
   const lines: string[] = [];
   blocks.forEach((block) => {
     const blockLines = blockToText(block);
     if (!blockLines.length) return;
-    if (lines.length) lines.push('');
+    if (lines.length && !(inListItem && block.type === 'list')) lines.push('');
     lines.push(...blockLines);
   });
   return lines;
@@ -64,9 +64,10 @@ function listToText(block: ExportListBlock): string[] {
   const lines: string[] = [];
   block.items.forEach((item, index) => {
     const marker = block.ordered ? `${block.start + index}. ` : '- ';
+    // Nested lists indent by the marker width at every level.
     const indent = ' '.repeat(marker.length);
     // Items are compact; paragraphs inside one item keep a blank line.
-    const itemLines = blocksToText(item.blocks);
+    const itemLines = blocksToText(item.blocks, true);
     if (!itemLines.length) {
       lines.push(marker.trimEnd());
       return;

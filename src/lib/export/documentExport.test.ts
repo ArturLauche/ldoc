@@ -83,6 +83,80 @@ next()</code></pre>
     expect(image).toMatchObject({ type: 'image', alt: 'Dot', widthPercent: 50, align: 'right', float: 'right' });
     expect(graphic).toMatchObject({ type: 'graphic', layoutId: 'process-chevron', title: 'Plan', model: expect.objectContaining({ title: 'Plan' }) });
   });
+
+  const runsOf = (html: string) => {
+    const [block] = extractExportDocumentFromHtml({ html, name: 'Doc', locale: 'en' }).blocks;
+    return block.type === 'paragraph' ? block.runs : [];
+  };
+
+  it('keeps every link the editor accepts, including fragments and relative paths', () => {
+    const hrefs = ['#section', '/privacy', './notes.txt', '../shared/plan.odt', 'https://example.com/', 'mailto:a@example.com'];
+    const runs = runsOf(`<p>${hrefs.map((href) => `<a href="${href}">${href}</a> `).join('')}<a href="javascript:alert(1)">x</a></p>`);
+    expect(runs.filter((run) => run.link).map((run) => run.link?.href)).toEqual(hrefs);
+  });
+
+  it('passes styles of table cells and other containers on to their text', () => {
+    const [table] = extractExportDocumentFromHtml({
+      html: '<table><tr><td style="color: red; font-family: Inter; font-size: 20px"><p>Styled</p></td><td data-background-color="#1e40af" style="background-color: #1e40af; color: #f8fafc"><p>Filled</p></td></tr></table><ul style="font-style: italic"><li><p>Item</p></li></ul>',
+      name: 'Doc',
+      locale: 'en',
+    }).blocks;
+    if (table.type !== 'table') throw new Error('expected a table');
+    const [styled, filled] = table.rows[0].cells;
+    const cellRun = (cell: typeof styled) => (cell.blocks[0].type === 'paragraph' ? cell.blocks[0].runs[0] : undefined);
+    expect(cellRun(styled)?.marks).toEqual({ color: 'red', fontFamily: 'Inter', fontSize: '20px' });
+    // A filled cell's contrast ink stays the cell color, and its fill is no text highlight.
+    expect(cellRun(filled)?.marks).toEqual({});
+    expect(filled.color).toBe('rgb(248, 250, 252)');
+  });
+
+  it('keeps line breaks of code blocks and private-use characters in text', () => {
+    const blocks = extractExportDocumentFromHtml({ html: '<pre><code>one<br>two</code></pre><p>Icon \uE000 here</p>', name: 'Doc', locale: 'en' }).blocks;
+    expect(blocks[0]).toEqual({ type: 'code-block', text: 'one\ntwo' });
+    expect(blocks[1]).toMatchObject({ runs: [{ text: 'Icon \uE000 here' }] });
+  });
+});
+
+describe('links in editable formats', () => {
+  const LINKS = '<p><a href="https://example.com/">Web</a> <a href="./notes.txt">Sibling</a> <a href="../up/plan.odt">Parent</a> <a href="/root">Root</a> <a href="#details">Fragment</a> <a href="#top">Top</a></p>';
+
+  it('DOCX: relative paths as relationships, fragments as bookmarks', async () => {
+    const zip = await unzip((await exportAs('docx', LINKS)).blob);
+    const rels = (await zip.file('word/_rels/document.xml.rels')?.async('string')) ?? '';
+    ['https://example.com/', './notes.txt', '../up/plan.odt', '/root'].forEach((target) =>
+      expect(rels).toContain(`Target="${target}" TargetMode="External"`),
+    );
+    const document = (await zip.file('word/document.xml')?.async('string')) ?? '';
+    expect(document).toContain('<w:hyperlink w:anchor="details"');
+    expect(document).toContain('<w:hyperlink w:anchor="_top"');
+    expect(document.match(/<w:hyperlink /g)).toHaveLength(6);
+  });
+
+  it('ODT: paths relative to the file climb out of the package; #top has a bookmark', async () => {
+    const content = (await (await unzip((await exportAs('odt', LINKS)).blob)).file('content.xml')?.async('string')) ?? '';
+    const hrefs = Array.from(content.matchAll(/<text:a [^>]*xlink:href="([^"]+)"/g), (match) => match[1]);
+    expect(hrefs).toEqual(['https://example.com/', '../notes.txt', '../../up/plan.odt', '/root', '#details', '#top']);
+    expect(content).toContain('<text:bookmark text:name="top"/>');
+  });
+
+  it('RTF: hyperlink fields for paths, bookmark switches for fragments', async () => {
+    const rtf = await (await exportAs('rtf', LINKS)).blob.text();
+    ['https://example.com/', './notes.txt', '../up/plan.odt', '/root'].forEach((target) => expect(rtf).toContain(`HYPERLINK "${target}"`));
+    expect(rtf).toContain('HYPERLINK \\\\l "details"');
+    expect(rtf).toContain('HYPERLINK \\\\l "_top"');
+  });
+
+  it('PDF: URI actions for paths, the start for #top, and a warning for other fragments', async () => {
+    const result = await exportAs('pdf', LINKS);
+    const pdf = await PDFDocument.load(await result.blob.arrayBuffer(), { updateMetadata: false });
+    const actions = (pdf.getPage(0).node.Annots()?.asArray() ?? []).map((ref) => pdf.context.lookup(ref, PDFDict).lookup(PDFName.of('A'), PDFDict));
+    const uris = actions.map((action) => {
+      const uri = action.get(PDFName.of('URI'));
+      return uri instanceof PDFString || uri instanceof PDFHexString ? uri.decodeText() : action.get(PDFName.of('S'))?.toString();
+    });
+    expect(uris).toEqual(['https://example.com/', './notes.txt', '../up/plan.odt', '/root', '/GoTo']);
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'link-not-supported-by-format', detail: '#details' })]);
+  });
 });
 
 describe('TXT export', () => {
@@ -112,8 +186,10 @@ describe('TXT export', () => {
       '<ol start="3"><li><p>Three</p><ul><li>Inner</li></ul></li></ol><blockquote><p>Quoted</p><p>Again</p></blockquote><pre><code>if (a) {\n\treturn;\n}</code></pre><hr>',
     );
     await expect(result.blob.text()).resolves.toBe(
-      ['3. Three', '', '   - Inner', '', '> Quoted', '>', '> Again', '', '    if (a) {', '        return;', '    }', '', '-'.repeat(40)].join('\n'),
+      ['3. Three', '   - Inner', '', '> Quoted', '>', '> Again', '', '    if (a) {', '        return;', '    }', '', '-'.repeat(40)].join('\n'),
     );
+    const nested = await exportAs('txt', '<ul><li><p>A</p><ul><li><p>B</p><ol><li><p>C</p><p>C2</p></li></ol></li></ul></li><li><p>D</p></li></ul>');
+    await expect(nested.blob.text()).resolves.toBe(['- A', '  - B', '    1. C', '', '       C2', '- D'].join('\n'));
   });
 
   it('exports leftover smart diagrams as readable text', async () => {
@@ -151,6 +227,9 @@ describe('HTML export', () => {
     expect(html).not.toMatch(/url\((?!data:)/);
     expect(html).not.toContain('/fonts/');
     expect(assets.requests.filter((url) => url.includes('cyrillic'))).toEqual([]);
+    // Each embedded family carries its license with the copyright notice.
+    expect(html).toMatch(/\/\*! DM Sans\n\nCopyright 2014 The DM Sans Project Authors[^]*SIL Open Font License[^]*\*\/\n@font-face\{font-family:'DM Sans'/);
+    expect(html).toMatch(/\/\*! Inter\n\nCopyright 2020 The Inter Project Authors/);
   });
 
   it('mirrors the editor document styles', async () => {
@@ -161,11 +240,13 @@ describe('HTML export', () => {
     expect(html).toContain('.lwrite-document>ul>li p{margin-top:0.75em}');
   });
 
-  it('embeds data images and keeps remote images it cannot download, with a warning', async () => {
+  it('embeds data images and links remote images it cannot download instead of loading them', async () => {
     const result = await exportAs('html', `<img src="${TINY_PNG}" alt="Dot"><img src="https://images.example/remote.png" alt="Remote">`);
     const html = await result.blob.text();
     expect(html).toContain(`src="${TINY_PNG}"`);
-    expect(html).toContain('src="https://images.example/remote.png"');
+    expect(html).not.toContain('src="https://images.example');
+    expect(html).toContain('<p><a href="https://images.example/remote.png" rel="noopener noreferrer">[Image: Remote]</a></p>');
+    expect(html).toContain("img-src data:;");
     expect(result.warnings.map((warning) => warning.code)).toEqual(['image-not-embedded']);
   });
 
@@ -323,6 +404,20 @@ describe('DOCX export', () => {
     expect(documentXml).toMatch(/<w:color w:val="F8FAFC"\/>.*B<\/w:t>/);
   });
 
+  it('keeps the body schema-valid around floats and orders run properties', async () => {
+    const result = await exportAs(
+      'docx',
+      `<img src="${TINY_PNG}" alt="Dot" data-align="left" data-width="10"><table><tr><td><p>Cell</p></td></tr></table><img src="${TINY_PNG}" alt="Dot" data-align="right" data-width="10"><div data-lwrite-graphic='${serializeSmartGraphic(createStarterGraphic('process-chevron'))}'></div><p><u><mark style="background-color: #fef08a">Marked</mark></u></p>`,
+    );
+    const documentXml = (await (await unzip(result.blob)).file('word/document.xml')?.async('string')) ?? '';
+    expectWellFormedXml(documentXml);
+    const body = new DOMParser().parseFromString(documentXml, 'application/xml').getElementsByTagName('w:body')[0];
+    // CT_Body holds paragraphs and tables; floated pictures sit in runs inside paragraphs.
+    expect(Array.from(body.children, (child) => child.tagName).filter((tag) => !['w:p', 'w:tbl', 'w:sectPr'].includes(tag))).toEqual([]);
+    expect(documentXml).toMatch(/<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"\/><\/w:pPr><w:r><w:drawing><wp:anchor[^]*?<\/w:p><w:tbl>/);
+    expect(documentXml).toContain('<w:rPr><w:u w:val="single"/><w:shd w:val="clear" w:color="auto" w:fill="FEF08A"/></w:rPr>');
+  });
+
   it('uses the editor line boxes as at-least line spacing', async () => {
     const zip = await unzip((await exportAs('docx', '<p>Body <span style="font-size: 24px">large</span></p>')).blob);
     const styles = await zip.file('word/styles.xml')?.async('string');
@@ -382,6 +477,15 @@ describe('ODT export', () => {
     expect(stylesXml).toContain('<svg:font-face-uri xlink:href="Fonts/');
     const contentXml = (await zip.file('content.xml')?.async('string')) ?? '';
     expect(contentXml).toContain('fo:font-weight="600"');
+  });
+
+  it('names the medium face, which LibreOffice cannot select by weight', async () => {
+    const zip = await unzip((await exportAs('odt', '<p>Text with a <a href="https://example.com/">link</a></p>')).blob);
+    const contentXml = (await zip.file('content.xml')?.async('string')) ?? '';
+    expect(contentXml).toMatch(/<style:font-face style:name="DM Sans Medium" svg:font-family="'DM Sans Medium'"[^>]*><svg:font-face-src><svg:font-face-uri xlink:href="Fonts\/DMSansMedium-Regular-\d\.ttf"/);
+    // Link text (weight 500) uses that face at normal weight.
+    expect(contentXml).toMatch(/style:font-name="DM Sans Medium"[^>]*fo:font-weight="normal"/);
+    expect(contentXml).not.toContain('fo:font-weight="500"');
   });
 
   it('writes alignment of nested paragraphs, merged and filled cells', async () => {

@@ -237,6 +237,7 @@ async function normalizePreparedImage(
     if (orientation > 1) {
       const rotated = await rasterizeImage(parsed, 'image/jpeg');
       if (rotated) return rotated;
+      warnings.add('image-orientation-ignored', parsed.detail);
     }
     return {
       bytes: parsed.bytes,
@@ -329,28 +330,39 @@ function readJpegDimensions(bytes: Uint8Array): { width: number; height: number 
 /** EXIF orientation (1–8) from a JPEG's APP1 segment; 1 when absent. */
 export function readJpegOrientation(bytes: Uint8Array): number {
   let offset = 2;
-  while (offset + 4 < bytes.length && bytes[offset] === 0xff) {
+  while (offset + 4 <= bytes.length && bytes[offset] === 0xff) {
     const marker = bytes[offset + 1];
-    const length = (bytes[offset + 2] << 8) + bytes[offset + 3];
-    if (marker === 0xe1 && bytes[offset + 4] === 0x45 && bytes[offset + 5] === 0x78 && bytes[offset + 6] === 0x69 && bytes[offset + 7] === 0x66) {
-      const tiff = offset + 10;
-      const little = bytes[tiff] === 0x49;
-      const read16 = (at: number) => (little ? bytes[at] | (bytes[at + 1] << 8) : (bytes[at] << 8) | bytes[at + 1]);
-      const read32 = (at: number) => (little ? read16(at) | (read16(at + 2) << 16) : (read16(at) << 16) | read16(at + 2));
-      const ifd = tiff + read32(tiff + 4);
-      const entries = read16(ifd);
-      for (let index = 0; index < entries; index += 1) {
-        const entry = ifd + 2 + index * 12;
-        if (entry + 10 > bytes.length) break;
-        if (read16(entry) === 0x0112) {
-          const value = read16(entry + 8);
-          return value >= 1 && value <= 8 ? value : 1;
-        }
-      }
-      return 1;
-    }
+    const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
     if (marker === 0xda || length < 2) break;
+    const end = Math.min(bytes.length, offset + 2 + length);
+    const exif = offset + 4;
+    if (marker === 0xe1 && exif + 6 <= end && String.fromCharCode(...bytes.subarray(exif, exif + 4)) === 'Exif' && bytes[exif + 4] === 0 && bytes[exif + 5] === 0) {
+      return exifOrientation(bytes, exif + 6, end);
+    }
     offset += 2 + length;
+  }
+  return 1;
+}
+
+/** Orientation tag of the first TIFF IFD inside an APP1 segment; every read stays inside `end`. */
+function exifOrientation(bytes: Uint8Array, tiff: number, end: number): number {
+  if (tiff + 8 > end) return 1;
+  const order = String.fromCharCode(bytes[tiff], bytes[tiff + 1]);
+  if (order !== 'II' && order !== 'MM') return 1;
+  const little = order === 'II';
+  const read16 = (at: number) => (little ? bytes[at] | (bytes[at + 1] << 8) : (bytes[at] << 8) | bytes[at + 1]);
+  const read32 = (at: number) => (little ? read16(at) + read16(at + 2) * 0x10000 : read16(at) * 0x10000 + read16(at + 2));
+  if (read16(tiff + 2) !== 42) return 1;
+  const ifd = tiff + read32(tiff + 4);
+  if (ifd + 2 > end) return 1;
+  const entries = read16(ifd);
+  for (let index = 0; index < entries; index += 1) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end) break;
+    if (read16(entry) === 0x0112) {
+      const value = read16(entry + 8);
+      return value >= 1 && value <= 8 ? value : 1;
+    }
   }
   return 1;
 }

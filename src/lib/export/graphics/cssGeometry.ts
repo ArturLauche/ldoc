@@ -161,19 +161,20 @@ export function parseBoxShadows(value: string): ParsedBoxShadow[] {
   });
 }
 
-/** `filter: drop-shadow(color x y blur)` (first one), as a shadow. */
+/** The first `drop-shadow()` of a computed `filter`, as a shadow (color and lengths in any order). */
 export function parseDropShadowFilter(value: string): SceneShadow | null {
-  const match = value.match(/drop-shadow\((.*?\))\s*(-?[\d.]+px)\s+(-?[\d.]+px)\s+([\d.]+px)?\)/);
-  if (match) {
-    const color = resolveCssColor(match[1]);
-    if (!color) return null;
-    return { color, dx: Number.parseFloat(match[2]), dy: Number.parseFloat(match[3]), blur: Number.parseFloat(match[4] ?? '0'), spread: 0 };
-  }
-  const alt = value.match(/drop-shadow\((-?[\d.]+px)\s+(-?[\d.]+px)\s+([\d.]+px)\s+(.*?\))\)/);
-  if (!alt) return null;
-  const color = resolveCssColor(alt[4]);
-  if (!color) return null;
-  return { color, dx: Number.parseFloat(alt[1]), dy: Number.parseFloat(alt[2]), blur: Number.parseFloat(alt[3]), spread: 0 };
+  const filter = splitTopLevel(value, ' ').find((part) => part.startsWith('drop-shadow(') && part.endsWith(')'));
+  if (!filter) return null;
+  let color: RgbaColor | null = null;
+  const lengths: number[] = [];
+  splitTopLevel(filter.slice('drop-shadow('.length, -1), ' ').forEach((token) => {
+    if (/^-?[\d.]/.test(token)) lengths.push(Number.parseFloat(token));
+    else color = resolveCssColor(token) ?? color;
+  });
+  const resolved = color as RgbaColor | null;
+  if (!resolved || lengths.length < 2 || !lengths.every(Number.isFinite)) return null;
+  const [dx, dy, blur = 0] = lengths;
+  return { color: resolved, dx, dy, blur, spread: 0 };
 }
 
 /** First `linear-gradient(...)` of a computed background-image, positioned on a box. */

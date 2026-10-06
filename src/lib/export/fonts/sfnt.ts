@@ -518,7 +518,7 @@ export function buildStaticFont(options: StaticFontOptions): StaticFont {
   tables.set('cmap', buildCmap(mapped));
   tables.set('OS/2', buildOs2(primary, options, mapped));
   tables.set('post', buildPost(primary));
-  tables.set('name', buildName(options.names));
+  tables.set('name', buildName({ ...licenseNotices(primary), ...options.names }));
 
   return { bytes: assembleSfnt(tables), glyphMaps, advances, unitsPerEm: primary.unitsPerEm };
 }
@@ -641,6 +641,24 @@ function buildPost(font: FontkitFont): Uint8Array {
   writer.u32(font.post?.isFixedPitch ? 1 : 0);
   for (let index = 0; index < 4; index += 1) writer.u32(0);
   return writer.toBytes();
+}
+
+const OFL_URL = /scripts\.sil\.org\/OFL|openfontlicense\.org/i;
+
+/**
+ * The source's copyright and license notices, which travel with every
+ * instance (OFL condition 2). Web subsets often drop the license
+ * description but keep its URL; for the OFL the standard statement is restored.
+ */
+function licenseNotices(font: FontkitFont): Pick<StaticFontNames, 'copyright' | 'license' | 'licenseUrl'> {
+  const copyright = font.getName('copyright') ?? undefined;
+  const licenseUrl = font.getName('licenseURL') ?? undefined;
+  const license =
+    font.getName('license') ??
+    (licenseUrl && OFL_URL.test(licenseUrl)
+      ? `This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: ${licenseUrl}`
+      : undefined);
+  return { copyright, license, licenseUrl };
 }
 
 function buildName(names: StaticFontNames): Uint8Array {

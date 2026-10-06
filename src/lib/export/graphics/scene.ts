@@ -103,7 +103,7 @@ const KAPPA = 0.5522847498;
 
 /** Rectangle path with elliptical corners, radii scaled down like CSS when they overlap. */
 export function roundedRectPath(x: number, y: number, width: number, height: number, radii?: CornerRadii): PathCommand[] {
-  if (width <= 0 || height <= 0) return [];
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return [];
   const r = radii ?? { tl: [0, 0], tr: [0, 0], br: [0, 0], bl: [0, 0] };
   const scale = Math.min(
     1,
@@ -131,6 +131,7 @@ export function roundedRectPath(x: number, y: number, width: number, height: num
 }
 
 export function ellipsePath(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
+  if (![cx, cy, rx, ry].every(Number.isFinite) || rx <= 0 || ry <= 0) return [];
   const kx = rx * KAPPA;
   const ky = ry * KAPPA;
   return [
@@ -141,6 +142,11 @@ export function ellipsePath(cx: number, cy: number, rx: number, ry: number): Pat
     ['C', cx + kx, cy - ry, cx + rx, cy - ky, cx + rx, cy],
     ['Z'],
   ];
+}
+
+/** True when every coordinate is a finite number (malformed SVG data yields NaN). */
+export function isFinitePath(path: PathCommand[]): boolean {
+  return path.every((command) => command.every((value, index) => index === 0 || Number.isFinite(value)));
 }
 
 export function polygonPath(points: Array<[number, number]>): PathCommand[] {
