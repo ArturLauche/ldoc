@@ -117,9 +117,11 @@ npm run android:debug
 npm run android:test
 # With a booted emulator/device:
 cd android
-./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.leunos.lwrite.OfflineEditorTest
+./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.class=com.leunos.lwrite.OfflineEditorTest
 ```
 
 Java tests cover version/channel/URL/checksum/range trust rules and bounded stream handling. TS tests cover native transfers, cancellation, corrupt replies, updater progress and save-before-departure behavior. Release-script tests verify version ordering and metadata generation. The APK verifier checks Android signatures, package metadata, offline assets and the fixed origin. Actions also runs Android 16 instrumentation with networking disabled: bundled editor launch, IndexedDB reload persistence, real bridge file chunks and content URI opening from a legal screen. It then builds a higher version code with the same development key, replaces the installed APK, cold-starts it and verifies the actual draft/library survived. A screenshot and test reports are uploaded as **LWrite-Android-Emulator**. Run the first phase on a fresh emulator; the opening test rejects an existing nonempty draft. Provider-specific picking/saving/sharing, IME selection and the official release downloader/system installer still need device validation; record those results honestly in the PR.
+
+Keep the `leaveApksInstalledAfterRun` option when checking persistence: Gradle otherwise uninstalls test applications after a connected run, which removes their data. The workflow retains both emulator test phases' reports.
 
 References: [Capacitor 8 Android toolchain](https://capacitorjs.com/docs/updating/8-0), [system bars and insets](https://capacitorjs.com/docs/apis/system-bars), [Android document access](https://developer.android.com/training/data-storage/shared/documents-files).
