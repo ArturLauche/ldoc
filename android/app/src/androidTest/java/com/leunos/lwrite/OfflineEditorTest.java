@@ -16,7 +16,7 @@ import org.junit.runner.RunWith;
 public class OfflineEditorTest {
     private MainActivity launch() {
         Intent intent = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), MainActivity.class)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         return (MainActivity) InstrumentationRegistry.getInstrumentation().startActivitySync(intent);
     }
     private String evaluate(MainActivity activity, String script) throws Exception {
@@ -52,5 +52,14 @@ public class OfflineEditorTest {
         while (!evaluate(activity, "window.__storageResult").contains(marker) && System.currentTimeMillis() < deadline) Thread.sleep(100);
         assertTrue(evaluate(activity, "window.__storageResult").contains(marker));
         evaluate(activity, "indexedDB.deleteDatabase('lwrite-native-test')");
+    }
+
+    @Test public void nativeFileBridgeAcceptsJavascriptIntegerSizesAndOffsets() throws Exception {
+        MainActivity activity = launch();
+        waitForEditor(activity);
+        evaluate(activity, "window.__fileResult=null; (async()=>{ const f=window.Capacitor.Plugins.LWriteFiles; let id; try { ({id}=await f.beginExport({name:'probe.txt',mimeType:'text/plain',size:5})); await f.writeChunk({id,offset:0,data:btoa('hello')}); const chunk=await f.readChunk({id,offset:0}); window.__fileResult=atob(chunk.data); } catch(e){window.__fileResult='error: '+e.message;} finally {if(id) await f.releaseFile({id});} })();");
+        long deadline = System.currentTimeMillis() + 10_000;
+        while ("null".equals(evaluate(activity, "window.__fileResult")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertEquals("\"hello\"", evaluate(activity, "window.__fileResult"));
     }
 }

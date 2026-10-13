@@ -199,7 +199,7 @@ public class LWriteFilesPlugin extends Plugin {
     @PluginMethod public void readChunk(PluginCall call) {
         io.execute(() -> {
             try (RandomAccessFile input = new RandomAccessFile(file(call.getString("id"), ".bin"), "r")) {
-                long offset = call.getLong("offset", -1L);
+                long offset = call.getInt("offset", -1);
                 if (offset < 0 || offset > input.length()) throw new IOException("Invalid offset");
                 input.seek(offset);
                 byte[] buffer = new byte[(int) Math.min(FilePolicy.CHUNK_BYTES, input.length() - offset)];
@@ -213,7 +213,7 @@ public class LWriteFilesPlugin extends Plugin {
         io.execute(() -> {
             String id = UUID.randomUUID().toString();
             try {
-                long size = call.getLong("size", -1L);
+                long size = call.getInt("size", -1);
                 String mime = call.getString("mimeType", "application/octet-stream");
                 if (size < 0 || size > FilePolicy.EXPORT_LIMIT || !mime.matches("[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+")) throw new IOException("Invalid export");
                 try (FileOutputStream ignored = new FileOutputStream(file(id, ".bin"))) { }
@@ -232,7 +232,7 @@ public class LWriteFilesPlugin extends Plugin {
                 if (encoded.length() > FilePolicy.CHUNK_BYTES * 4 / 3 + 4 || !meta.optBoolean("export")) throw new IOException("Invalid chunk");
                 byte[] bytes = Base64.decode(encoded, Base64.NO_WRAP);
                 try (RandomAccessFile output = new RandomAccessFile(file(id, ".bin"), "rw")) {
-                    long offset = call.getLong("offset", -1L);
+                    long offset = call.getInt("offset", -1);
                     if (offset != output.length() || offset + bytes.length > meta.getLong("size")) throw new IOException("Invalid export offset");
                     output.seek(offset);
                     output.write(bytes);
