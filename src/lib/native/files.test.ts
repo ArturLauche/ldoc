@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
-import { deliverNativeBlob, pickFiles, readNativeFile } from './files';
+import { deliverNativeBlob, pickFileBatch, pickFiles, readNativeFile } from './files';
 import { MAX_DOCUMENT_BYTES } from '@/lib/documentLimits';
 
 const bridge = vi.hoisted(() => ({
@@ -50,12 +50,40 @@ describe('Android file bridge', () => {
     bridge.NativeFiles.finishExport.mockResolvedValue({ completed: false });
     expect(await deliverNativeBlob(blob('hello'), 'report.txt', 'save')).toBe(false);
   });
-  it('keeps a shared file readable to other apps and cleans up failed transfers', async () => {
+  it('releases staging after native sharing moves the recipient-visible file', async () => {
     await deliverNativeBlob(blob('hello'), 'report.txt', 'share');
-    expect(bridge.NativeFiles.releaseFile).not.toHaveBeenCalled();
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: file.id });
+    bridge.NativeFiles.releaseFile.mockClear();
     bridge.NativeFiles.writeChunk.mockRejectedValue(new Error('Storage full'));
     await expect(deliverNativeBlob(blob('hello'), 'report.txt', 'save')).rejects.toThrow('Storage full');
     expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: file.id });
+  });
+  it('reads a batch lazily and releases unread files if the import stops', async () => {
+    const second = { ...file, id: '12345678-1234-1234-1234-123456789013', name: 'second.txt' };
+    const third = { ...file, id: '12345678-1234-1234-1234-123456789014', name: 'third.txt' };
+    bridge.NativeFiles.pickFiles.mockResolvedValue({ files: [file, second, third] });
+    const batch = pickFileBatch({ accept: '.txt', kind: 'document', multiple: true });
+    const first = await batch.next();
+    expect(first.value).toMatchObject({ name: 'report.txt' });
+    expect(bridge.NativeFiles.readChunk).toHaveBeenCalledTimes(1);
+    expect(bridge.NativeFiles.releaseFile).not.toHaveBeenCalled();
+    const next = await batch.next();
+    expect(next.value).toMatchObject({ name: 'second.txt' });
+    expect(bridge.NativeFiles.readChunk).toHaveBeenCalledTimes(2);
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: file.id });
+    await batch.return(undefined);
+    expect(bridge.NativeFiles.readChunk).toHaveBeenCalledTimes(2);
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: second.id });
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: third.id });
+  });
+  it('releases the rest of a batch when a provider read fails', async () => {
+    const second = { ...file, id: '12345678-1234-1234-1234-123456789013' };
+    bridge.NativeFiles.pickFiles.mockResolvedValue({ files: [file, second] });
+    bridge.NativeFiles.readChunk.mockRejectedValue(new Error('Provider unavailable'));
+    const batch = pickFileBatch({ accept: '.txt', kind: 'document', multiple: true });
+    await expect(batch.next()).rejects.toThrow('Provider');
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: file.id });
+    expect(bridge.NativeFiles.releaseFile).toHaveBeenCalledWith({ id: second.id });
   });
   it('splits large exports into bounded messages with consecutive offsets', async () => {
     await deliverNativeBlob(blob('x'.repeat(192 * 1024 + 10)), 'large.txt', 'save');

@@ -65,14 +65,7 @@ public class LWriteFilesPlugin extends Plugin {
     @Override public void load() {
         io.execute(() -> {
             try {
-                File[] files = directory().listFiles();
-                if (files != null) for (File entry : files) if (entry.lastModified() < System.currentTimeMillis() - EXPIRY_MS) {
-                    if (entry.isDirectory()) {
-                        File[] children = entry.listFiles();
-                        if (children != null) for (File child : children) child.delete();
-                    }
-                    entry.delete();
-                }
+                FilePolicy.expireFiles(directory(), System.currentTimeMillis() - EXPIRY_MS);
             } catch (IllegalStateException ignored) { incomingError = "Temporary storage unavailable"; }
         });
         receiveIntent(getActivity().getIntent());
@@ -213,6 +206,7 @@ public class LWriteFilesPlugin extends Plugin {
         io.execute(() -> {
             String id = UUID.randomUUID().toString();
             try {
+                FilePolicy.expireFiles(directory(), System.currentTimeMillis() - EXPIRY_MS);
                 long size = call.getInt("size", -1);
                 String mime = call.getString("mimeType", "application/octet-stream");
                 if (size < 0 || size > FilePolicy.EXPORT_LIMIT || !mime.matches("[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+")) throw new IOException("Invalid export");
@@ -250,13 +244,8 @@ public class LWriteFilesPlugin extends Plugin {
                 if (file(id, ".bin").length() != meta.getLong("size") || !meta.optBoolean("export")) throw new IOException("Export is incomplete");
                 String action = call.getString("action");
                 File targetDir = new File(directory(), id);
-                File sharedTarget = new File(targetDir, meta.getString("name"));
-                if ("share".equals(action) || "print".equals(action)) {
-                    if (!targetDir.exists() && !targetDir.mkdir()) throw new IOException("Unable to prepare shared file");
-                    try (InputStream input = new FileInputStream(file(id, ".bin")); OutputStream output = new FileOutputStream(sharedTarget)) {
-                        FilePolicy.copyBounded(input, output, FilePolicy.EXPORT_LIMIT);
-                    }
-                }
+                boolean shared = "share".equals(action) || "print".equals(action);
+                File sharedTarget = shared ? FilePolicy.prepareSharedFile(file(id, ".bin"), targetDir, meta.getString("name")) : null;
                 getActivity().runOnUiThread(() -> {
                     try {
                         if ("save".equals(action)) {
@@ -278,7 +267,10 @@ public class LWriteFilesPlugin extends Plugin {
                             }
                             call.resolve(new JSObject().put("completed", true));
                         } else throw new IOException("Unknown export action");
-                    } catch (Exception error) { call.reject("Unable to deliver export", error); }
+                    } catch (Exception error) {
+                        if (sharedTarget != null) FilePolicy.deleteSharedFile(sharedTarget);
+                        call.reject("Unable to deliver export", error);
+                    }
                 });
             } catch (Exception error) { call.reject("Unable to prepare export", error); }
         });

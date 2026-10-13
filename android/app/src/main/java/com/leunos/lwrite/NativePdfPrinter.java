@@ -44,7 +44,10 @@ final class NativePdfPrinter {
                     } catch (Exception error) { callback.onWriteFailed("Could not print PDF"); }
                 });
             }
-            @Override public void onFinish() { io.shutdown(); }
+            @Override public void onFinish() {
+                io.execute(() -> FilePolicy.deleteSharedFile(file));
+                io.shutdown();
+            }
         }, null);
     }
 }

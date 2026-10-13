@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/components/locale-provider';
@@ -7,6 +7,13 @@ import { FileMenu } from './FileMenu';
 
 const documentLibraryMocks = vi.hoisted(() => ({
   getLibraryDocuments: vi.fn(() => []),
+  importSingleLibraryDocument: vi.fn(),
+}));
+const fileMocks = vi.hoisted(() => ({ pickFileBatch: vi.fn() }));
+
+vi.mock('@/lib/native/files', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/native/files')>(),
+  pickFileBatch: fileMocks.pickFileBatch,
 }));
 
 vi.mock('@/lib/documentLibrary', async (importOriginal) => {
@@ -14,12 +21,15 @@ vi.mock('@/lib/documentLibrary', async (importOriginal) => {
   return {
     ...actual,
     getLibraryDocuments: documentLibraryMocks.getLibraryDocuments,
+    importSingleLibraryDocument: documentLibraryMocks.importSingleLibraryDocument,
   };
 });
 
 describe('FileMenu startup', () => {
   beforeEach(() => {
     documentLibraryMocks.getLibraryDocuments.mockClear();
+    documentLibraryMocks.importSingleLibraryDocument.mockReset();
+    fileMocks.pickFileBatch.mockReset();
   });
 
   it('does not load library documents while the library dialog is closed', () => {
@@ -116,5 +126,46 @@ describe('FileMenu startup', () => {
     await user.click(within(sheet).getByRole('button', { name: 'Version History' }));
     await waitFor(() => expect(onShowVersionHistory).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('dialog', { name: 'File' })).not.toBeInTheDocument();
+  });
+
+  it('finishes saving each selected file before requesting the next and preserves the open draft', async () => {
+    const user = userEvent.setup();
+    const onImportDocument = vi.fn();
+    let finish: (value: { name: string }) => void = () => {};
+    const first = new Promise<{ name: string }>((resolve) => { finish = resolve; });
+    documentLibraryMocks.importSingleLibraryDocument.mockImplementationOnce(() => first).mockResolvedValue({ name: 'Second' });
+    const nextFile = vi.fn();
+    fileMocks.pickFileBatch.mockImplementation(async function* () {
+      yield new File(['first'], 'first.json', { type: 'application/json' });
+      nextFile();
+      yield new File(['second'], 'second.json', { type: 'application/json' });
+    });
+    render(
+      <LocaleProvider>
+        <ConfirmProvider>
+          <FileMenu
+            compact
+            editor={null}
+            documentId="doc-1"
+            documentName="Current draft"
+            setDocumentName={vi.fn()}
+            onSaveDocument={vi.fn()}
+            onLoadDocument={vi.fn()}
+            onCreateNewDocument={vi.fn()}
+            onShowVersionHistory={vi.fn()}
+            onImportDocument={onImportDocument}
+          />
+        </ConfirmProvider>
+      </LocaleProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'File' }));
+    await user.click(screen.getByRole('button', { name: 'Import Single Files' }));
+    await waitFor(() => expect(documentLibraryMocks.importSingleLibraryDocument).toHaveBeenCalledTimes(1));
+    expect(nextFile).not.toHaveBeenCalled();
+    await act(async () => { finish({ name: 'First' }); });
+    await waitFor(() => expect(documentLibraryMocks.importSingleLibraryDocument).toHaveBeenCalledTimes(2));
+    expect(nextFile).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(documentLibraryMocks.getLibraryDocuments).toHaveBeenCalledTimes(1));
+    expect(onImportDocument).not.toHaveBeenCalled();
   });
 });

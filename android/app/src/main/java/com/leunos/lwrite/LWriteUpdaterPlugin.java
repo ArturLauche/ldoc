@@ -116,6 +116,7 @@ public class LWriteUpdaterPlugin extends Plugin {
         // Resolve immediately so the editor never waits for a network operation.
         call.resolve(state());
         io.execute(() -> {
+            boolean acceptedCandidate = false;
             try {
                 ReleaseDescriptor candidate = findRelease();
                 preferences.edit().putLong("lastChecked", System.currentTimeMillis()).apply();
@@ -127,6 +128,7 @@ public class LWriteUpdaterPlugin extends Plugin {
                     if (!candidate.certificate.equals(ApkTrust.certificate(installed))) throw new ReleaseHttp.Failure("integrity", 0);
                     if (!candidate.sameArtifact(available)) clearApkCache();
                     available = candidate;
+                    acceptedCandidate = true;
                     total = candidate.size;
                     if (!preferences.edit().putString("manifest", json(candidate).toString()).commit()) throw new ReleaseHttp.Failure("storage", 0);
                     if (!apk().isFile()) download(candidate);
@@ -138,8 +140,10 @@ public class LWriteUpdaterPlugin extends Plugin {
             } catch (Exception exception) {
                 String code = exception instanceof ReleaseHttp.Failure ? ((ReleaseHttp.Failure) exception).code : exception instanceof IllegalStateException ? "storage" : "network";
                 error = code; phase = "error";
-                if (code.equals("integrity") || code.equals("incompatible")) clearApkCache();
-                if (code.equals("network") || code.equals("rate-limit") || code.equals("release")) {
+                // Invalid new release metadata must not erase a previously
+                // verified download or its resumable partial transfer.
+                if (acceptedCandidate && (code.equals("integrity") || code.equals("incompatible"))) clearApkCache();
+                if (!acceptedCandidate || code.equals("network") || code.equals("rate-limit") || code.equals("release")) {
                     try {
                         if (available != null && apk().isFile()) {
                             ApkTrust.verify(getContext().getPackageManager(), installed, apk(), available);

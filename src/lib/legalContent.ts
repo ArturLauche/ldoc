@@ -116,6 +116,8 @@ export function createLegalCopies(
         heading: 'Recipients / providers',
         bullets: [
           'Hosting / CDN provider: the static site — including its self-hosted web fonts — is delivered by a hosting and CDN/security provider (for the official deployment this is Cloudflare Pages; self-hosted copies may use a different provider depending on deployment configuration).',
+          'GitHub: official Android builds contact GitHub Releases and its download infrastructure for update checks and APK downloads. GitHub receives the network request information described above; no document content is included.',
+          'Destinations you choose: Android passes an exported document to the file provider, sharing application or print service you select.',
           'Image hosts you choose: only when you insert an image by URL, your browser contacts that third-party server.',
           'No analytics, advertising, tracking, session recording, external database, authentication provider or email-delivery service is used by this project.',
         ],
@@ -136,6 +138,7 @@ export function createLegalCopies(
         heading: 'International data transfers',
         paragraphs: [
           'The editing itself happens on your own device. Where server logs are processed, the hosting/CDN provider may operate infrastructure in the EU and in third countries (such as the USA), depending on deployment and routing. Such providers rely on their own safeguards (for example EU standard contractual clauses) for any transfer outside the EU/EEA. Because the web fonts are self-hosted, they involve no separate transfer to a third-party font provider.',
+          'GitHub may process Android update request data in the United States and other countries. Its General Privacy Statement describes the locations, retention and transfer safeguards, including standard contractual clauses and the Data Privacy Framework.',
         ],
       },
       {
@@ -240,6 +243,8 @@ export function createLegalCopies(
         heading: 'Empfänger / Anbieter',
         bullets: [
           'Hosting-/CDN-Anbieter: Die statische Seite – einschließlich ihrer selbst gehosteten Web-Schriftarten – wird über einen Hosting- und CDN-/Sicherheitsanbieter ausgeliefert (für die offizielle Bereitstellung ist dies Cloudflare Pages; selbst gehostete Kopien können je nach Konfiguration einen anderen Anbieter nutzen).',
+          'GitHub: Offizielle Android-Versionen kontaktieren GitHub Releases und dessen Download-Infrastruktur für Update-Prüfungen und APK-Downloads. GitHub erhält die oben beschriebenen Netzwerkdaten; Dokumentinhalte sind nicht enthalten.',
+          'Von dir gewählte Ziele: Android übergibt ein exportiertes Dokument an den von dir gewählten Dateianbieter, die gewählte Anwendung zum Teilen oder den gewählten Druckdienst.',
           'Von dir gewählte Bild-Hosts: Nur wenn du ein Bild per URL einfügst, kontaktiert dein Browser den Server des Dritten.',
           'Es werden keine Analyse-, Werbe-, Tracking- oder Sitzungsaufzeichnungs-Tools, keine externe Datenbank, kein Authentifizierungsanbieter und kein E-Mail-Versanddienst verwendet.',
         ],
@@ -260,6 +265,7 @@ export function createLegalCopies(
         heading: 'Internationale Datenübermittlungen',
         paragraphs: [
           'Die Bearbeitung selbst findet auf deinem eigenen Gerät statt. Soweit Server-Logs verarbeitet werden, kann der Hosting-/CDN-Anbieter – je nach Bereitstellung und Routing – Infrastruktur in der EU und in Drittländern (etwa den USA) betreiben. Solche Anbieter stützen sich für Übermittlungen außerhalb der EU/des EWR auf eigene Garantien (zum Beispiel EU-Standardvertragsklauseln). Da die Web-Schriftarten selbst gehostet werden, ist damit keine gesonderte Übermittlung an einen externen Schriftarten-Anbieter verbunden.',
+          'GitHub kann Netzwerkdaten der Android-Update-Anfragen in den USA und weiteren Ländern verarbeiten. GitHubs allgemeine Datenschutzerklärung beschreibt die Speicherorte, Aufbewahrung und Übermittlungsgarantien, einschließlich Standardvertragsklauseln und des Data Privacy Framework.',
         ],
       },
       {
@@ -358,7 +364,7 @@ export function createLegalCopies(
       {
         heading: 'Third-party services and links',
         paragraphs: [
-          'The site relies on a hosting/CDN provider and may connect to image hosts you choose. Web fonts are self-hosted and served from the same origin, so they do not involve a third-party font provider. Any third parties you do reach (the hosting/CDN provider, or an image host you pick) have their own terms and privacy practices, for which this project is not responsible.',
+          'The site relies on a hosting/CDN provider and may connect to image hosts you choose. Official Android builds also contact GitHub Releases for updates; exported files go to the destination or application you choose. Web fonts are self-hosted or bundled, so they do not involve a third-party font provider. These third parties have their own terms and privacy practices, for which this project is not responsible.',
         ],
       },
       {
@@ -444,7 +450,7 @@ export function createLegalCopies(
       {
         heading: 'Dienste und Links Dritter',
         paragraphs: [
-          'Die Seite nutzt einen Hosting-/CDN-Anbieter und kann sich mit von dir gewählten Bild-Hosts verbinden. Web-Schriftarten werden selbst gehostet und von derselben Adresse ausgeliefert, sodass kein externer Schriftarten-Anbieter beteiligt ist. Die Dritten, die du tatsächlich erreichst (der Hosting-/CDN-Anbieter oder ein von dir gewählter Bild-Host), haben eigene Bedingungen und Datenschutzpraktiken, für die dieses Projekt nicht verantwortlich ist.',
+          'Die Seite nutzt einen Hosting-/CDN-Anbieter und kann sich mit von dir gewählten Bild-Hosts verbinden. Offizielle Android-Versionen kontaktieren außerdem GitHub Releases für Updates; exportierte Dateien gehen an das von dir gewählte Ziel oder die gewählte Anwendung. Schriftarten werden selbst gehostet oder mitgeliefert, sodass kein externer Schriftarten-Anbieter beteiligt ist. Diese Dritten haben eigene Bedingungen und Datenschutzpraktiken, für die dieses Projekt nicht verantwortlich ist.',
         ],
       },
       {

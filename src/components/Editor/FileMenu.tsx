@@ -48,7 +48,7 @@ import { assertDocumentSize } from '@/lib/documentLimits';
 import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/download';
 import { isAndroid } from '@/lib/native/bridge';
-import { deliverNativeBlob, pickFiles } from '@/lib/native/files';
+import { deliverNativeBlob, pickFileBatch, pickFiles } from '@/lib/native/files';
 import { useIncomingAndroidFiles } from '@/hooks/useIncomingAndroidFiles';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
@@ -273,41 +273,39 @@ export const FileMenu = ({
    * (.docx, .odt, .rtf, .html, .txt, ...). The open document is never replaced.
    */
   const handleImportSingleDocument = async () => {
-    let files: File[];
-    try {
-      files = await pickFiles({ accept: `${SUPPORTED_IMPORT_FORMATS},.json,.lwrite.json,application/json`, kind: 'mixed', multiple: true });
-    } catch (error) {
-      logError('Document selection failed', error);
-      toast.error(t('importFailed'));
-      return;
-    }
-    if (files.length === 0) return;
+    if (isImporting) return;
     setIsImporting(true);
     toast.loading(t('importInProgress'), { id: 'import-single' });
     let lastName = '';
     let imported = 0;
     let failed = 0;
-    for (const file of files) {
-      try {
-        assertDocumentSize(file);
-        if (/\.json$/i.test(file.name) || file.type === 'application/json') {
-          const doc = await importSingleLibraryDocument(await file.text());
-          lastName = doc.name;
-        } else {
-          const { importDocument } = await import('./DocumentImporter');
-          const result = await importDocument(file);
-          const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
-          lastName = doc.name;
+    try {
+      for await (const file of pickFileBatch({ accept: `${SUPPORTED_IMPORT_FORMATS},.json,.lwrite.json,application/json`, kind: 'mixed', multiple: true })) {
+        try {
+          assertDocumentSize(file);
+          if (/\.json$/i.test(file.name) || file.type === 'application/json') {
+            const doc = await importSingleLibraryDocument(await file.text());
+            lastName = doc.name;
+          } else {
+            const { importDocument } = await import('./DocumentImporter');
+            const result = await importDocument(file);
+            const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
+            lastName = doc.name;
+          }
+          imported += 1;
+        } catch (error) {
+          logError('Single document import failed', error);
+          failed += 1;
         }
-        imported += 1;
-      } catch (error) {
-        logError('Single document import failed', error);
-        failed += 1;
       }
+      if (imported > 0) await refreshLibraryDocuments();
+    } catch (error) {
+      logError('Document selection failed', error);
+      failed += 1;
+    } finally {
+      setIsImporting(false);
+      toast.dismiss('import-single');
     }
-    await refreshLibraryDocuments();
-    setIsImporting(false);
-    toast.dismiss('import-single');
     if (imported > 0) toast.success(imported === 1 ? `${t('importedSingleDocToast')}: ${lastName}` : `${t('importedSingleDocToast')} (${imported})`);
     if (failed > 0) toast.error(t('importFailed'));
   };

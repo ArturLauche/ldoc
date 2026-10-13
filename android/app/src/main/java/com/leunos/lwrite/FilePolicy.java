@@ -67,6 +67,34 @@ final class FilePolicy {
         return total;
     }
 
+    static File prepareSharedFile(File staged, File targetDirectory, String name) throws IOException {
+        if (!staged.isFile()) throw new IOException("Export staging file is missing");
+        if (!targetDirectory.isDirectory() && !targetDirectory.mkdir()) throw new IOException("Unable to prepare shared file");
+        File target = new File(targetDirectory, safeName(name));
+        if (target.exists() || !staged.renameTo(target)) {
+            targetDirectory.delete();
+            throw new IOException("Unable to move shared file");
+        }
+        return target;
+    }
+
+    static void deleteSharedFile(File target) {
+        if (target.delete()) target.getParentFile().delete();
+    }
+
+    /** Shared recipients need the named file after the chooser has returned. */
+    static void expireFiles(File directory, long cutoff) {
+        File[] entries = directory.listFiles();
+        if (entries == null) return;
+        for (File entry : entries) if (entry.lastModified() < cutoff) {
+            if (entry.isDirectory()) {
+                File[] children = entry.listFiles();
+                if (children != null) for (File child : children) child.delete();
+            }
+            entry.delete();
+        }
+    }
+
     static String readText(File file) throws IOException {
         try (InputStream input = new FileInputStream(file); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             copyBounded(input, output, 16 * 1024);

@@ -25,12 +25,41 @@ export async function readNativeFile(file: NativeFile, maxBytes = MAX_DOCUMENT_B
   return new File(parts, file.name, { type: file.mimeType });
 }
 
-export function pickFiles(options: {
+interface FilePickerOptions {
   accept: string;
   kind: 'document' | 'library' | 'mixed' | 'image';
   multiple?: boolean;
-}): Promise<File[]> {
-  if (isAndroid()) return pickNativeFiles(options);
+}
+
+export async function pickFiles(options: Omit<FilePickerOptions, 'multiple'>): Promise<File[]> {
+  for await (const file of pickFileBatch(options)) return [file];
+  return [];
+}
+
+/** Read each Android file only when its predecessor has finished importing. */
+export async function* pickFileBatch(options: FilePickerOptions): AsyncGenerator<File> {
+  if (!isAndroid()) {
+    yield* await pickBrowserFiles(options);
+    return;
+  }
+  const { files } = await NativeFiles.pickFiles({ kind: options.kind, multiple: options.multiple ?? false });
+  let index = 0;
+  try {
+    for (; index < files.length; index += 1) {
+      const file = files[index];
+      try {
+        yield await readNativeFile(file, options.kind === 'image' ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES);
+      } finally {
+        await NativeFiles.releaseFile({ id: file.id });
+      }
+    }
+  } finally {
+    // Also release unread selections when a read fails or the consumer stops.
+    await Promise.all(files.slice(index + 1).map((file) => NativeFiles.releaseFile({ id: file.id })));
+  }
+}
+
+function pickBrowserFiles(options: FilePickerOptions): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -42,20 +71,8 @@ export function pickFiles(options: {
   });
 }
 
-async function pickNativeFiles(options: { kind: 'document' | 'library' | 'mixed' | 'image'; multiple?: boolean }): Promise<File[]> {
-  const { files } = await NativeFiles.pickFiles({ kind: options.kind, multiple: options.multiple ?? false });
-  try {
-    const result: File[] = [];
-    for (const file of files) result.push(await readNativeFile(file, options.kind === 'image' ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES));
-    return result;
-  } finally {
-    await Promise.all(files.map((file) => NativeFiles.releaseFile({ id: file.id })));
-  }
-}
-
 export async function deliverNativeBlob(blob: Blob, name: string, action: 'save' | 'share' | 'print'): Promise<boolean> {
   const { id } = await NativeFiles.beginExport({ name, mimeType: blob.type.split(';')[0] || 'application/octet-stream', size: blob.size });
-  let handedOff = false;
   try {
     for (let offset = 0; offset < blob.size; offset += CHUNK_BYTES) {
       const bytes = new Uint8Array(await blob.slice(offset, offset + CHUNK_BYTES).arrayBuffer());
@@ -64,10 +81,10 @@ export async function deliverNativeBlob(blob: Blob, name: string, action: 'save'
       await NativeFiles.writeChunk({ id, offset, data: btoa(text) });
     }
     const { completed } = await NativeFiles.finishExport({ id, action });
-    handedOff = completed && action !== 'save';
     return completed;
   } finally {
-    // Shared/printed files stay available to the recipient; native expiry cleans them.
-    if (!handedOff) await NativeFiles.releaseFile({ id });
+    // Native sharing moves the payload to its recipient-visible name. Only that
+    // file remains until expiry; the staging metadata can always be released.
+    await NativeFiles.releaseFile({ id });
   }
 }
