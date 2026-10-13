@@ -1,14 +1,17 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SystemBars, SystemBarsStyle, type PluginListenerHandle } from '@capacitor/core';
 import { toast } from 'sonner';
-import { isAndroid } from '@/lib/native/bridge';
+import { isAndroid, NativeFiles } from '@/lib/native/bridge';
 import { dismissNativeOverlay, flushNativeSession, prepareNativeDeparture } from '@/lib/native/lifecycle';
 import { logWarning } from '@/lib/logger';
 import { readStoredLocale } from '@/lib/localePreference';
 import { getBrowserLocale, t } from '@/lib/translations';
 
 export function NativeRuntime({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const openEditor = useEffectEvent(() => { if (window.location.pathname !== '/') void navigate('/'); });
   useEffect(() => {
     if (!isAndroid()) return;
     const listeners: PluginListenerHandle[] = [];
@@ -26,6 +29,8 @@ export function NativeRuntime({ children }: { children: ReactNode }) {
     styleBars();
     const observer = new MutationObserver(styleBars);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    void NativeFiles.addListener('incomingFiles', () => openEditor()).then(retain)
+      .catch((error: unknown) => logWarning('Native file navigation listener unavailable', error));
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) void flushNativeSession();
     }).then(retain).catch((error: unknown) => logWarning('Native lifecycle listener unavailable', error));
