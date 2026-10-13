@@ -66,10 +66,17 @@ export function createLegalCopies(
         heading: 'About this project',
         paragraphs: [
           formatMessage(
-            '{name} is a free, non-commercial hobby project. It is a browser-only ("local-first") rich text editor: there is no user account, no server-side database, and no cloud sync. The documents you write, your version history, and your theme and language preferences are stored only in your own browser (documents and history in IndexedDB, preferences in localStorage) and are not transmitted to us.',
+            '{name} is a free, non-commercial hobby project. It is a local-first rich text editor for browsers and Android: there is no user account, no server-side database, and no cloud sync. The documents you write, your version history, and your theme and language preferences are stored only on your own device (documents and history in IndexedDB, preferences in localStorage) and are not transmitted to us.',
             v,
           ),
           'This means that, for the core editing features, your content never leaves your device. The sections below explain the few cases where data is nevertheless processed — mainly technical server logs at the hosting provider, which also serves the site’s self-hosted fonts.',
+        ],
+      },
+      {
+        heading: 'Android application and updates',
+        paragraphs: [
+          'The Android application bundles the editor and fonts, so opening and editing local documents does not contact the hosted website. Documents and preferences stay in private app storage. When you save, share or print a document, Android hands the file to the destination or application you choose.',
+          'Official Android builds automatically check GitHub Releases for updates and download newer APKs over HTTPS. These requests disclose ordinary network information, including your IP address, request time and the updater’s user agent, to GitHub and its download infrastructure. The updater does not upload documents or preferences, and comparing installed and available versions happens on your device. Android controls permission and approval for installation.',
         ],
       },
       {
@@ -183,10 +190,17 @@ export function createLegalCopies(
         heading: 'Über dieses Projekt',
         paragraphs: [
           formatMessage(
-            '{name} ist ein kostenloses, nicht-kommerzielles Hobbyprojekt. Es ist ein reiner Browser-Editor („local-first"): Es gibt kein Benutzerkonto, keine serverseitige Datenbank und keine Cloud-Synchronisierung. Die von dir geschriebenen Dokumente, dein Versionsverlauf sowie deine Theme- und Spracheinstellungen werden ausschließlich in deinem eigenen Browser (Dokumente und Verlauf in IndexedDB, Einstellungen in localStorage) gespeichert und nicht an uns übertragen.',
+            '{name} ist ein kostenloses, nicht-kommerzielles Hobbyprojekt. Es ist ein lokaler Editor für Browser und Android („local-first"): Es gibt kein Benutzerkonto, keine serverseitige Datenbank und keine Cloud-Synchronisierung. Die von dir geschriebenen Dokumente, dein Versionsverlauf sowie deine Theme- und Spracheinstellungen werden ausschließlich auf deinem eigenen Gerät (Dokumente und Verlauf in IndexedDB, Einstellungen in localStorage) gespeichert und nicht an uns übertragen.',
             v,
           ),
           'Für die zentralen Editor-Funktionen verlassen deine Inhalte also dein Gerät nicht. Die folgenden Abschnitte erläutern die wenigen Fälle, in denen dennoch Daten verarbeitet werden – vor allem technische Server-Logs beim Hosting-Anbieter, der auch die selbst gehosteten Schriftarten der Seite ausliefert.',
+        ],
+      },
+      {
+        heading: 'Android-Anwendung und Updates',
+        paragraphs: [
+          'Die Android-Anwendung enthält den Editor und die Schriftarten. Beim Öffnen und Bearbeiten lokaler Dokumente wird die gehostete Website nicht kontaktiert. Dokumente und Einstellungen bleiben im privaten App-Speicher. Beim Speichern, Teilen oder Drucken übergibt Android die Datei an das von dir gewählte Ziel oder die gewählte Anwendung.',
+          'Offizielle Android-Versionen prüfen automatisch GitHub Releases auf Updates und laden neuere APKs über HTTPS herunter. Dabei erhält GitHub mit seiner Download-Infrastruktur übliche Netzwerkdaten wie deine IP-Adresse, den Anfragezeitpunkt und den User-Agent des Updaters. Dokumente und Einstellungen werden nicht hochgeladen; installierte und verfügbare Versionen werden auf deinem Gerät verglichen. Android kontrolliert die Berechtigung und Bestätigung für die Installation.',
         ],
       },
       {
