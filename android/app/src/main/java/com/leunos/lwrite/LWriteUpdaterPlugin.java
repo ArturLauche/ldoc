@@ -96,7 +96,12 @@ public class LWriteUpdaterPlugin extends Plugin {
         return state;
     }
     private void publish() { notifyListeners("stateChanged", state()); }
-    private boolean installationAllowed() { return Build.VERSION.SDK_INT < 26 || getContext().getPackageManager().canRequestPackageInstalls(); }
+    private boolean installationAllowed() {
+        if (development()) return false;
+        if (Build.VERSION.SDK_INT < 26) return true;
+        try { return getContext().getPackageManager().canRequestPackageInstalls(); }
+        catch (SecurityException ignored) { return false; }
+    }
     @PluginMethod public void getState(PluginCall call) {
         if (initialized) call.resolve(state());
         else io.execute(() -> call.resolve(state()));

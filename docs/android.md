@@ -22,6 +22,8 @@ Run `npm run android:sync` after web changes before building in Android Studio. 
 
 Development builds are visibly named **LWrite Dev**, use **com.leunos.lwrite.debug**, and disable official updates. They coexist with the production **LWrite/com.leunos.lwrite** application. Their document libraries are separate; move documents using the existing manual library export/import. A debug key cannot update a production installation.
 
+Debug signing keys can differ between local machines and Actions runs. Export the development library before uninstalling a development build to switch keys; official releases always retain the permanent key.
+
 ## Download and install
 
 Every PR and push to `main` runs the [Android workflow](../.github/workflows/android.yml). Open [Actions → Android](https://github.com/ArturLauche/ldoc/actions/workflows/android.yml), select a successful run, then download **LWrite-Android-Debug** under Artifacts. Unzip it and install `LWrite-Android-Debug.apk`. GitHub requires a signed-in account to download workflow artifacts; they expire after 30 days.
@@ -115,9 +117,9 @@ npm run android:debug
 npm run android:test
 # With a booted emulator/device:
 cd android
-./gradlew connectedDebugAndroidTest
+./gradlew :app:connectedDebugAndroidTest
 ```
 
-Java tests cover version/channel/URL/checksum/range trust rules and bounded stream handling. TS tests cover native transfers, cancellation, corrupt replies, updater progress and save-before-departure behavior. Release-script tests verify version ordering and metadata generation. The APK verifier checks Android signatures, package metadata, offline assets and the fixed origin. An emulator/device is still needed to verify provider-specific picking/saving/sharing, IME selection, installer permission and a real signed upgrade; record those results honestly in the PR.
+Java tests cover version/channel/URL/checksum/range trust rules and bounded stream handling. TS tests cover native transfers, cancellation, corrupt replies, updater progress and save-before-departure behavior. Release-script tests verify version ordering and metadata generation. The APK verifier checks Android signatures, package metadata, offline assets and the fixed origin. Actions also runs Android 16 instrumentation with networking disabled: bundled editor launch, IndexedDB reload persistence, real bridge file chunks and content URI opening from a legal screen. Run these instrumentation checks on a fresh emulator; the opening test rejects an existing nonempty draft. Provider-specific picking/saving/sharing, IME selection, installer permission and a real signed upgrade still need device validation; record those results honestly in the PR.
 
 References: [Capacitor 8 Android toolchain](https://capacitorjs.com/docs/updating/8-0), [system bars and insets](https://capacitorjs.com/docs/apis/system-bars), [Android document access](https://developer.android.com/training/data-storage/shared/documents-files).

@@ -1,5 +1,5 @@
 include ':app'
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+// This app uses Capacitor plugins only. Capacitor itself supplies its Cordova
+// compatibility classes; the generated, empty legacy plugin module is unnecessary.
 
 apply from: 'capacitor.settings.gradle'
