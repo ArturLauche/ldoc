@@ -32,7 +32,8 @@ export function NativeRuntime({ children }: { children: ReactNode }) {
     void NativeFiles.addListener('incomingFiles', () => openEditor()).then(retain)
       .catch((error: unknown) => logWarning('Native file navigation listener unavailable', error));
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
-      if (!isActive) void flushNativeSession();
+      if (isActive) styleBars();
+      else void flushNativeSession();
     }).then(retain).catch((error: unknown) => logWarning('Native lifecycle listener unavailable', error));
     void CapacitorApp.addListener('backButton', () => {
       if (backing || dismissNativeOverlay()) return;

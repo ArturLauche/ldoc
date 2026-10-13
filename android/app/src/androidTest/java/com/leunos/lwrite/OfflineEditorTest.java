@@ -4,8 +4,17 @@ import static org.junit.Assert.*;
 import android.content.Intent;
 import android.webkit.WebView;
 import android.content.Context;
+import android.os.Build;
+import android.os.SystemClock;
 import android.net.Uri;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.util.concurrent.CountDownLatch;
@@ -39,6 +48,83 @@ public class OfflineEditorTest {
             Thread.sleep(200);
         } while (System.currentTimeMillis() < deadline);
         fail("Bundled editor did not become editable");
+    }
+
+    private static void waitForSystemBarStyle(MainActivity activity, boolean light) throws Exception {
+        long deadline = System.currentTimeMillis() + 10_000;
+        AtomicReference<Boolean> matched = new AtomicReference<>(false);
+        do {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
+                matched.set(controller.isAppearanceLightStatusBars() == light
+                    && (Build.VERSION.SDK_INT < 26 || controller.isAppearanceLightNavigationBars() == light));
+            });
+            if (matched.get()) return;
+            Thread.sleep(100);
+        } while (System.currentTimeMillis() < deadline);
+        fail("Status and navigation bars did not follow the editor theme: light=" + light);
+    }
+
+    @Test public void systemBarsFollowBothEditorThemes() throws Exception {
+        MainActivity activity = launch();
+        waitForEditor(activity);
+        evaluate(activity, "document.documentElement.classList.remove('dark')");
+        waitForSystemBarStyle(activity, true);
+        evaluate(activity, "document.documentElement.classList.add('dark')");
+        waitForSystemBarStyle(activity, false);
+        evaluate(activity, "document.documentElement.classList.remove('dark')");
+        waitForSystemBarStyle(activity, true);
+    }
+
+    private static void waitForKeyboard(MainActivity activity, boolean visible) throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        AtomicReference<Boolean> matched = new AtomicReference<>(false);
+        do {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(activity.getWindow().getDecorView());
+                matched.set(insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()) == visible);
+            });
+            if (matched.get()) return;
+            Thread.sleep(100);
+        } while (System.currentTimeMillis() < deadline);
+        fail("Android keyboard visibility did not become " + visible);
+    }
+
+    @Test public void nativeTypingKeepsToolbarVisibleAndBackDismissesTheKeyboard() throws Exception {
+        MainActivity activity = launch();
+        waitForEditor(activity);
+        String original = evaluate(activity, "document.querySelector('.ProseMirror').textContent");
+        float density = Float.parseFloat(evaluate(activity, "window.devicePixelRatio"));
+        float x = Float.parseFloat(evaluate(activity, "document.querySelector('.ProseMirror').getBoundingClientRect().left+16")) * density;
+        float y = Float.parseFloat(evaluate(activity, "document.querySelector('.ProseMirror').getBoundingClientRect().top+16")) * density;
+        int[] origin = new int[2];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.getBridge().getWebView().getLocationOnScreen(origin));
+        long now = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x + origin[0], y + origin[1], 0);
+        MotionEvent up = MotionEvent.obtain(now, now + 10, MotionEvent.ACTION_UP, x + origin[0], y + origin[1], 0);
+        down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(down);
+        InstrumentationRegistry.getInstrumentation().sendPointerSync(up);
+        down.recycle(); up.recycle();
+        waitForKeyboard(activity, true);
+        long deadline = System.currentTimeMillis() + 10_000;
+        String toolbarVisible = "(()=>{const r=document.querySelector('.mobile-toolbar').getBoundingClientRect();const v=window.visualViewport;return r.top>=v.offsetTop && r.bottom<=v.offsetTop+v.height+1;})()";
+        while (!"true".equals(evaluate(activity, toolbarVisible)) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertEquals("Mobile controls stay inside the viewport above the native IME", "true", evaluate(activity, toolbarVisible));
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_A);
+        deadline = System.currentTimeMillis() + 10_000;
+        while (original.equals(evaluate(activity, "document.querySelector('.ProseMirror').textContent")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertNotEquals("Native input reaches TipTap", original, evaluate(activity, "document.querySelector('.ProseMirror').textContent"));
+        evaluate(activity, "document.querySelector('.mobile-toolbar [aria-label=\"Undo\"]').click()");
+        deadline = System.currentTimeMillis() + 10_000;
+        while (!original.equals(evaluate(activity, "document.querySelector('.ProseMirror').textContent")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertEquals("Leave the persistence fixture unchanged", original, evaluate(activity, "document.querySelector('.ProseMirror').textContent"));
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+        waitForKeyboard(activity, false);
+        AtomicReference<Boolean> foreground = new AtomicReference<>(false);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> foreground.set(activity.hasWindowFocus()));
+        assertTrue("Back closes the IME before leaving the editor", foreground.get());
     }
     @Test public void bundledEditorAndIndexedDbSurviveAWebViewReload() throws Exception {
         MainActivity activity = launch();
