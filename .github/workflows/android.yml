@@ -1,0 +1,151 @@
+name: Android
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  debug:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --progress=false
+      - run: npm ls --all
+      - run: npm run validate
+      - run: npm run audit
+      - run: npx cap sync android
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947 # v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Build and test the native application
+        working-directory: android
+        run: ./gradlew assembleDebug testDebugUnitTest lintDebug --console=plain
+      - name: Verify the installable APK and bundled editor
+        run: |
+          mkdir -p android-artifacts
+          cp android/app/build/outputs/apk/debug/app-debug.apk android-artifacts/LWrite-Android-Debug.apk
+          node scripts/android/verify-apk.mjs android-artifacts/LWrite-Android-Debug.apk debug android-artifacts/verification.json
+          sha256sum android-artifacts/LWrite-Android-Debug.apk > android-artifacts/LWrite-Android-Debug.apk.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        id: apk
+        with:
+          name: LWrite-Android-Debug
+          path: android-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Link the development download
+        env:
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+        run: echo "[Download LWrite Dev APK]($ARTIFACT_URL) — separate app ID; official updates disabled." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: Android-debug-reports
+          path: android/app/build/reports/
+          if-no-files-found: ignore
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'ArturLauche/ldoc' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Validate stable tag, main ancestry and monotonically increasing version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/android/preflight-release.mjs
+      - name: Require permanent release signing configuration
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          CERTIFICATE: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD CERTIFICATE; do
+            if [ -z "${!name}" ]; then
+              echo "Missing Android release signing configuration: $name. See docs/android.md." >&2
+              exit 1
+            fi
+          done
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --progress=false
+      - run: npm ls --all
+      - run: npm run validate
+      - run: npm run audit
+      - run: npx cap sync android
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947 # v4
+      - run: ./gradlew testDebugUnitTest lintDebug --console=plain
+        working-directory: android
+      - name: Decode the private keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/lwrite-release.jks"
+      - name: Build the signed official APK
+        working-directory: android
+        env:
+          LWRITE_VERSION_NAME: ${{ steps.version.outputs.versionName }}
+          LWRITE_KEYSTORE_PATH: ${{ runner.temp }}/lwrite-release.jks
+          LWRITE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LWRITE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LWRITE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --console=plain
+      - name: Verify signature and package, then generate updater assets
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          APK_NAME: ${{ steps.version.outputs.apkName }}
+          LWRITE_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          mkdir -p android-artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk "android-artifacts/$APK_NAME"
+          node scripts/android/verify-apk.mjs "android-artifacts/$APK_NAME" release android-artifacts/verification.json
+          node scripts/android/release-metadata.mjs "$TAG" "android-artifacts/$APK_NAME" android-artifacts/verification.json
+      - name: Publish official release only after all assets verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          APK_NAME: ${{ steps.version.outputs.apkName }}
+        run: |
+          if ! gh release view "$TAG" --repo ArturLauche/ldoc > /dev/null 2>&1; then
+            gh release create "$TAG" --repo ArturLauche/ldoc --draft --verify-tag --title "LWrite $TAG for Android" --generate-notes --notes-file android-release-notes.md
+          fi
+          gh release upload "$TAG" --repo ArturLauche/ldoc "android-artifacts/$APK_NAME" "android-artifacts/$APK_NAME.sha256" android-artifacts/LWrite-Android-update.json --clobber
+          gh release edit "$TAG" --repo ArturLauche/ldoc --draft=false --prerelease=false --latest
+          echo "[Official Android release](https://github.com/ArturLauche/ldoc/releases/tag/$TAG)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove private signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/lwrite-release.jks"

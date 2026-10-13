@@ -2,6 +2,24 @@
 
 [LWrite](https://write.leunos.com) is a local-first rich-text editor built with React and TipTap. Documents stay in this browser's storage. No account or application backend is required.
 
+LWrite also runs as a bundled, offline Android application. It uses the same editor and local IndexedDB library, with Android file opening/saving/sharing, printing, native navigation and verified automatic APK updates from GitHub Releases. See [Android development, signing and release setup](docs/android.md).
+
+## Android
+
+Use Node/npm versions below plus JDK 21 and Android SDK 36 (Android Studio Otter 2025.2.1+):
+
+```sh
+npm ci --progress=false
+npm run android:debug   # builds android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:open    # Android Studio; sync again after web changes
+```
+
+[Android GitHub Actions](https://github.com/ArturLauche/ldoc/actions/workflows/android.yml) produces **LWrite-Android-Debug** APK artifacts for every PR and push to `main`. Development builds install as **LWrite Dev**, separately from production, and do not receive official updates.
+
+Official `vX.Y.Z` tags on `main` produce signed APKs, checksums and update metadata in [GitHub Releases](https://github.com/ArturLauche/ldoc/releases) after the permanent signing secrets are configured. Generate and securely retain one release keystore; set `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` secrets and the `ANDROID_SIGNING_CERT_SHA256` variable using [the exact setup instructions](docs/android.md#one-time-permanent-signing-setup). Never replace that key between releases.
+
+Install an official APK once. LWrite then checks and downloads newer stable releases automatically; **App updates** shows progress and offers installation when you are ready. Android may require “Allow from this source” for LWrite and always controls installation approval. Downloads and failed update attempts leave documents/settings intact. Documents stay in app storage across restarts and updates; uninstalling or clearing app storage removes them. Use the existing manual library export/import to move or recover documents.
+
 ## Features
 
 - Rich text, headings, nested lists, links, tables, images, and editable graphics.
