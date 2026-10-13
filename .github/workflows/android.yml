@@ -59,6 +59,23 @@ jobs:
         env:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: echo "[Download LWrite Dev APK]($ARTIFACT_URL) — separate app ID; official updates disabled." >> "$GITHUB_STEP_SUMMARY"
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify the bundled editor offline on Android 16
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            adb shell svc wifi disable
+            adb shell svc data disable
+            cd android && ./gradlew :app:connectedDebugAndroidTest --console=plain
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:

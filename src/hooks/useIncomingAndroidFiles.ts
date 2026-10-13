@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { toast } from 'sonner';
 import { isAndroid, NativeFiles, type NativeFile } from '@/lib/native/bridge';
 import { readNativeFile } from '@/lib/native/files';
@@ -9,40 +9,56 @@ import { logWarning } from '@/lib/logger';
 export function useIncomingAndroidFiles(ready: boolean, onFile: (file: File) => Promise<void>): void {
   const { t } = useLocale();
   const draining = useRef(false);
-  useEffect(() => {
-    if (!ready || !isAndroid()) return;
-    let cancelled = false;
-    const drain = async () => {
-      if (draining.current || cancelled) return;
-      draining.current = true;
-      try {
+  const again = useRef(false);
+  const unmounted = useRef(false);
+  const onIncomingFile = useEffectEvent(onFile);
+  const drain = useEffectEvent(async () => {
+    if (!ready || unmounted.current) return;
+    if (draining.current) { again.current = true; return; }
+    draining.current = true;
+    try {
+      do {
+        again.current = false;
         const pending = await NativeFiles.pendingFiles();
         if (pending.error) toast.error(t('importFailed'));
         for (const file of pending.files) {
-          if (cancelled) break;
+          if (unmounted.current) break;
+          let consumed = false;
           try {
-            await onFile(await readNativeFile(file));
+            const content = await readNativeFile(file);
+            if (unmounted.current) break;
+            consumed = true;
+            await onIncomingFile(content);
           } catch (error) {
+            consumed = true;
             logWarning('Incoming document could not be opened', error);
             toast.error(t('importFailed'));
           } finally {
-            await release(file);
+            if (consumed) await release(file);
           }
         }
-      } catch (error) {
-        logWarning('Incoming file queue unavailable', error);
-        toast.error(t('importFailed'));
-      } finally {
-        draining.current = false;
-      }
-    };
-    const listener = NativeFiles.addListener('incomingFiles', () => { void drain(); });
+      } while (again.current && !unmounted.current);
+    } catch (error) {
+      logWarning('Incoming file queue unavailable', error);
+      toast.error(t('importFailed'));
+    } finally {
+      draining.current = false;
+    }
+  });
+  useEffect(() => {
+    if (!isAndroid()) return;
+    unmounted.current = false;
+    const listener = NativeFiles.addListener('incomingFiles', () => { void drain(); }).catch((error: unknown) => {
+      logWarning('Incoming file listener unavailable', error);
+      return null;
+    });
     void listener.then(() => drain());
     return () => {
-      cancelled = true;
-      void listener.then((handle) => handle.remove());
+      unmounted.current = true;
+      void listener.then((handle) => handle?.remove());
     };
-  }, [onFile, ready, t]);
+  }, []);
+  useEffect(() => { if (ready && isAndroid()) void drain(); }, [ready]);
 }
 
 const release = (file: NativeFile) => NativeFiles.releaseFile({ id: file.id });
