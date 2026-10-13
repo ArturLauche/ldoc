@@ -97,6 +97,8 @@ public class OfflineEditorTest {
             while (!evaluate(activity, "document.querySelector('.ProseMirror')?.textContent || ''").contains(marker) && System.currentTimeMillis() < deadline) Thread.sleep(100);
             assertEquals("\"/\"", evaluate(activity, "location.pathname"));
             assertTrue(evaluate(activity, "document.querySelector('.ProseMirror').textContent").contains(marker));
+            waitForEditor(activity);
+            evaluate(activity, "document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}))");
             evaluate(activity, "window.__savedImport=null; (()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-current-doc');q.onsuccess=()=>window.__savedImport=q.result || '';t.oncomplete=()=>db.close();};})();");
             deadline = System.currentTimeMillis() + 20_000;
             while (!evaluate(activity, "window.__savedImport || ''").contains(marker) && System.currentTimeMillis() < deadline) {
@@ -104,6 +106,13 @@ public class OfflineEditorTest {
                 evaluate(activity, "(()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-current-doc');q.onsuccess=()=>window.__savedImport=q.result || '';t.oncomplete=()=>db.close();};})()");
             }
             assertTrue("Imported draft committed before APK replacement", evaluate(activity, "window.__savedImport || ''").contains(marker));
+            evaluate(activity, "window.__savedLibrary=null; (()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-doc-library');q.onsuccess=()=>window.__savedLibrary=q.result || '';t.oncomplete=()=>db.close();};})();");
+            deadline = System.currentTimeMillis() + 20_000;
+            while (!evaluate(activity, "window.__savedLibrary || ''").contains(marker) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100);
+                evaluate(activity, "(()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-doc-library');q.onsuccess=()=>window.__savedLibrary=q.result || '';t.oncomplete=()=>db.close();};})()");
+            }
+            assertTrue("Library committed before APK replacement", evaluate(activity, "window.__savedLibrary || ''").contains(marker));
         } finally { document.delete(); dir.delete(); }
     }
 }
