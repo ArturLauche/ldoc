@@ -139,6 +139,14 @@ public class LWriteUpdaterPlugin extends Plugin {
                 String code = exception instanceof ReleaseHttp.Failure ? ((ReleaseHttp.Failure) exception).code : exception instanceof IllegalStateException ? "storage" : "network";
                 error = code; phase = "error";
                 if (code.equals("integrity") || code.equals("incompatible")) clearApkCache();
+                if (code.equals("network") || code.equals("rate-limit") || code.equals("release")) {
+                    try {
+                        if (available != null && apk().isFile()) {
+                            ApkTrust.verify(getContext().getPackageManager(), installed, apk(), available);
+                            phase = "ready"; // A failed check does not strand a verified offline download.
+                        }
+                    } catch (Exception invalidCache) { error = "integrity"; clearApkCache(); }
+                }
                 int attempts = Math.min(8, preferences.getInt("attempts", 0) + 1);
                 long next = System.currentTimeMillis() + (code.equals("integrity") || code.equals("incompatible") || code.equals("release") ? UpdatePolicy.CHECK_INTERVAL_MS : UpdatePolicy.retryDelay(attempts));
                 if (exception instanceof ReleaseHttp.Failure) next = Math.max(next, ((ReleaseHttp.Failure) exception).retryAt);

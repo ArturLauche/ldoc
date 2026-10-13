@@ -59,6 +59,7 @@ export function AndroidUpdates() {
           {state?.phase === 'downloading' ? <progress className="h-2 w-full accent-primary" aria-label={t('androidUpdateDownloading')} value={updateProgress(state)} max={100} /> : null}
           {state?.phase === 'error' ? <p className="text-sm text-muted-foreground">{t(state.error === 'integrity' || state.error === 'incompatible' ? 'androidUpdateRejected' : 'androidUpdateRetry')}</p> : null}
           {state?.phase === 'ready' ? <>
+            {state.error ? <p className="text-sm text-muted-foreground">{t('androidUpdateRetry')}</p> : null}
             <p className="text-sm text-muted-foreground">{t('androidInstallPermission')}</p>
             <Button onClick={() => void install()} disabled={installing}>{t('androidInstallUpdate')}</Button>
           </> : null}
