@@ -3,11 +3,17 @@ package com.leunos.lwrite;
 import static org.junit.Assert.*;
 import android.content.Intent;
 import android.webkit.WebView;
+import android.content.Context;
+import android.net.Uri;
+import androidx.core.content.FileProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -61,5 +67,32 @@ public class OfflineEditorTest {
         long deadline = System.currentTimeMillis() + 10_000;
         while ("null".equals(evaluate(activity, "window.__fileResult")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
         assertEquals("\"hello\"", evaluate(activity, "window.__fileResult"));
+    }
+
+    @Test public void openWithImportsAGrantedContentUriFromALegalScreen() throws Exception {
+        MainActivity activity = launch();
+        waitForEditor(activity);
+        // Use a fresh emulator; never replace a developer's existing draft.
+        assertEquals("true", evaluate(activity, "document.querySelector('.ProseMirror').textContent.trim()===''"));
+        String marker = "Android content URI import " + System.currentTimeMillis();
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        File dir = new File(context.getCacheDir(), "lwrite-files/native-test");
+        assertTrue(dir.exists() || dir.mkdirs());
+        File document = new File(dir, "incoming.txt");
+        try (FileOutputStream output = new FileOutputStream(document)) { output.write(marker.getBytes(StandardCharsets.UTF_8)); }
+        try {
+            evaluate(activity, "document.querySelector('a[href=\"/privacy\"],a[href=\"/datenschutz\"]').click()");
+            long deadline = System.currentTimeMillis() + 10_000;
+            while ("\"/\"".equals(evaluate(activity, "location.pathname")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+            assertNotEquals("\"/\"", evaluate(activity, "location.pathname"));
+            Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", document);
+            Intent intent = new Intent(Intent.ACTION_VIEW).setClass(context, MainActivity.class).setDataAndType(uri, "text/plain")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> context.startActivity(intent));
+            deadline = System.currentTimeMillis() + 20_000;
+            while (!evaluate(activity, "document.querySelector('.ProseMirror')?.textContent || ''").contains(marker) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+            assertEquals("\"/\"", evaluate(activity, "location.pathname"));
+            assertTrue(evaluate(activity, "document.querySelector('.ProseMirror').textContent").contains(marker));
+        } finally { document.delete(); dir.delete(); }
     }
 }
