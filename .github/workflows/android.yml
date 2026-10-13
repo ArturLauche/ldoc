@@ -75,7 +75,20 @@ jobs:
           script: |
             adb shell svc wifi disable
             adb shell svc data disable
-            cd android && ./gradlew :app:connectedDebugAndroidTest --console=plain
+            cd android && ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.leunos.lwrite.OfflineEditorTest --console=plain
+            cd android && LWRITE_VERSION_NAME=0.0.2 ./gradlew assembleDebug --console=plain
+            adb shell am force-stop com.leunos.lwrite.debug
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            cd android && LWRITE_VERSION_NAME=0.0.2 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.leunos.lwrite.ApkReplacementTest --console=plain
+            adb exec-out screencap -p > android-artifacts/android16-offline.png
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: LWrite-Android-Emulator
+          path: |
+            android-artifacts/android16-offline.png
+            android/app/build/reports/androidTests/
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:

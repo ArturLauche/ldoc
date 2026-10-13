@@ -256,11 +256,13 @@ public class LWriteUpdaterPlugin extends Plugin {
 
     @PluginMethod public void install(PluginCall call) {
         if (development() || !"ready".equals(phase) || available == null || busy.get()) { call.reject("No verified update available"); return; }
-        if (!installationAllowed()) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
-            try { startActivityForResult(call, intent, "installationPermission"); }
-            catch (Exception exception) { call.reject("Installation settings unavailable", exception); }
-            return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            if (!installationAllowed()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
+                try { startActivityForResult(call, intent, "installationPermission"); }
+                catch (Exception exception) { call.reject("Installation settings unavailable", exception); }
+                return;
+            }
         }
         launchInstaller(call);
     }

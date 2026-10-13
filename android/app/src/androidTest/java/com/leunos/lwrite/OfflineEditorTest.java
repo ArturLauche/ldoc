@@ -20,19 +20,19 @@ import org.junit.runner.RunWith;
 /** Runs against the real bundled WebView, not a mocked browser or hosted URL. */
 @RunWith(AndroidJUnit4.class)
 public class OfflineEditorTest {
-    private MainActivity launch() {
+    static MainActivity launch() {
         Intent intent = new Intent(InstrumentationRegistry.getInstrumentation().getTargetContext(), MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         return (MainActivity) InstrumentationRegistry.getInstrumentation().startActivitySync(intent);
     }
-    private String evaluate(MainActivity activity, String script) throws Exception {
+    static String evaluate(MainActivity activity, String script) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<String> result = new AtomicReference<>();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.getBridge().getWebView().evaluateJavascript(script, value -> { result.set(value); done.countDown(); }));
         assertTrue("WebView JavaScript callback", done.await(10, TimeUnit.SECONDS));
         return result.get();
     }
-    private void waitForEditor(MainActivity activity) throws Exception {
+    static void waitForEditor(MainActivity activity) throws Exception {
         long deadline = System.currentTimeMillis() + 30_000;
         do {
             if ("true".equals(evaluate(activity, "Boolean(document.querySelector('.ProseMirror[contenteditable=true]'))"))) return;
@@ -51,7 +51,11 @@ public class OfflineEditorTest {
         long deadline = System.currentTimeMillis() + 10_000;
         while (!"\"saved\"".equals(evaluate(activity, "window.__storageResult")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
         assertEquals("\"saved\"", evaluate(activity, "window.__storageResult"));
+        evaluate(activity, "window.__oldPage=true");
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.getBridge().getWebView().reload());
+        deadline = System.currentTimeMillis() + 10_000;
+        while (!"\"undefined\"".equals(evaluate(activity, "typeof window.__oldPage")) && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertEquals("Reload created a new JavaScript document", "\"undefined\"", evaluate(activity, "typeof window.__oldPage"));
         waitForEditor(activity);
         evaluate(activity, "window.__storageResult=null; (()=>{const r=indexedDB.open('lwrite-native-test',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('probe','readonly');const q=t.objectStore('probe').get('marker');q.onsuccess=()=>window.__storageResult=q.result;t.oncomplete=()=>db.close();};})();");
         deadline = System.currentTimeMillis() + 10_000;
@@ -93,6 +97,13 @@ public class OfflineEditorTest {
             while (!evaluate(activity, "document.querySelector('.ProseMirror')?.textContent || ''").contains(marker) && System.currentTimeMillis() < deadline) Thread.sleep(100);
             assertEquals("\"/\"", evaluate(activity, "location.pathname"));
             assertTrue(evaluate(activity, "document.querySelector('.ProseMirror').textContent").contains(marker));
+            evaluate(activity, "window.__savedImport=null; (()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-current-doc');q.onsuccess=()=>window.__savedImport=q.result || '';t.oncomplete=()=>db.close();};})();");
+            deadline = System.currentTimeMillis() + 20_000;
+            while (!evaluate(activity, "window.__savedImport || ''").contains(marker) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100);
+                evaluate(activity, "(()=>{const r=indexedDB.open('lwrite',1);r.onsuccess=()=>{const db=r.result;const t=db.transaction('documents','readonly');const q=t.objectStore('documents').get('lwrite-current-doc');q.onsuccess=()=>window.__savedImport=q.result || '';t.oncomplete=()=>db.close();};})()");
+            }
+            assertTrue("Imported draft committed before APK replacement", evaluate(activity, "window.__savedImport || ''").contains(marker));
         } finally { document.delete(); dir.delete(); }
     }
 }
