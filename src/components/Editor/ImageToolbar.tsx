@@ -29,6 +29,8 @@ import { formatMessage, type TranslationKey } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { focusContainerOnTouch } from '@/lib/inputModality';
+import { isAndroid } from '@/lib/native/bridge';
+import { pickFiles } from '@/lib/native/files';
 import { ToolTile } from './toolbarControls';
 import {
   DEFAULT_IMAGE_ALIGNMENT,
@@ -305,7 +307,15 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
                 type="button"
                 variant="ghost"
                 className="h-auto w-full flex-col whitespace-normal py-3"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  if (!isAndroid()) {
+                    fileInputRef.current?.click();
+                    return;
+                  }
+                  void pickFiles({ accept: 'image/*', kind: 'image' }).then(async ([file]) => {
+                    if (file) await uploadFile(file);
+                  }).catch(() => toast.error(t('importFailed')));
+                }}
                 disabled={isUploading}
               >
                 <Upload className="h-6 w-6 mx-auto mb-3 text-muted-foreground" />

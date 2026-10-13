@@ -16,6 +16,7 @@
   },
   "include": [
     "vite.config.ts",
+    "capacitor.config.ts",
     "build",
     "src/vite-env.d.ts",
     "playwright.config.ts",

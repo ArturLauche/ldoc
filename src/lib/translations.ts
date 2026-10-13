@@ -22,6 +22,28 @@ export const localeNames: Record<Locale, string> = {
  * back to English (and finally to the key itself) for anything missing.
  */
 const en = {
+  share: 'Share',
+  fileMenuShareAs: 'Share document as',
+  nativeShareOpened: 'Share sheet opened:',
+  androidUpdates: 'App updates',
+  androidUpdateDescription: 'Official Android updates from LWrite’s GitHub Releases. Documents stay on this device.',
+  androidInstalledVersion: 'Installed version',
+  androidAvailableVersion: 'Available version',
+  androidLastChecked: 'Last checked',
+  androidDevelopmentBuild: 'Development build. Install an official release separately to receive updates.',
+  androidUpdateIdle: 'Updates are checked automatically while LWrite is open.',
+  androidUpdateChecking: 'Checking for updates…',
+  androidUpdateCurrent: 'LWrite is up to date.',
+  androidUpdateDownloading: 'Downloading update…',
+  androidUpdateReady: 'Update downloaded and verified. Install when you are ready.',
+  androidUpdateError: 'The update could not be completed. You can continue editing offline.',
+  androidUpdateAvailable: 'Install LWrite {version}',
+  androidUpdateRejected: 'The update failed verification or is incompatible. No installation was started.',
+  androidUpdateRetry: 'LWrite will retry. You can also check again manually.',
+  androidInstallPermission: 'Android may ask you to allow updates from LWrite. Installation always requires your approval.',
+  androidInstallFailed: 'The installer could not start. Check Android’s installation permission and try again.',
+  androidInstallUpdate: 'Install update',
+  androidCheckUpdates: 'Check for updates',
   // App shell
   appLoadFailed: 'LWrite could not open',
   appLoadFailedHint: 'Try reloading the page. Your saved browser data has not been cleared.',

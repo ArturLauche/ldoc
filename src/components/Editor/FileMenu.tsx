@@ -18,6 +18,7 @@ import {
   Files,
   Upload,
   Printer,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +47,9 @@ import { focusContainerOnTouch } from '@/lib/inputModality';
 import { assertDocumentSize } from '@/lib/documentLimits';
 import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/download';
+import { isAndroid } from '@/lib/native/bridge';
+import { deliverNativeBlob, pickFiles } from '@/lib/native/files';
+import { useIncomingAndroidFiles } from '@/hooks/useIncomingAndroidFiles';
 import { buildExportFileName as buildSafeExportFileName } from '@/lib/fileNames';
 import type { ExportFormat } from '@/lib/export/types';
 import { formatMessage, type TranslationKey } from '@/lib/translations';
@@ -110,6 +114,7 @@ function SheetAction({
 interface FileMenuProps {
   /** Phones open the file actions as a bottom sheet instead of nested menus. */
   compact?: boolean;
+  nativeReady?: boolean;
   menuTriggerRef?: RefObject<HTMLButtonElement | null>;
   editor: Editor | null;
   documentId: string;
@@ -124,6 +129,7 @@ interface FileMenuProps {
 
 export const FileMenu = ({
   compact = false,
+  nativeReady = true,
   menuTriggerRef,
   editor,
   documentId,
@@ -175,39 +181,39 @@ export const FileMenu = ({
     if (await onCreateNewDocument()) toast.success(t('newDocumentCreated'));
   };
 
-  const handleOpenFile = async () => {
-    if (!editor) return;
-
+  const openImportedFile = useCallback(async (file: File) => {
+    setIsImporting(true);
+    toast.loading(t('importInProgress'), { id: 'import' });
     try {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = SUPPORTED_IMPORT_FORMATS;
-
-      input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
-
-        setIsImporting(true);
-        toast.loading(t('importInProgress'), { id: 'import' });
-
-        try {
-          const { importDocument } = await import('./DocumentImporter');
-          const result = await importDocument(file);
-          if (!(await onImportDocument(result.content, result.fileName))) {
-            toast.dismiss('import');
-            return;
-          }
-          refreshLibraryDocuments();
-          toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
-        } catch (error) {
-          logError('Import error', error);
-          toast.error(t('importFailed'), { id: 'import' });
-        } finally {
-          setIsImporting(false);
+      assertDocumentSize(file);
+      if (/\.json$/i.test(file.name)) {
+        const result = await importUnifiedLibraryFile(await file.text());
+        toast.success(formatMessage(t('importedLibraryToast'), result), { id: 'import' });
+      } else {
+        const { importDocument } = await import('./DocumentImporter');
+        const result = await importDocument(file);
+        if (!(await onImportDocument(result.content, result.fileName))) {
+          toast.dismiss('import');
+          return;
         }
-      };
+        toast.success(formatMessage(t('openedFileToast'), { name: file.name }), { id: 'import' });
+      }
+      await refreshLibraryDocuments();
+    } catch (error) {
+      logError('Import error', error);
+      toast.error(t('importFailed'), { id: 'import' });
+    } finally {
+      setIsImporting(false);
+    }
+  }, [onImportDocument, refreshLibraryDocuments, t]);
 
-      input.click();
+  useIncomingAndroidFiles(nativeReady && Boolean(editor), openImportedFile);
+
+  const handleOpenFile = async () => {
+    if (!editor || isImporting) return;
+    try {
+      const [file] = await pickFiles({ accept: SUPPORTED_IMPORT_FORMATS, kind: 'document' });
+      if (file) await openImportedFile(file);
     } catch (error) {
       logError('Open failed', error);
       toast.error(t('openFailed'));
@@ -233,7 +239,7 @@ export const FileMenu = ({
       );
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       const blob = new Blob([payload], { type: 'application/json' });
-      downloadBlob(blob, fileName);
+      if (!(await downloadBlob(blob, fileName))) return;
       toast.success(formatMessage(t('exportedLibraryToast'), { count }));
       if (includesDraft) toast.info(t('backupIncludesDraft'));
     } catch (error) {
@@ -244,34 +250,21 @@ export const FileMenu = ({
     }
   };
 
-  const handleImportLibrary = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.lwrite.json,application/json';
-    input.onchange = async (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
+  const handleImportLibrary = async () => {
+    try {
+      const [file] = await pickFiles({ accept: '.json,.lwrite.json,application/json', kind: 'library' });
       if (!file) return;
-
       setIsImporting(true);
-      try {
-        assertDocumentSize(file);
-        const raw = await file.text();
-        const result = await importUnifiedLibraryFile(raw);
-        refreshLibraryDocuments();
-        toast.success(
-          formatMessage(t('importedLibraryToast'), {
-            imported: result.imported,
-            skipped: result.skipped,
-          }),
-        );
-      } catch (error) {
-        logError('Library import failed', error);
-        toast.error(t('invalidLibraryFile'));
-      } finally {
-        setIsImporting(false);
-      }
-    };
-    input.click();
+      assertDocumentSize(file);
+      const result = await importUnifiedLibraryFile(await file.text());
+      await refreshLibraryDocuments();
+      toast.success(formatMessage(t('importedLibraryToast'), result));
+    } catch (error) {
+      logError('Library import failed', error);
+      toast.error(t('invalidLibraryFile'));
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   /**
@@ -279,66 +272,52 @@ export const FileMenu = ({
    * Accepts both LWrite document files (.json) and regular document formats
    * (.docx, .odt, .rtf, .html, .txt, ...). The open document is never replaced.
    */
-  const handleImportSingleDocument = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.accept = `${SUPPORTED_IMPORT_FORMATS},.json,.lwrite.json,application/json`;
-    input.onchange = async (event) => {
-      const files = Array.from((event.target as HTMLInputElement).files ?? []);
-      if (files.length === 0) return;
-
-      setIsImporting(true);
-      toast.loading(t('importInProgress'), { id: 'import-single' });
-
-      let lastName = '';
-      let imported = 0;
-      let failed = 0;
-
-      for (const file of files) {
-        try {
-          assertDocumentSize(file);
-          const isLibraryFile = /\.json$/i.test(file.name) || file.type === 'application/json';
-          if (isLibraryFile) {
-            const doc = await importSingleLibraryDocument(await file.text());
-            lastName = doc.name;
-          } else {
-            const { importDocument } = await import('./DocumentImporter');
-            const result = await importDocument(file);
-            const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
-            lastName = doc.name;
-          }
-          imported += 1;
-        } catch (error) {
-          logError('Single document import failed', error);
-          failed += 1;
+  const handleImportSingleDocument = async () => {
+    let files: File[];
+    try {
+      files = await pickFiles({ accept: `${SUPPORTED_IMPORT_FORMATS},.json,.lwrite.json,application/json`, kind: 'mixed', multiple: true });
+    } catch (error) {
+      logError('Document selection failed', error);
+      toast.error(t('importFailed'));
+      return;
+    }
+    if (files.length === 0) return;
+    setIsImporting(true);
+    toast.loading(t('importInProgress'), { id: 'import-single' });
+    let lastName = '';
+    let imported = 0;
+    let failed = 0;
+    for (const file of files) {
+      try {
+        assertDocumentSize(file);
+        if (/\.json$/i.test(file.name) || file.type === 'application/json') {
+          const doc = await importSingleLibraryDocument(await file.text());
+          lastName = doc.name;
+        } else {
+          const { importDocument } = await import('./DocumentImporter');
+          const result = await importDocument(file);
+          const doc = await addImportedDocumentToLibrary(result.fileName, result.content);
+          lastName = doc.name;
         }
+        imported += 1;
+      } catch (error) {
+        logError('Single document import failed', error);
+        failed += 1;
       }
-
-      refreshLibraryDocuments();
-      setIsImporting(false);
-      toast.dismiss('import-single');
-
-      if (imported > 0) {
-        toast.success(
-          imported === 1
-            ? `${t('importedSingleDocToast')}: ${lastName}`
-            : `${t('importedSingleDocToast')} (${imported})`,
-        );
-      }
-      if (failed > 0) {
-        toast.error(t('importFailed'));
-      }
-    };
-    input.click();
+    }
+    await refreshLibraryDocuments();
+    setIsImporting(false);
+    toast.dismiss('import-single');
+    if (imported > 0) toast.success(imported === 1 ? `${t('importedSingleDocToast')}: ${lastName}` : `${t('importedSingleDocToast')} (${imported})`);
+    if (failed > 0) toast.error(t('importFailed'));
   };
 
-  const handleExportLibraryDocument = (doc: StoredDocument) => {
+  const handleExportLibraryDocument = async (doc: StoredDocument) => {
     try {
       const payload = exportLibraryDocumentsFile([doc]);
       const fileName = buildSafeExportFileName(doc.name, 'lwrite.json');
       const blob = new Blob([payload], { type: 'application/json' });
-      downloadBlob(blob, fileName);
+      if (!(await downloadBlob(blob, fileName))) return;
       toast.success(formatMessage(t('exportedDocumentToast'), { name: doc.name }));
     } catch (error) {
       logError('Document export failed', error);
@@ -385,7 +364,7 @@ export const FileMenu = ({
     toast.success(formatMessage(t('openedDocumentToast'), { name: doc.name }));
   };
 
-  const exportAs = async (format: ExportFormat) => {
+  const exportAs = async (format: ExportFormat, action: 'save' | 'share' | 'print' = 'save') => {
     if (!editor || isExporting) return;
 
     setIsExporting(true);
@@ -397,8 +376,9 @@ export const FileMenu = ({
         locale,
         format,
       });
-      downloadBlob(blob, fileName);
-      toast.success(`${t('exportSuccess')} ${fileName}`);
+      const completed = action === 'save' ? await downloadBlob(blob, fileName) : await deliverNativeBlob(blob, fileName, action);
+      if (!completed) return;
+      toast.success(`${t(action === 'share' ? 'nativeShareOpened' : 'exportSuccess')} ${fileName}`);
       if (warnings.length) {
         const summary =
           warnings.length === 1
@@ -425,7 +405,10 @@ export const FileMenu = ({
     setRenameOpen(true);
   };
 
-  const print = () => requestAnimationFrame(() => window.print());
+  const print = () => {
+    if (isAndroid()) void exportAs('pdf', 'print');
+    else requestAnimationFrame(() => window.print());
+  };
 
   /** File pickers and downloads run within the tap; dialogs open after the sheet closes. */
   const runFromSheet = (action: () => void, timing: 'now' | 'after-close' = 'now') => {
@@ -539,6 +522,19 @@ export const FileMenu = ({
                     onClick={() => runFromSheet(handleImportLibrary)}
                   />
                 </SheetSection>
+                {isAndroid() ? (
+                  <SheetSection label={t('fileMenuShareAs')}>
+                    <div className="file-sheet-formats">
+                      {EXPORT_FORMATS.map(({ format, label }) => (
+                        <button key={format} type="button" className="file-sheet-format"
+                          aria-label={`${t('share')} ${t(label)}`} disabled={isExporting}
+                          onClick={() => runFromSheet(() => void exportAs(format, 'share'))}>
+                          <Share2 aria-hidden="true" /><span aria-hidden="true">.{format}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </SheetSection>
+                ) : null}
                 <SheetSection label={t('fileMenuExportAs')}>
                   <div className="file-sheet-formats">
                     {EXPORT_FORMATS.map(({ format, label, icon: Icon }) => (
@@ -636,6 +632,18 @@ export const FileMenu = ({
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {isAndroid() ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Share2 className="mr-2 h-4 w-4" />{t('fileMenuShareAs')}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {EXPORT_FORMATS.map(({ format, label }) => (
+                    <DropdownMenuItem key={format} disabled={isExporting} onClick={() => void exportAs(format, 'share')}>
+                      {t(label)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={startRename}>{t('fileMenuRename')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={print}>
