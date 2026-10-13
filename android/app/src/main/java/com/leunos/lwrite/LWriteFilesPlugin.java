@@ -268,7 +268,8 @@ public class LWriteFilesPlugin extends Plugin {
                             } else {
                                 Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", sharedTarget);
                                 Intent intent = new Intent(Intent.ACTION_SEND).setType(meta.getString("mimeType")).putExtra(Intent.EXTRA_STREAM, uri)
-                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setClipData(ClipData.newRawUri(meta.getString("name"), uri));
+                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                intent.setClipData(ClipData.newRawUri(meta.getString("name"), uri));
                                 getActivity().startActivity(Intent.createChooser(intent, null));
                             }
                             call.resolve(new JSObject().put("completed", true));
@@ -285,10 +286,12 @@ public class LWriteFilesPlugin extends Plugin {
         Uri uri = result.getData() == null ? null : result.getData().getData();
         if (result.getResultCode() != Activity.RESULT_OK || uri == null) { call.resolve(new JSObject().put("completed", false)); return; }
         io.execute(() -> {
-            try (InputStream input = new FileInputStream(file(call.getString("id"), ".bin")); OutputStream output = getContext().getContentResolver().openOutputStream(uri, "wt")) {
-                if (output == null) throw new IOException("Destination unavailable");
-                FilePolicy.copyBounded(input, output, FilePolicy.EXPORT_LIMIT);
-                output.flush();
+            try {
+                try (InputStream input = new FileInputStream(file(call.getString("id"), ".bin")); OutputStream output = getContext().getContentResolver().openOutputStream(uri, "wt")) {
+                    if (output == null) throw new IOException("Destination unavailable");
+                    FilePolicy.copyBounded(input, output, FilePolicy.EXPORT_LIMIT);
+                    output.flush();
+                }
                 call.resolve(new JSObject().put("completed", true));
             } catch (Exception error) { call.reject("Unable to save export", error); }
         });

@@ -121,7 +121,7 @@ public class LWriteUpdaterPlugin extends Plugin {
                     if (!candidate.sameArtifact(available)) clearApkCache();
                     available = candidate;
                     total = candidate.size;
-                    preferences.edit().putString("manifest", json(candidate).toString()).commit();
+                    if (!preferences.edit().putString("manifest", json(candidate).toString()).commit()) throw new ReleaseHttp.Failure("storage", 0);
                     if (!apk().isFile()) download(candidate);
                     ApkTrust.verify(getContext().getPackageManager(), installed, apk(), candidate);
                     downloaded = total;
@@ -260,7 +260,8 @@ public class LWriteUpdaterPlugin extends Plugin {
                     try {
                         Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", apk());
                         Intent intent = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).setClipData(ClipData.newRawUri("LWrite update", uri));
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        intent.setClipData(ClipData.newRawUri("LWrite update", uri));
                         getActivity().startActivity(intent);
                         call.resolve(new JSObject().put("permissionRequired", false));
                     } catch (Exception exception) { call.reject("Installer unavailable", exception); }
