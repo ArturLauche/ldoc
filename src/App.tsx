@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { lazy, Suspense } from 'react';
+import { NativeRuntime } from '@/components/NativeRuntime';
 const Index = lazy(() => import('./pages/Index'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
@@ -13,6 +14,7 @@ const App = () => (
   <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <LocaleProvider>
       <BrowserRouter>
+        <NativeRuntime>
         <ScrollToTop />
         <AppErrorBoundary>
           <Suspense
@@ -34,6 +36,7 @@ const App = () => (
             </Routes>
           </Suspense>
         </AppErrorBoundary>
+        </NativeRuntime>
       </BrowserRouter>
     </LocaleProvider>
   </ThemeProvider>

@@ -30,6 +30,8 @@ import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 import { logWarning } from '@/lib/logger';
 import { useDocumentStats } from './useDocumentStats';
+import { isAndroid } from '@/lib/native/bridge';
+import { registerNativeSession } from '@/lib/native/lifecycle';
 
 export const AUTOSAVE_DELAY = 3000;
 
@@ -176,6 +178,18 @@ export function useDocumentSession(editor: Editor | null) {
   useLayoutEffect(() => {
     saveRef.current = saveDocument;
   }, [saveDocument]);
+
+  useEffect(() => {
+    if (!isAndroid()) return;
+    const flush = async () => !sessionRef.current.dirty || saveRef.current({ quiet: true });
+    return registerNativeSession({
+      flush,
+      canLeave: async () => {
+        if (sessionRef.current.loading || sessionRef.current.transitioning) return false;
+        return await flush() && !sessionRef.current.dirty;
+      },
+    });
+  }, []);
 
   const markEdited = useCallback(() => {
     revisionRef.current += 1;

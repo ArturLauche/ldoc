@@ -1,0 +1,78 @@
+apply plugin: 'com.android.application'
+
+def releaseVersion = System.getenv('LWRITE_VERSION_NAME') ?: '0.0.0'
+def versionMatch = releaseVersion =~ /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})$/
+if (!versionMatch.matches() || versionMatch[0][1].toInteger() > 2000) {
+    throw new GradleException('LWRITE_VERSION_NAME must be a stable major.minor.patch version (major <= 2000; minor/patch <= 999)')
+}
+def androidVersionCode = versionMatch[0][1].toInteger() * 1000000 + versionMatch[0][2].toInteger() * 1000 + versionMatch[0][3].toInteger()
+def signingValues = ['LWRITE_KEYSTORE_PATH', 'LWRITE_KEYSTORE_PASSWORD', 'LWRITE_KEY_ALIAS', 'LWRITE_KEY_PASSWORD'].collectEntries { [(it): System.getenv(it)] }
+
+android {
+    namespace = "com.leunos.lwrite"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId = "com.leunos.lwrite"
+        minSdkVersion = rootProject.ext.minSdkVersion
+        targetSdkVersion = rootProject.ext.targetSdkVersion
+        versionCode = Math.max(1, androidVersionCode)
+        versionName = releaseVersion
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildFeatures { buildConfig = true }
+    signingConfigs {
+        release {
+            if (signingValues.values().every { it }) {
+                storeFile = file(signingValues.LWRITE_KEYSTORE_PATH)
+                storePassword = signingValues.LWRITE_KEYSTORE_PASSWORD
+                keyAlias = signingValues.LWRITE_KEY_ALIAS
+                keyPassword = signingValues.LWRITE_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix = '.debug'
+            versionNameSuffix = '-dev'
+            resValue 'string', 'app_name', 'LWrite Dev'
+            resValue 'string', 'title_activity_main', 'LWrite Dev'
+        }
+        release {
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    lint { abortOnError = true }
+}
+
+tasks.register('verifyReleaseSigning') {
+    doLast {
+        if (androidVersionCode < 1 || !signingValues.values().every { it }) {
+            throw new GradleException('Official releases require a nonzero stable version and all four LWRITE signing environment variables; debug keys are never substituted')
+        }
+    }
+}
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach { dependsOn 'verifyReleaseSigning' }
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+}
+
+apply from: 'capacitor.build.gradle'

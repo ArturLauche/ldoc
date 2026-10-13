@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Capacitor's Cordova ConfigXmlParser resolves this resource by name. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@xml/config" />

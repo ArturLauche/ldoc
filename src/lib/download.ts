@@ -1,8 +1,12 @@
+import { isAndroid } from '@/lib/native/bridge';
+import { deliverNativeBlob } from '@/lib/native/files';
+
 const REVOKE_DELAY_MS = 60_000;
 
-export function downloadBlob(blob: Blob, filename: string): void {
+export async function downloadBlob(blob: Blob, filename: string): Promise<boolean> {
+  if (isAndroid()) return deliverNativeBlob(blob, filename, 'save');
   if (typeof document === 'undefined' || typeof URL === 'undefined') {
-    return;
+    return false;
   }
 
   const url = URL.createObjectURL(blob);
@@ -17,6 +21,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   anchor.remove();
 
   scheduleRevoke(url);
+  return true;
 }
 
 function scheduleRevoke(url: string): void {

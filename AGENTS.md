@@ -2,7 +2,8 @@
 
 ## Stack and commands
 
-LWrite is a browser-only, local-first rich-text editor (React + TipTap); there is no backend.
+LWrite is a local-first rich-text editor (React + TipTap) for browsers and bundled
+Android WebView via Capacitor; there is no backend.
 
 - Package manager: `npm@10.9.2` (`package-lock.json` is authoritative; ignore `bun.lock`).
 - Node.js `24.21.0` is pinned in `.node-version` for development and Cloudflare.
@@ -27,6 +28,8 @@ npm run build            # production build + HTML/metadata verification
 npm run validate         # lint + typecheck + test --run + build (full gate)
 npm run audit            # all runtime + development dependency advisories
 npm run test:browser -- --project=chromium # production persistence regressions (build first)
+npm run android:debug   # production web bundle + Capacitor sync + installable dev APK
+npm run android:test    # Java security/file tests + Android lint (JDK 21 / SDK 36)
 ```
 
 ## Setup and test instructions
@@ -90,6 +93,12 @@ export type DocumentStorageResult<T> =
   builds static instances (PDF subsets, Office embedding); `graphics/` captures Smart Graphics
   from `SmartGraphicCanvas` as vector scenes (no second layout system). Tests stub font fetches
   with `src/test/exportAssets.ts`; `tests/browser/export.spec.ts` compares HTML export with the editor.
+- Android: `capacitor.config.ts` keeps the `https://localhost` storage origin fixed.
+  `src/lib/native/` bridges files/lifecycle/updater; `android/app/src/main/java/com/leunos/lwrite/`
+  implements SAF, read-only sharing/printing and verified full-APK updates. Never clear
+  WebView data on updates. Debug uses `com.leunos.lwrite.debug`; releases use
+  `com.leunos.lwrite` and the permanent signing key. See `docs/android.md` for the
+  tag/version/checksum protocol and one-time GitHub signing configuration.
 
 ## Git and PR workflow
 

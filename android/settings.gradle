@@ -1,0 +1,5 @@
+include ':app'
+// This app uses Capacitor plugins only. Capacitor itself supplies its Cordova
+// compatibility classes; the generated, empty legacy plugin module is unnecessary.
+
+apply from: 'capacitor.settings.gradle'

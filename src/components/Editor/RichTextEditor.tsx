@@ -14,6 +14,9 @@ import { createEditorExtensions } from './editorExtensions';
 import { HeaderPreferences } from './HeaderPreferences';
 import { SaveStatus } from './SaveStatus';
 import { useDocumentSession } from './useDocumentSession';
+import { isAndroid } from '@/lib/native/bridge';
+
+const AndroidUpdates = lazy(() => import('./AndroidUpdates').then((module) => ({ default: module.AndroidUpdates })));
 
 const FileMenu = lazy(() => import('./FileMenu').then((module) => ({ default: module.FileMenu })));
 
@@ -166,6 +169,7 @@ export const RichTextEditor = () => {
             <Suspense fallback={<FileMenuFallback compact={compact} />}>
               <FileMenu
                 compact={compact}
+                nativeReady={!chromeInert}
                 menuTriggerRef={menuTriggerRef}
                 editor={editor}
                 documentId={documentId}
@@ -329,6 +333,7 @@ export const RichTextEditor = () => {
                 {t('termsOfUse')}
               </Link>
             </nav>
+            {isAndroid() ? <Suspense fallback={null}><AndroidUpdates /></Suspense> : null}
           </div>
         </div>
       </footer>
