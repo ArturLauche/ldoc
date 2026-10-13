@@ -1,17 +1,17 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const [apk, variant, output] = process.argv.slice(2);
 if (!apk || !['debug', 'release'].includes(variant) || !existsSync(apk) || statSync(apk).size === 0) throw new Error('Provide a real APK path and debug/release variant.');
 const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
 if (!sdk) throw new Error('ANDROID_HOME must point to the Android SDK.');
-const versions = readdirSync(join(sdk, 'build-tools')).filter((entry) => /^\d+\.\d+\.\d+$/.test(entry)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-const tools = join(sdk, 'build-tools', versions.at(-1) ?? '');
+// Match the committed toolchain rather than selecting a runner's newest preview.
+const tools = join(sdk, 'build-tools', '36.0.0');
 const run = (command, args) => execFileSync(command, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } });
 const signature = run(join(tools, 'apksigner'), ['verify', '--verbose', '--print-certs', apk]);
 const certificate = /Signer #1 certificate SHA-256 digest: ([a-f0-9]{64})/i.exec(signature)?.[1].toLowerCase();
-if (!certificate || signature.includes('Signer #2 certificate')) throw new Error('APK must have exactly one valid signer.');
+if (!certificate || signature.includes('Signer #2 certificate')) throw new Error(`APK must have exactly one valid signer. apksigner output:\n${signature}`);
 const badging = run(join(tools, 'aapt'), ['dump', 'badging', apk]);
 const match = /package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/.exec(badging);
 if (!match) throw new Error('APK package metadata is unreadable.');

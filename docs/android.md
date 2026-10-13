@@ -4,7 +4,7 @@ Android runs the same production React/TipTap editor in Capacitor **8.5.3**. Its
 
 ## Develop and build
 
-Install the repository's Node **24.21.0**, npm **10.9.2**, **JDK 21**, and Android Studio **Otter 2025.2.1+**. Install Android SDK Platform **36**, Build Tools **36.0.0**, and platform-tools. Set `JAVA_HOME` and `ANDROID_HOME` to those installations (or let Android Studio write the ignored `android/local.properties`). The committed Gradle **8.14.3** wrapper verifies its distribution checksum; Android Gradle Plugin is **8.13.0**.
+Install the repository's Node **24.21.0**, npm **10.9.2**, **JDK 21**, and Android Studio **Otter 2025.2.1+**. Install Android SDK Platform **36**, Build Tools **36.0.0**, and platform-tools. Set `JAVA_HOME` and `ANDROID_HOME` to those installations (or let Android Studio write the ignored `android/local.properties`). The committed Gradle **8.14.6** wrapper verifies its distribution checksum; Android Gradle Plugin is **8.13.0**.
 
 ```sh
 npm ci --progress=false

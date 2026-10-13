@@ -64,14 +64,16 @@ public class LWriteFilesPlugin extends Plugin {
 
     @Override public void load() {
         io.execute(() -> {
-            File[] files = directory().listFiles();
-            if (files != null) for (File entry : files) if (entry.lastModified() < System.currentTimeMillis() - EXPIRY_MS) {
-                if (entry.isDirectory()) {
-                    File[] children = entry.listFiles();
-                    if (children != null) for (File child : children) child.delete();
+            try {
+                File[] files = directory().listFiles();
+                if (files != null) for (File entry : files) if (entry.lastModified() < System.currentTimeMillis() - EXPIRY_MS) {
+                    if (entry.isDirectory()) {
+                        File[] children = entry.listFiles();
+                        if (children != null) for (File child : children) child.delete();
+                    }
+                    entry.delete();
                 }
-                entry.delete();
-            }
+            } catch (IllegalStateException ignored) { incomingError = "Temporary storage unavailable"; }
         });
         receiveIntent(getActivity().getIntent());
     }
@@ -177,6 +179,7 @@ public class LWriteFilesPlugin extends Plugin {
 
     @PluginMethod public void pendingFiles(PluginCall call) {
         io.execute(() -> {
+            try {
             JSArray files = new JSArray();
             File[] entries = directory().listFiles((dir, name) -> name.endsWith(".json"));
             if (entries != null) for (File entry : entries) {
@@ -189,6 +192,7 @@ public class LWriteFilesPlugin extends Plugin {
             JSObject value = new JSObject().put("files", files);
             if (incomingError != null) { value.put("error", incomingError); incomingError = null; }
             call.resolve(value);
+            } catch (Exception error) { call.reject("Incoming file storage unavailable", error); }
         });
     }
 
@@ -301,7 +305,7 @@ public class LWriteFilesPlugin extends Plugin {
         try {
             file(id, ".bin").delete();
             file(id, ".json").delete();
-        } catch (IOException ignored) { }
+        } catch (IOException | IllegalArgumentException | IllegalStateException ignored) { }
     }
     @PluginMethod public void releaseFile(PluginCall call) { io.execute(() -> { remove(call.getString("id")); call.resolve(); }); }
     @Override protected void handleOnDestroy() { io.shutdown(); }

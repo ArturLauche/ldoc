@@ -7,6 +7,8 @@ import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.os.storage.StorageManager;
+import android.content.Context;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -129,7 +131,7 @@ public class LWriteUpdaterPlugin extends Plugin {
                 }
                 preferences.edit().putInt("attempts", 0).putLong("nextAttemptAt", System.currentTimeMillis() + UpdatePolicy.CHECK_INTERVAL_MS).apply();
             } catch (Exception exception) {
-                String code = exception instanceof ReleaseHttp.Failure ? ((ReleaseHttp.Failure) exception).code : "network";
+                String code = exception instanceof ReleaseHttp.Failure ? ((ReleaseHttp.Failure) exception).code : exception instanceof IllegalStateException ? "storage" : "network";
                 error = code; phase = "error";
                 if (code.equals("integrity") || code.equals("incompatible")) clearApkCache();
                 int attempts = Math.min(8, preferences.getInt("attempts", 0) + 1);
@@ -209,7 +211,7 @@ public class LWriteUpdaterPlugin extends Plugin {
                 if (status == 200) offset = 0; // Server declined Range; restart safely.
                 long announced = connection.getContentLengthLong();
                 if (announced != -1 && announced != release.size - offset) throw new ReleaseHttp.Failure("integrity", 0);
-                if (directory().getUsableSpace() < release.size - offset + 8 * 1024 * 1024) throw new ReleaseHttp.Failure("storage", 0);
+                reserveSpace(release.size - offset + 8 * 1024 * 1024);
                 try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(part, offset > 0)) {
                     byte[] buffer = new byte[64 * 1024];
                     long received = offset, lastEvent = 0;
@@ -230,11 +232,26 @@ public class LWriteUpdaterPlugin extends Plugin {
         if (!part.renameTo(apk())) throw new ReleaseHttp.Failure("storage", 0);
     }
 
-    private void clearApkCache() { partial().delete(); apk().delete(); downloaded = 0; }
+    private void clearApkCache() {
+        try { partial().delete(); apk().delete(); } catch (IllegalStateException ignored) { /* App storage may be temporarily unavailable. */ }
+        downloaded = 0;
+    }
+
+    private void reserveSpace(long needed) throws IOException {
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                StorageManager manager = (StorageManager) getContext().getSystemService(Context.STORAGE_SERVICE);
+                if (manager == null) throw new IOException("Storage manager unavailable");
+                java.util.UUID volume = manager.getUuidForPath(directory());
+                if (manager.getAllocatableBytes(volume) < needed) throw new IOException("Not enough update storage");
+                manager.allocateBytes(volume, needed);
+            } catch (IOException exception) { throw new ReleaseHttp.Failure("storage", 0); }
+        } else if (directory().getUsableSpace() < needed) throw new ReleaseHttp.Failure("storage", 0);
+    }
 
     @PluginMethod public void install(PluginCall call) {
         if (development() || !"ready".equals(phase) || available == null || busy.get()) { call.reject("No verified update available"); return; }
-        if (!installationAllowed() && Build.VERSION.SDK_INT >= 26) {
+        if (!installationAllowed()) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
             try { startActivityForResult(call, intent, "installationPermission"); }
             catch (Exception exception) { call.reject("Installation settings unavailable", exception); }

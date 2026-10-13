@@ -2,6 +2,4 @@
 <resources>
     <string name="app_name">LWrite</string>
     <string name="title_activity_main">LWrite</string>
-    <string name="package_name">com.leunos.lwrite</string>
-    <string name="custom_url_scheme">com.leunos.lwrite</string>
 </resources>
