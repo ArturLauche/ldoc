@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { isAndroid } from '@/lib/native/bridge';
 import { dismissNativeOverlay, flushNativeSession, prepareNativeDeparture } from '@/lib/native/lifecycle';
 import { logWarning } from '@/lib/logger';
+import { readStoredLocale } from '@/lib/localePreference';
+import { getBrowserLocale, t } from '@/lib/translations';
 
 export function NativeRuntime({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -26,7 +28,7 @@ export function NativeRuntime({ children }: { children: ReactNode }) {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) void flushNativeSession();
-    }).then(retain);
+    }).then(retain).catch((error: unknown) => logWarning('Native lifecycle listener unavailable', error));
     void CapacitorApp.addListener('backButton', () => {
       if (backing || dismissNativeOverlay()) return;
       if (window.location.pathname !== '/') {
@@ -36,9 +38,9 @@ export function NativeRuntime({ children }: { children: ReactNode }) {
       backing = true;
       void prepareNativeDeparture().then(async (saved) => {
         if (saved) await CapacitorApp.minimizeApp();
-        else toast.error('Save your changes before leaving LWrite.');
+        else toast.error(t(readStoredLocale() ?? getBrowserLocale(), 'saveFailed'));
       }).catch((error: unknown) => logWarning('Could not leave editor', error)).finally(() => { backing = false; });
-    }).then(retain);
+    }).then(retain).catch((error: unknown) => logWarning('Native Back listener unavailable', error));
     return () => {
       disposed = true;
       observer.disconnect();

@@ -21,7 +21,11 @@ export function useAndroidUpdater() {
     if (!isAndroid()) return;
     let cancelled = false;
     const accept = (next: unknown) => { if (!cancelled && validateUpdateState(next)) setState(next); };
-    const subscription = NativeUpdater.addListener('stateChanged', accept);
+    const subscription = NativeUpdater.addListener('stateChanged', accept).catch((error: unknown) => {
+      logWarning('Android update listener unavailable', error);
+      if (!cancelled) setBridgeError(true);
+      return null;
+    });
     void NativeUpdater.getState().then(accept).then(() => { if (!cancelled) return check(false); })
       .catch(() => { if (!cancelled) setBridgeError(true); });
     const resume = () => { if (document.visibilityState !== 'hidden') void check(false); };
@@ -34,7 +38,7 @@ export function useAndroidUpdater() {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('online', resume);
-      void subscription.then((handle) => handle.remove());
+      void subscription.then((handle) => handle?.remove());
     };
   }, [check]);
   return { state, check, bridgeError };
