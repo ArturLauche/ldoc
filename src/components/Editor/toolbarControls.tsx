@@ -280,6 +280,8 @@ export function LinkPopover({ editor, trigger, align = 'center', onComplete }: L
       >
         <form
           className="flex flex-col gap-2"
+          // Bare domains ("example.com") are valid here; normalizeLinkUrl decides.
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             setLink();

@@ -15,7 +15,7 @@ async function openFile(page: Page, name: string, buffer: Buffer) {
   await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button', { name: 'File', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('menuitem', { name: 'Open...', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Open file…', exact: true }).click();
   await (await chooser).setFiles({ name, mimeType: 'text/html', buffer });
   await expect(page.getByRole('textbox', { name: 'Document name', exact: true })).toHaveValue(
     name.replace(/\.[^.]+$/, ''),
@@ -50,15 +50,18 @@ test.beforeEach(async ({ page }) => {
 test('an accepted 10 MB image survives saving and a fresh page load', async ({ page }) => {
   await page.getByRole('button', { name: 'Insert image', exact: true }).click();
   const dialog = page.getByRole('dialog', {
-    name: 'Insert Image',
+    name: 'Insert image',
     exact: true,
   });
   await dialog.getByLabel('Alt text (optional)').fill('Full size image');
   const chooser = page.waitForEvent('filechooser');
-  await dialog.getByRole('button', { name: /^Click to upload or drag and drop/ }).click();
+  await dialog.getByRole('button', { name: /^Choose an image or drop it here/ }).click();
   const bytes = imageAtLimit();
   expect(bytes.length).toBe(10 * MiB);
   await (await chooser).setFiles({ name: 'at-limit.png', mimeType: 'image/png', buffer: bytes });
+  // The chosen file is previewed first and inserted on confirmation.
+  await expect(dialog.getByText('at-limit.png')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Insert image', exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await save(page);
   await page.reload();
@@ -120,9 +123,9 @@ test('conflict backups preserve the saved version and live draft without saving'
   await save(other);
   await expect(page.getByRole('button', { name: 'Save as a copy', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'File', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Library Transfer', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Import and backup', exact: true }).click();
   const download = page.waitForEvent('download');
-  await page.getByRole('menuitem', { name: 'Export All Docs (.json)', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Back up library (.json)', exact: true }).click();
   const backup = JSON.parse(await readFile((await (await download).path())!, 'utf8')) as {
     documents: { id: string; content: string }[];
   };
@@ -145,12 +148,12 @@ test('DOCX and ODT still round-trip through the bounded archive importer', async
   );
   await save(page);
   for (const [extension, label] of [
-    ['docx', 'Word Document (.docx)'],
-    ['odt', 'OpenDocument Text (.odt)'],
+    ['docx', 'Word document (.docx)'],
+    ['odt', 'OpenDocument text (.odt)'],
   ]) {
     await expect(page.getByRole('menu')).toHaveCount(0);
     await page.getByRole('button', { name: 'File', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Export As', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Export as', exact: true }).click();
     const download = page.waitForEvent('download');
     await page.getByRole('menuitem', { name: label, exact: true }).click();
     const bytes = await readFile((await (await download).path())!);

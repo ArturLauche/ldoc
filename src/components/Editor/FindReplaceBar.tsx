@@ -141,7 +141,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
       : t('findNoMatches')
     : null;
 
-  const iconSize = compact ? 'size-10 max-[379px]:w-9' : undefined;
+  const iconSize = compact ? 'size-10 max-[379px]:w-9!' : undefined;
 
   const matchCaseButton = (
     <ToolbarButton
