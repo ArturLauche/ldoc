@@ -39,6 +39,6 @@ describe('document library text search', () => {
     );
     await user.clear(search);
     await user.type(search, '<h2>');
-    expect(screen.getByText('No matching documents.')).toBeInTheDocument();
+    expect(screen.getByText('No documents match your search.')).toBeInTheDocument();
   });
 });

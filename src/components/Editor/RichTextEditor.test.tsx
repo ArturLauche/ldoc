@@ -19,7 +19,7 @@ import { RichTextEditor } from './RichTextEditor';
 function renderEditor() {
   return render(
     <MemoryRouter>
-      <ThemeProvider attribute="class" defaultTheme="light">
+      <ThemeProvider>
         <LocaleProvider>
           <ConfirmProvider>
             <TooltipProvider>
@@ -188,8 +188,9 @@ describe('RichTextEditor on phones', () => {
 
     // Language and theme fold into one menu so the title keeps its room.
     expect(screen.queryByRole('button', { name: 'Change language' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Display and language' }));
-    expect(await screen.findByRole('menuitem', { name: 'Dark mode' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Preferences' }));
+    expect(await screen.findByRole('menuitemradio', { name: 'Dark' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'System' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'Deutsch' })).toBeInTheDocument();
 
     // Save state stays in the phone header as an icon, with its label kept

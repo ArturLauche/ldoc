@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { focusContainerOnTouch } from '@/lib/inputModality';
@@ -28,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { LayoutCard } from './graphics/LayoutCard';
 import { layoutMatchesQuery } from './graphics/layoutSearch';
 import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
-import { ToolTile } from './toolbarControls';
+import { ToolbarButton, ToolTile } from './toolbarControls';
 
 type GalleryTab = 'all' | SmartGraphicCategory;
 
@@ -67,21 +66,11 @@ export function SmartGraphicGallery({
           />
         </DialogTrigger>
       ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 p-0"
-                aria-label={t('toolbarInsertGraphic')}
-              >
-                <Shapes className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('toolbarInsertGraphic')}</TooltipContent>
-        </Tooltip>
+        <DialogTrigger asChild>
+          <ToolbarButton label={t('toolbarInsertGraphic')}>
+            <Shapes />
+          </ToolbarButton>
+        </DialogTrigger>
       )}
 
       <DialogContent

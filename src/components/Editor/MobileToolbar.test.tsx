@@ -88,7 +88,8 @@ describe('MobileToolbar', () => {
     expect(editor.getHTML()).toContain('text-align: center');
 
     await user.click(within(panel).getByRole('tab', { name: 'Color' }));
-    expect(within(panel).getAllByRole('button', { name: /^Set text color/ })).toHaveLength(12);
+    expect(within(panel).getAllByRole('button', { name: /^Set text color/ })).toHaveLength(11);
+    expect(within(panel).getByRole('button', { name: 'Automatic color' })).toBeInTheDocument();
     expect(within(panel).getByRole('button', { name: 'Remove highlight' })).toBeInTheDocument();
   });
 

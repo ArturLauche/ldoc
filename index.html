@@ -12,8 +12,27 @@
     <!-- route-head:end -->
     <meta name="application-name" content="LWrite" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141921" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1d212b" />
+    <!-- Applies the saved theme before first paint (see src/lib/theme.ts). Runs
+         before the app bundle, so it reads the preference directly. -->
+    <script>
+      (function () {
+        var preference = null;
+        try {
+          preference = window.localStorage.getItem('theme');
+        } catch (error) {}
+        var dark =
+          preference === 'dark' ||
+          (preference !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var root = document.documentElement;
+        root.classList.add(dark ? 'dark' : 'light');
+        root.style.colorScheme = dark ? 'dark' : 'light';
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+          meta.setAttribute('content', dark ? '#1d212b' : '#ffffff');
+        });
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

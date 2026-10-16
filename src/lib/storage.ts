@@ -126,3 +126,20 @@ export function throwIfStorageFailed<T>(result: DocumentStorageResult<T>): T {
 
   return result.value;
 }
+
+/**
+ * Notifies about changes another tab makes to one key (the browser's
+ * `storage` event; the current tab's own writes do not fire it).
+ */
+export function subscribeStorageItem(
+  key: string,
+  onChange: (value: string | null) => void,
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const listener = (event: StorageEvent) => {
+    // `key` is null when another tab clears all storage.
+    if (event.key === key || event.key === null) onChange(event.key === null ? null : event.newValue);
+  };
+  window.addEventListener('storage', listener);
+  return () => window.removeEventListener('storage', listener);
+}

@@ -174,6 +174,17 @@ const ChromeAwareScrolling = Extension.create({
   },
 });
 
+/** DOM attributes of the editable document; the label follows the interface language. */
+export function editorAttributes(label: string): Record<string, string> {
+  return {
+    class: 'prose max-w-none focus:outline-hidden',
+    role: 'textbox',
+    dir: 'auto',
+    'aria-multiline': 'true',
+    'aria-label': label,
+  };
+}
+
 /**
  * Builds the TipTap extension set with an initial placeholder. Later locale
  * changes use setEditorPlaceholder without rebuilding the editor or its history.

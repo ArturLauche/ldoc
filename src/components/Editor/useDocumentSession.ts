@@ -29,7 +29,6 @@ import { subscribeDocumentChanges, writeDocumentItem } from '@/lib/documentDatab
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 import { logWarning } from '@/lib/logger';
-import { useDocumentStats } from './useDocumentStats';
 
 export const AUTOSAVE_DELAY = 3000;
 
@@ -76,7 +75,6 @@ export function useDocumentSession(editor: Editor | null) {
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const revisionRef = useRef(0);
   const replacingRef = useRef(false);
-  const stats = useDocumentStats(editor);
 
   const updateSession = useCallback((patch: Partial<Session>) => {
     sessionRef.current = { ...sessionRef.current, ...patch };
@@ -520,7 +518,6 @@ export function useDocumentSession(editor: Editor | null) {
     hasUnsavedChanges: session.dirty,
     saveError: session.error,
     hasExternalChanges: session.conflict,
-    ...stats,
     saveDocument,
     loadDocument,
     createNewDocument,

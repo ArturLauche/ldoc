@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { toast } from 'sonner';
@@ -54,7 +54,7 @@ describe('ImageToolbar uploads', () => {
     vi.restoreAllMocks();
   });
 
-  const tile = () => screen.getByRole('button', { name: 'Insert image' });
+  const tile = () => screen.getAllByRole('button', { name: 'Insert image' })[0];
   const chooseFile = () =>
     fireEvent.change(document.querySelector<HTMLInputElement>('#image-upload')!, {
       target: { files: [new File(['x'], 'pixel.png', { type: 'image/png' })] },
@@ -64,12 +64,18 @@ describe('ImageToolbar uploads', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   };
 
-  it('inserts a finished upload and hands focus back to the document', async () => {
+  it('previews a chosen file, inserts it on confirmation and hands focus back', async () => {
     const user = userEvent.setup();
     await user.click(tile());
+    const insert = screen.getByRole('button', { name: 'Insert image' });
+    expect(insert).toBeDisabled();
     chooseFile();
     await act(async () => finishUpload(PIXEL));
 
+    // Nothing is inserted until the user confirms the preview.
+    expect(editor.getHTML()).not.toContain('<img');
+    expect(await screen.findByText('pixel.png')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Insert image' }));
     expect(editor.getHTML()).toContain('<img');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
@@ -94,12 +100,12 @@ describe('ImageToolbar uploads', () => {
     const user = userEvent.setup();
     await user.click(tile());
     chooseFile();
-    expect(await screen.findByText('Uploading...')).toBeInTheDocument();
+    expect(await screen.findByText('Reading image…')).toBeInTheDocument();
     const toastError = vi.spyOn(toast, 'error');
     await act(async () => failUpload(new Error('unreadable')));
-    expect(toastError).toHaveBeenCalledWith('Failed to upload image');
+    expect(toastError).toHaveBeenCalledWith('The image could not be read');
 
-    expect(await screen.findByText('Click to upload or drag and drop')).toBeInTheDocument();
+    expect(await screen.findByText('Choose an image or drop it here')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(editor.getHTML()).not.toContain('<img');
   });
@@ -139,5 +145,27 @@ describe('ImageToolbar uploads', () => {
     expect(url).toHaveValue('example.com/photo.png');
     expect(editor.getHTML()).not.toContain('<img');
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('edits a selected image without the insert controls', async () => {
+    const user = userEvent.setup();
+    editor.commands.setContent(`<img src="${PIXEL}" alt="Old" data-align="center">`);
+    editor.commands.setNodeSelection(0);
+    await user.click(tile());
+    const dialog = await screen.findByRole('dialog', { name: 'Edit image' });
+    expect(within(dialog).queryByRole('tab')).not.toBeInTheDocument();
+    const alt = within(dialog).getByRole('textbox', { name: 'Alt text (optional)' });
+    expect(alt).toHaveValue('Old');
+    await user.clear(alt);
+    await user.type(alt, 'New description');
+    await user.click(within(dialog).getByRole('radio', { name: 'Align left' }));
+    await user.click(within(dialog).getByRole('radio', { name: '50%' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Update image' }));
+    expect(editor.getAttributes('image')).toMatchObject({
+      alt: 'New description',
+      align: 'left',
+      width: '50',
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 });
