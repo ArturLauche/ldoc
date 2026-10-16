@@ -69,7 +69,7 @@ const en = {
   libraryEmptyHint: 'Start writing or import a document. Changes are saved on this device.',
   libraryReadFailed:
     'The document library could not be read. Your stored data has not been changed.',
-  currentDocument: 'Open document',
+  currentDocument: 'Currently open',
   versionActionFailed:
     'The version could not be saved or deleted. Your existing history has been kept.',
   versionReadFailed: 'Version history could not be read. Your stored data has not been changed.',
@@ -465,6 +465,8 @@ const en = {
   selectedWords: '{selected} of {total} words',
   documentEditor: 'Document editor',
   legalLinks: 'Legal',
+  insertDividerShort: 'Divider',
+  documentActions: 'Actions for {name}',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -701,7 +703,7 @@ const de: TranslationCatalog = {
     'Schreibe los oder importiere ein Dokument. Änderungen werden auf diesem Gerät gespeichert.',
   libraryReadFailed:
     'Die Dokumentbibliothek konnte nicht gelesen werden. Deine Daten bleiben erhalten.',
-  currentDocument: 'Geöffnetes Dokument',
+  currentDocument: 'Geöffnet',
   versionActionFailed:
     'Die Version konnte nicht gespeichert oder gelöscht werden. Dein Verlauf bleibt erhalten.',
   versionReadFailed:
@@ -1076,6 +1078,8 @@ const de: TranslationCatalog = {
   selectedWords: '{selected} von {total} Wörtern',
   documentEditor: 'Dokumenteditor',
   legalLinks: 'Rechtliches',
+  insertDividerShort: 'Trennlinie',
+  documentActions: 'Aktionen für {name}',
 };
 
 const it: TranslationCatalog = {

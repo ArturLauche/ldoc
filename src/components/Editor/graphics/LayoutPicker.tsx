@@ -55,9 +55,9 @@ export function LayoutPicker({
             aria-pressed={item === category}
             onClick={() => setCategory(item)}
             className={cn(
-              'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-9',
+              'shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-9',
               item === category
-                ? 'border-primary bg-primary text-primary-foreground'
+                ? 'border-selected/50 bg-selected/12 text-selected-foreground'
                 : 'border-border text-muted-foreground hover:text-foreground',
             )}
           >

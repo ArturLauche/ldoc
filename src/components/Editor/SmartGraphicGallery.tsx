@@ -124,7 +124,7 @@ function GalleryBody({
     return (
       <section key={category} aria-label={t(GRAPHIC_CATEGORY_KEYS[category])} className="space-y-2.5">
         {tab === 'all' ? (
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-xs font-medium text-muted-foreground">
             {t(GRAPHIC_CATEGORY_KEYS[category])}
           </h3>
         ) : null}
@@ -154,7 +154,7 @@ function GalleryBody({
       className="flex min-h-0 flex-1 flex-col sm:flex-row"
     >
       {/* Scrolls on short screens (landscape phones) so every category stays reachable. */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-card/60 sm:px-3 sm:py-5">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-muted/40 sm:px-3 sm:py-5">
         <DialogHeader className="space-y-1 pe-8 sm:px-2 sm:pe-2">
           <DialogTitle>{t('graphicGalleryTitle')}</DialogTitle>
           <DialogDescription className="text-xs sm:text-[0.8125rem]">{t('graphicGalleryDescription')}</DialogDescription>
@@ -170,7 +170,7 @@ function GalleryBody({
             <TabsTrigger
               key={item}
               value={item}
-              className="shrink-0 justify-between gap-3 rounded-full border border-border px-3 py-1.5 text-[0.8125rem] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground max-sm:min-h-9 data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:rounded-md sm:border-transparent sm:px-2.5 sm:py-2 sm:data-[state=active]:border-transparent sm:data-[state=active]:bg-accent sm:data-[state=active]:text-foreground"
+              className="h-auto shrink-0 justify-between gap-3 rounded-md border border-border px-3 py-1.5 text-[0.8125rem] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground max-sm:min-h-9 data-[state=active]:border-selected/50 data-[state=active]:bg-selected/12 data-[state=active]:text-selected-foreground data-[state=active]:shadow-none sm:border-transparent sm:px-2.5 sm:py-2 sm:data-[state=active]:border-transparent"
             >
               {tabLabel(item)}
               <span aria-hidden="true" className="text-xs tabular-nums opacity-70">

@@ -223,6 +223,60 @@ header.app-bar {
   padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
 }
 
+/* First paint before the scripts run (built HTML) and the route fallback:
+   the editor chrome's geometry, so the real interface replaces it in place. */
+.boot-shell {
+  min-height: 100dvh;
+  background: hsl(var(--background));
+}
+.boot-bar {
+  height: calc(3rem + 1px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+.boot-toolbar {
+  height: calc(2.25rem + 0.75rem + 1px);
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+.boot-main {
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+}
+.boot-page {
+  height: max(32rem, 65vh);
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--card));
+}
+.boot-dock {
+  display: none;
+}
+/* Matches COMPACT_LAYOUT_QUERY in src/hooks/useMediaQuery.ts. */
+@media (max-width: 639px), (max-height: 500px) and (pointer: coarse) and (max-width: 1023px) {
+  .boot-toolbar {
+    display: none;
+  }
+  .boot-main {
+    padding: 0;
+  }
+  .boot-page {
+    height: 50dvh;
+    border-width: 0 0 1px;
+    border-radius: 0;
+  }
+  .boot-dock {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    display: block;
+    height: calc(3rem + 1px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+  }
+}
+
 /* Header: one compact row. Phones hide it while scrolling down. */
 .editor-header {
   background: hsl(var(--card));
@@ -832,6 +886,30 @@ header.app-bar {
 .editor-content .ProseMirror :is(h1, h2, h3) span[style*='font-family' i],
 .document-preview :is(h1, h2, h3) {
   color: inherit;
+}
+
+/* Legal pages: long-form reading text on the interface tokens. */
+.legal-prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+  --tw-prose-counters: hsl(var(--muted-foreground));
+  --tw-prose-bullets: hsl(var(--muted-foreground));
+  --tw-prose-hr: hsl(var(--border));
+  --tw-prose-captions: hsl(var(--muted-foreground));
+  max-width: 68ch;
+}
+.legal-footer {
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding-block: 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Read-only document previews (version history) reuse the document styles. */
+.editor-content.document-preview .ProseMirror {
+  min-height: 0;
+  padding: 2rem 2.5rem;
 }
 
 .editor-content .ProseMirror p.is-editor-empty:first-child::before {
@@ -1540,6 +1618,12 @@ header.app-bar {
   .editor-content .ProseMirror {
     padding: 1.25rem max(1rem, env(safe-area-inset-right, 0px)) 2rem
       max(1rem, env(safe-area-inset-left, 0px));
+  }
+  .editor-content.document-preview .ProseMirror {
+    padding: 1.25rem 1rem;
+  }
+  .editor-loading {
+    padding: 1.25rem 1rem 0;
   }
   .editor-content .ProseMirror h1 {
     font-size: 1.75rem;

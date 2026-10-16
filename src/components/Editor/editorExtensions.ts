@@ -13,6 +13,7 @@ import Image from '@tiptap/extension-image';
 import { Extension, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { FindReplace } from './findReplaceExtension';
+import { ImageFiles } from './imageFileExtension';
 import { SmartGraphic } from './smartGraphicExtension';
 import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
 
@@ -238,5 +239,6 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     SmartGraphic,
     FindReplace,
     ChromeAwareScrolling,
+    ImageFiles,
   ];
 }

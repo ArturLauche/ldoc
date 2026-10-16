@@ -1,15 +1,19 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useLocale } from '@/hooks/useLocale';
 import { useAutoHideOnScroll } from '@/hooks/useAutoHideOnScroll';
 import { useCompactLayout } from '@/hooks/useMediaQuery';
 import { useVisualViewportVars } from '@/hooks/useVisualViewport';
 import { trackInputModality } from '@/lib/inputModality';
+import { MAX_IMAGE_SIZE_MB } from '@/lib/media';
+import { formatMessage } from '@/lib/translations';
 import { cn } from '@/lib/utils';
 import { SHORTCUTS } from './editorShortcuts';
 import { EditorFooter } from './EditorFooter';
+import { IMAGE_FILE_ERROR_EVENT, type ImageFileErrorCode } from './imageFileExtension';
 import { createEditorExtensions, editorAttributes } from './editorExtensions';
 import { PreferencesMenu } from './PreferencesMenu';
 import { SaveStatus } from './SaveStatus';
@@ -121,6 +125,33 @@ export const RichTextEditor = () => {
     editor.commands.setEditorPlaceholder(t('placeholder'));
     editor.setOptions({ editorProps: { attributes: editorAttributes(t('documentEditor')) } });
   }, [editor, t]);
+
+  useEffect(() => {
+    const onImageFileError = (event: Event) => {
+      const code = (event as CustomEvent<ImageFileErrorCode>).detail;
+      toast.error(
+        code === 'too-large'
+          ? formatMessage(t('imageErrorTooLarge'), { maxSize: MAX_IMAGE_SIZE_MB })
+          : code === 'read-failed'
+            ? t('imageUploadFailed')
+            : t(code === 'not-image-drop' ? 'imageDropNotImage' : 'imageErrorNotImage'),
+      );
+    };
+    // A file dropped beside the document must not replace the app with that file.
+    const keepFilesInApp = (event: DragEvent) => {
+      if (!event.defaultPrevented && event.dataTransfer?.types.includes('Files')) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener(IMAGE_FILE_ERROR_EVENT, onImageFileError);
+    window.addEventListener('dragover', keepFilesInApp);
+    window.addEventListener('drop', keepFilesInApp);
+    return () => {
+      document.removeEventListener(IMAGE_FILE_ERROR_EVENT, onImageFileError);
+      window.removeEventListener('dragover', keepFilesInApp);
+      window.removeEventListener('drop', keepFilesInApp);
+    };
+  }, [t]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
