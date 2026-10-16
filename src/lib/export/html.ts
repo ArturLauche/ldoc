@@ -308,11 +308,11 @@ ul{list-style-type:disc}
 ol{list-style-type:decimal}
 ul ul{list-style-type:circle}
 ul ul ul{list-style-type:square}
-:is(ul,ol) :is(ul,ol){margin-top:${em(s.list.nestedMarginTop)}}
-li{margin:${em(s.list.itemMarginTop)} 0 ${s.list.itemMarginBottom}px;padding-left:${s.list.itemPadding}px}
+:is(ul,ol) :is(ul,ol){margin-top:${em(s.list.nestedMarginTop)};margin-bottom:${s.list.nestedMarginBottom}px}
+li{margin:${em(s.list.itemMarginTop)} 0 ${em(s.list.itemMarginBottom)};padding-left:${s.list.itemPadding}px}
 li::marker{color:${muted};font-weight:400}
-.lwrite-document>ul>li p{margin-top:${em(s.list.paragraphMarginTop)}}
-.lwrite-document>:is(ul,ol)>li>p:first-child{margin-top:${em(s.list.firstParagraphMarginTop)}}
+.lwrite-document li>p{margin:0}
+.lwrite-document li>p+p{margin-top:${em(s.list.itemParagraphGap)}}
 img{display:block;max-width:100%;height:auto;border-radius:${s.image.radius}px}
 img[data-align=center]{margin:${s.image.margin}px auto}
 img[data-align=left]{float:left;margin:${s.image.floatMargin}px ${s.image.floatGap}px ${s.image.floatMargin}px 0}
@@ -322,6 +322,8 @@ table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0;font-size:
 th,td{min-width:${s.table.minColumnWidth}px;border:${s.table.borderWidth}px solid ${border};padding:${s.table.cellPaddingY}px ${s.table.cellPaddingX}px;vertical-align:top;text-align:left;background-color:#${s.table.cellBackground}}
 th{background-color:#${s.table.headerBackground};font-weight:${s.table.headerWeight}}
 :is(th,td) p{margin:${em(s.paragraph.marginTop)} 0 ${s.table.paragraphMarginBottom}px}
+.lwrite-document :is(th,td)>:first-child{margin-top:0}
+.lwrite-document :is(th,td)>:last-child{margin-bottom:0}
 table[data-borders=hidden] :is(th,td){border-color:transparent}
 div.lwrite-graphic{margin:${s.graphic.margin}px 0;padding:${s.graphic.padding}px;border:${s.graphic.borderWidth}px solid #${s.graphic.borderColor};border-radius:${s.graphic.radius}px;background:#${s.graphic.background};overflow-x:auto}
 .lwrite-graphic-title{font-weight:600;margin:0 0 8px}

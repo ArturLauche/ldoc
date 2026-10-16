@@ -249,6 +249,7 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
     const margins = blockMargins(block, {
       container: frame.container,
       index,
+      last: index === blocks.length - 1,
       previous: blocks[index - 1],
       listDepth: frame.listDepth,
       ...(frame.rootList ? { rootList: frame.rootList } : {}),

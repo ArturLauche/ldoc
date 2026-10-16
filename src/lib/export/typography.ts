@@ -33,12 +33,14 @@ export const DOCUMENT_STYLE = {
     /** `li` padding-inline-start; markers sit outside it. */
     itemPadding: 6,
     marginTop: 20,
-    nestedMarginTop: 12,
     marginBottom: 16,
-    itemMarginTop: 8,
-    itemMarginBottom: 2,
-    firstParagraphMarginTop: 20,
-    paragraphMarginTop: 12,
+    /** Lists inside list items: tight, like their parent items. */
+    nestedMarginTop: 4,
+    nestedMarginBottom: 0,
+    itemMarginTop: 4,
+    itemMarginBottom: 0,
+    /** Paragraphs in an item have no margins, except between two of them. */
+    itemParagraphGap: 8,
   },
   blockquote: { margin: 25.6, paddingLeft: 16, borderWidth: 4, weight: 500, italic: true, open: '“', close: '”' },
   inlineCode: { scale: 0.875, weight: 600, before: '`', after: '`' },
@@ -49,7 +51,7 @@ export const DOCUMENT_STYLE = {
     lineHeight: 1.75,
     margin: 12,
     cellPaddingX: 8,
-    cellPaddingY: 3.2,
+    cellPaddingY: 6,
     borderWidth: 1,
     cellBackground: 'F3F5F7',
     headerBackground: 'F1F3F5',
@@ -253,6 +255,8 @@ export interface MarginContext {
   container: 'root' | 'list-item' | 'blockquote' | 'cell';
   /** Index among siblings. */
   index: number;
+  /** Last among its siblings (cells trim the bottom margin of their last block). */
+  last?: boolean;
   previous?: ExportBlock;
   /** Nesting depth of lists around this element (0 = not in a list). */
   listDepth: number;
@@ -268,6 +272,14 @@ export interface BlockMargins {
 }
 
 export function blockMargins(block: ExportBlock, context: MarginContext): BlockMargins {
+  const margins = ownMargins(block, context);
+  // Cell content sits on the cell padding: the first block has no top
+  // margin and the last no bottom margin (`:is(td, th) > :first-child`).
+  if (context.container !== 'cell') return margins;
+  return { top: context.index === 0 ? 0 : margins.top, bottom: context.last ? 0 : margins.bottom };
+}
+
+function ownMargins(block: ExportBlock, context: MarginContext): BlockMargins {
   const afterReset =
     context.previous?.type === 'horizontal-rule' ||
     (context.previous?.type === 'heading' && (context.previous.level ?? 1) > 1);
@@ -278,13 +290,9 @@ export function blockMargins(block: ExportBlock, context: MarginContext): BlockM
         return { top: DOCUMENT_STYLE.table.paragraphMarginTop, bottom: DOCUMENT_STYLE.table.paragraphMarginBottom };
       }
       if (context.container === 'list-item') {
-        // Prose: `> ul > li p` 0.75em, `> ul|ol > li > p:first-child` 1.25em,
-        // anything else the paragraph default (scaled to 14px in cells).
-        let paragraphTop: number = DOCUMENT_STYLE.paragraph.marginTop;
-        if (context.inCell) paragraphTop = DOCUMENT_STYLE.table.paragraphMarginTop;
-        else if (context.rootList && context.listDepth === 1 && context.index === 0) paragraphTop = DOCUMENT_STYLE.list.firstParagraphMarginTop;
-        else if (context.rootList === 'bullet') paragraphTop = DOCUMENT_STYLE.list.paragraphMarginTop;
-        return { top: paragraphTop, bottom: DOCUMENT_STYLE.paragraph.marginBottom };
+        // Tight lists: `li > p { margin: 0 }`, `li > p + p { margin-top: 0.5em }`.
+        const gap = context.previous?.type === 'paragraph' ? em(DOCUMENT_STYLE.list.itemParagraphGap, context) : 0;
+        return { top: gap, bottom: 0 };
       }
       return { top: top(DOCUMENT_STYLE.paragraph.marginTop), bottom: DOCUMENT_STYLE.paragraph.marginBottom };
     }
@@ -293,10 +301,9 @@ export function blockMargins(block: ExportBlock, context: MarginContext): BlockM
       return { top: heading.marginTop, bottom: heading.marginBottom };
     }
     case 'list':
-      return {
-        top: top(em(context.listDepth > 0 ? DOCUMENT_STYLE.list.nestedMarginTop : DOCUMENT_STYLE.list.marginTop, context)),
-        bottom: DOCUMENT_STYLE.list.marginBottom,
-      };
+      return context.listDepth > 0
+        ? { top: top(em(DOCUMENT_STYLE.list.nestedMarginTop, context)), bottom: DOCUMENT_STYLE.list.nestedMarginBottom }
+        : { top: top(em(DOCUMENT_STYLE.list.marginTop, context)), bottom: DOCUMENT_STYLE.list.marginBottom };
     case 'blockquote': {
       const margin = em(DOCUMENT_STYLE.blockquote.margin, context);
       return { top: top(margin), bottom: margin };
@@ -323,7 +330,7 @@ function em(value: number, context: { inCell?: boolean }): number {
 
 /** Margins of a list item box, which collapse with its first and last child. */
 export function listItemMargins(inCell = false): BlockMargins {
-  return { top: em(DOCUMENT_STYLE.list.itemMarginTop, { inCell }), bottom: DOCUMENT_STYLE.list.itemMarginBottom };
+  return { top: em(DOCUMENT_STYLE.list.itemMarginTop, { inCell }), bottom: em(DOCUMENT_STYLE.list.itemMarginBottom, { inCell }) };
 }
 
 /**
@@ -378,7 +385,8 @@ interface FlowScope {
 /**
  * Walks blocks like the editor's CSS block formatting context. Page flows
  * drop the first leaf's gap; table cells keep both edges (cells have padding,
- * so their content margins do not collapse with the outside).
+ * so their content margins do not collapse with the outside), but their
+ * first and last blocks have no outer margins of their own.
  */
 export function flowLeaves(blocks: ExportBlock[], container: MarginContext['container'] = 'root'): Flow {
   const state: FlowState = { pendingBottom: 0, pendingTop: 0, leaves: [] };
@@ -391,6 +399,7 @@ function walkFlow(blocks: ExportBlock[], scope: FlowScope, state: FlowState): vo
     const margins = blockMargins(block, {
       container: scope.container,
       index,
+      last: index === blocks.length - 1,
       previous: blocks[index - 1],
       listDepth: scope.listDepth,
       ...(scope.rootList ? { rootList: scope.rootList } : {}),

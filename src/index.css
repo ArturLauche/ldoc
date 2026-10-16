@@ -997,8 +997,23 @@ header.app-bar {
   list-style-type: square;
 }
 
+/* Tight lists: items 4px apart, paragraphs inside an item only spaced from
+   each other. Mirrored by DOCUMENT_STYLE.list in src/lib/export/typography.ts. */
 .editor-content .ProseMirror li {
-  margin-bottom: 0.125rem;
+  margin: 0.25em 0 0;
+}
+
+.editor-content .ProseMirror li > p {
+  margin: 0;
+}
+
+.editor-content .ProseMirror li > p + p {
+  margin-top: 0.5em;
+}
+
+.editor-content .ProseMirror :is(ul, ol) :is(ul, ol) {
+  margin-top: 0.25em;
+  margin-bottom: 0;
 }
 
 .editor-content .ProseMirror mark {
@@ -1054,9 +1069,20 @@ header.app-bar {
   box-sizing: border-box;
   min-width: 48px;
   border: 1px solid hsl(var(--border));
-  padding: 0.2rem 0.5rem;
+  padding: 0.375rem 0.5rem;
   vertical-align: top;
   background-color: hsl(var(--background));
+}
+
+/* Cell content sits on the cell padding, like a word processor table. The
+   doubled class outranks block rules such as centered images; the last
+   child ignores the column-resize handle ProseMirror adds while hovering. */
+.editor-content .ProseMirror.ProseMirror :is(td, th) > :first-child {
+  margin-top: 0;
+}
+
+.editor-content .ProseMirror.ProseMirror :is(td, th) > :nth-last-child(1 of :not(.column-resize-handle)) {
+  margin-bottom: 0;
 }
 
 .editor-content .ProseMirror th {

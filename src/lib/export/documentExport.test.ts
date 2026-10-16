@@ -255,7 +255,8 @@ describe('HTML export', () => {
     expect(html).toContain('white-space:break-spaces');
     expect(html).toContain('font-variant-ligatures:none');
     expect(html).toMatch(/h2\{font-size:28px;font-weight:600;line-height:1\.3/);
-    expect(html).toContain('.lwrite-document>ul>li p{margin-top:0.75em}');
+    expect(html).toContain('.lwrite-document li>p{margin:0}');
+    expect(html).toContain('.lwrite-document :is(th,td)>:first-child{margin-top:0}');
   });
 
   it('embeds data images and links remote images it cannot download instead of loading them', async () => {
