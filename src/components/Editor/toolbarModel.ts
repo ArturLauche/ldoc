@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
+import { redoDepth, undoDepth } from '@tiptap/pm/history';
+import { liftListItem, sinkListItem } from '@tiptap/pm/schema-list';
 import { useEditorState, type Editor } from '@tiptap/react';
 import type { TranslationKey } from '@/lib/translations';
 import { SHORTCUTS } from './editorShortcuts';
+import { selectionNodes } from './selectionNodes';
 
 export const FONT_SIZES = [
   '10px',
@@ -23,8 +26,6 @@ export const MAX_FONT_SIZE_PX = Number.parseFloat(FONT_SIZES[FONT_SIZES.length -
 
 /** Swatch value that removes the color (automatic text color, no highlight). */
 export const NO_COLOR = 'transparent';
-/** @deprecated Use NO_COLOR. */
-export const REMOVE_HIGHLIGHT = NO_COLOR;
 
 export const TEXT_COLORS = [
   NO_COLOR,
@@ -119,18 +120,21 @@ export function useToolbarState(editor: Editor | null) {
     editor,
     selector: ({ editor: current }) => {
       if (!current) return null;
+      // Node questions share one walk over the selection (see selectionNodes).
+      const nodeActive = selectionNodes(current.state).isActive;
+      const listItem = current.schema.nodes.listItem;
       const textStyle = current.getAttributes('textStyle');
       const fontSize: unknown = textStyle.fontSize;
       const fontFamily: unknown = textStyle.fontFamily;
       const lineHeight: unknown = textStyle.lineHeight;
       const color: unknown = textStyle.color;
       const highlight: unknown = current.getAttributes('highlight').color;
-      const heading = ([1, 2, 3] as const).find((level) => current.isActive('heading', { level }));
-      const blockStyle: TextBlockStyle = current.isActive('codeBlock')
+      const heading = ([1, 2, 3] as const).find((level) => nodeActive('heading', { level }));
+      const blockStyle: TextBlockStyle = nodeActive('codeBlock')
         ? 'codeBlock'
         : heading
           ? (`h${heading}` as TextBlockStyle)
-          : current.isActive('blockquote')
+          : nodeActive('blockquote')
             ? 'blockquote'
             : 'paragraph';
       return {
@@ -148,18 +152,21 @@ export function useToolbarState(editor: Editor | null) {
         subscript: current.isActive('subscript'),
         code: current.isActive('code'),
         link: current.isActive('link'),
-        bulletList: current.isActive('bulletList'),
-        orderedList: current.isActive('orderedList'),
+        bulletList: nodeActive('bulletList'),
+        orderedList: nodeActive('orderedList'),
+        // Only blocks carry textAlign, so the node answer is the full answer.
         alignment: (['left', 'center', 'right', 'justify'] as const).find((textAlign) =>
-          current.isActive({ textAlign }),
+          nodeActive(null, { textAlign }),
         ),
-        inTable: current.isActive('table'),
-        inGraphic: current.isActive('smartGraphic'),
-        imageSelected: current.isActive('image'),
-        canUndo: current.can().undo(),
-        canRedo: current.can().redo(),
-        canIndent: current.can().sinkListItem('listItem'),
-        canOutdent: current.can().liftListItem('listItem'),
+        inTable: nodeActive('table'),
+        inGraphic: nodeActive('smartGraphic'),
+        imageSelected: nodeActive('image'),
+        // The commands behind can().undo() and can().sinkListItem(), asked
+        // directly: a can() chain wraps every editor command on each call.
+        canUndo: undoDepth(current.state) > 0,
+        canRedo: redoDepth(current.state) > 0,
+        canIndent: listItem ? sinkListItem(listItem)(current.state) : false,
+        canOutdent: listItem ? liftListItem(listItem)(current.state) : false,
       };
     },
   });

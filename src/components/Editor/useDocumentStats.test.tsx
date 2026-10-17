@@ -58,6 +58,73 @@ describe('document statistics lifecycle', () => {
       editor.commands.setTextSelection(3);
     });
     expect(hook.result.current.selectedWordCount).toBeNull();
+    // Only spaces or a node without text selected: the footer keeps the total.
+    act(() => {
+      editor.commands.setContent('<p>one</p><hr><p>two</p>');
+      editor.commands.setNodeSelection(5);
+    });
+    expect(editor.state.selection.empty).toBe(false);
+    expect(hook.result.current.selectedWordCount).toBeNull();
+    hook.unmount();
+    editor.destroy();
+  });
+
+  it('counts every block, including list items, tables and graphics, without separators', () => {
+    vi.useFakeTimers();
+    const editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content:
+        '<h1>Big title</h1><p>one two<br>three</p><ul><li><p>four</p></li><li><p>five six</p></li></ul>' +
+        '<table><tr><td><p>seven</p></td><td><p>eight</p></td></tr></table>',
+    });
+    editor.commands.focus('end');
+    editor.commands.insertSmartGraphic('list-block', 'en');
+    const hook = renderHook(() => useDocumentStats(editor));
+    // The same total as counting the whole text at once (graphic labels included).
+    const expectedWords = editor.getText().match(/\S+/g)?.length ?? 0;
+    expect(expectedWords).toBeGreaterThan(10);
+    expect(hook.result.current.wordCount).toBe(expectedWords);
+    // Characters with spaces, without paragraph or line breaks.
+    const visible = editor.getText().replace(/[\n\r]/g, '');
+    expect(hook.result.current.characterCount).toBe([...visible].length);
+
+    // Typing changes only the edited block; the cached blocks still count.
+    act(() => {
+      editor.commands.setTextSelection(editor.state.doc.resolve(3).pos);
+      editor.commands.insertContent('very ');
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(hook.result.current.wordCount).toBe(expectedWords + 1);
+    expect(hook.result.current.characterCount).toBe([...visible].length + 5);
+    hook.unmount();
+    editor.destroy();
+  });
+
+  it('refreshes after a typing pause, and at least every two seconds while typing', () => {
+    vi.useFakeTimers();
+    const editor = new Editor({ extensions: createEditorExtensions(() => ''), content: '<p>start</p>' });
+    const hook = renderHook(() => useDocumentStats(editor));
+    expect(hook.result.current.wordCount).toBe(1);
+    const typeWord = () =>
+      act(() => {
+        editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' word');
+        vi.advanceTimersByTime(100);
+      });
+
+    // Continuous typing: no refresh before the two-second cap…
+    for (let i = 0; i < 15; i++) typeWord();
+    expect(hook.result.current.wordCount).toBe(1);
+    // …but one shortly after it, even though typing goes on.
+    for (let i = 0; i < 8; i++) typeWord();
+    expect(hook.result.current.wordCount).toBeGreaterThan(1);
+
+    // A pause publishes the final count.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(hook.result.current.wordCount).toBe(24);
     hook.unmount();
     editor.destroy();
   });

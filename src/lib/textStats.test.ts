@@ -16,8 +16,9 @@ describe('text statistics', () => {
     expect(countWords('你好。', 'zh')).toBe(1);
   });
 
-  it('counts astral characters once', () => {
+  it('counts astral characters once and line breaks not at all', () => {
     expect(countCharacters('a😀b')).toBe(3);
     expect(countCharacters('')).toBe(0);
+    expect(countCharacters('ab\n\ncd\r\ne f')).toBe(7);
   });
 });

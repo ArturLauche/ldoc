@@ -44,6 +44,7 @@ import { DesignPicker } from './graphics/DesignPicker';
 import { LayoutPicker } from './graphics/LayoutPicker';
 import { TextPane } from './graphics/TextPane';
 import { GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
+import { selectionNodes } from './selectionNodes';
 import { SmartGraphicGallery } from './SmartGraphicGallery';
 import { ToolbarButton, ToolbarSeparator } from './toolbarControls';
 
@@ -78,19 +79,24 @@ export function SmartGraphicToolbar({
   showInsert = true,
   showLabels = false,
 }: SmartGraphicToolbarProps) {
-  const { t, locale } = useLocale();
+  const { t, tCount, locale } = useLocale();
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
   const [textPaneOpen, setTextPaneOpen] = useState(false);
 
   const graphicState = useEditorState({
     editor,
-    selector: ({ editor: current }) => ({
-      graphic: current.isActive('smartGraphic')
-        ? coerceGraphic(current.getAttributes('smartGraphic').graphic)
-        : null,
-      activeItemId: (current.storage.smartGraphic?.activeItemId as string | null) ?? null,
-    }),
+    selector: ({ editor: current }) => {
+      // Runs on every transaction while the insert button is shown: one walk
+      // over the selection instead of two from the top of the document.
+      const nodes = selectionNodes(current.state);
+      return {
+        graphic: nodes.isActive('smartGraphic')
+          ? coerceGraphic(nodes.attributes('smartGraphic').graphic)
+          : null,
+        activeItemId: (current.storage.smartGraphic?.activeItemId as string | null) ?? null,
+      };
+    },
   });
 
   const apply = (next: SmartGraphicModel, options?: { focus?: boolean }) => {
@@ -220,7 +226,7 @@ export function SmartGraphicToolbar({
             ? needsSelection
             : canRemoveGraphicItem(graphic, selectedId)
               ? undefined
-              : formatMessage(t('graphicMinItemsReason'), { count: layout.minItems })
+              : tCount('graphicMinItemsReason', layout.minItems)
         }
         onClick={removeItem}
       >

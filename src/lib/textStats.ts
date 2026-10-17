@@ -30,11 +30,15 @@ export function countWords(text: string, locale = 'en'): number {
   return count;
 }
 
-/** Characters as code points, so an emoji or other astral symbol counts once. */
+/**
+ * Characters as code points, so an emoji or other astral symbol counts once.
+ * Line and paragraph breaks are structure, not characters (as in word
+ * processors' "characters with spaces").
+ */
 export function countCharacters(text: string): number {
   let count = 0;
   for (const char of text) {
-    if (char) count += 1;
+    if (char !== '\n' && char !== '\r') count += 1;
   }
   return count;
 }

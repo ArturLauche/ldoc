@@ -31,6 +31,7 @@ import { useLocale } from '@/hooks/useLocale';
 import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import { formatMessage } from '@/lib/translations';
 import { cn } from '@/lib/utils';
+import { selectionNodes, type SelectionNodes } from './selectionNodes';
 import { TableGridPicker } from './TableGridPicker';
 import { ColorIndicator, PopoverSection, ToolbarButton } from './toolbarControls';
 
@@ -41,10 +42,9 @@ const swatchClass = (selected: boolean) =>
   );
 
 /** Fill of the cell at the selection (header or body cell). */
-function cellBackground(editor: Editor): string | undefined {
+function cellBackground(nodes: SelectionNodes): string | undefined {
   const value: unknown =
-    editor.getAttributes('tableCell').backgroundColor ??
-    editor.getAttributes('tableHeader').backgroundColor;
+    nodes.attributes('tableCell').backgroundColor ?? nodes.attributes('tableHeader').backgroundColor;
   return typeof value === 'string' && value ? value : undefined;
 }
 
@@ -74,22 +74,28 @@ export function TableToolbar({ editor, showInsert = true, showLabels = false }: 
   const [fillOpen, setFillOpen] = useState(false);
   const tableState = useEditorState({
     editor,
-    selector: ({ editor: current }) => ({
-      inTable: current.isActive('table'),
-      canAddRowBefore: current.can().addRowBefore(),
-      canAddRowAfter: current.can().addRowAfter(),
-      canAddColumnBefore: current.can().addColumnBefore(),
-      canAddColumnAfter: current.can().addColumnAfter(),
-      canDeleteRow: current.can().deleteRow(),
-      canDeleteColumn: current.can().deleteColumn(),
-      canDeleteTable: current.can().deleteTable(),
-      canMergeCells: current.can().mergeCells(),
-      canSplitCell: current.can().splitCell(),
-      canToggleHeaderRow: current.can().toggleHeaderRow(),
-      canToggleHeaderColumn: current.can().toggleHeaderColumn(),
-      bordersHidden: current.getAttributes('table').borders === 'hidden',
-      cellFill: cellBackground(current),
-    }),
+    selector: ({ editor: current }) => {
+      // One walk over the selection answers the node questions (see selectionNodes).
+      const nodes = selectionNodes(current.state);
+      // One dry-run command set for all checks (each can() call builds one).
+      const can = current.can();
+      return {
+        inTable: nodes.isActive('table'),
+        canAddRowBefore: can.addRowBefore(),
+        canAddRowAfter: can.addRowAfter(),
+        canAddColumnBefore: can.addColumnBefore(),
+        canAddColumnAfter: can.addColumnAfter(),
+        canDeleteRow: can.deleteRow(),
+        canDeleteColumn: can.deleteColumn(),
+        canDeleteTable: can.deleteTable(),
+        canMergeCells: can.mergeCells(),
+        canSplitCell: can.splitCell(),
+        canToggleHeaderRow: can.toggleHeaderRow(),
+        canToggleHeaderColumn: can.toggleHeaderColumn(),
+        bordersHidden: nodes.attributes('table').borders === 'hidden',
+        cellFill: cellBackground(nodes),
+      };
+    },
   });
 
   const applyFill = (color: string | null) => {

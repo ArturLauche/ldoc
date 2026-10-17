@@ -107,14 +107,19 @@ export function loadFont(fontName: string) {
   document.head.appendChild(link);
 }
 
-export function loadDocumentFonts(doc: ProseMirrorNode) {
+/** Font names the content of `node` sets with textStyle marks. */
+export function fontFamiliesIn(node: ProseMirrorNode): Set<string> {
   const families = new Set<string>();
-  doc.descendants((node) => {
-    for (const mark of node.marks) {
+  node.descendants((child) => {
+    for (const mark of child.marks) {
       if (mark.type.name === 'textStyle' && typeof mark.attrs.fontFamily === 'string') {
         families.add(primaryFontName(mark.attrs.fontFamily));
       }
     }
   });
-  families.forEach(loadFont);
+  return families;
+}
+
+export function loadDocumentFonts(doc: ProseMirrorNode) {
+  fontFamiliesIn(doc).forEach(loadFont);
 }

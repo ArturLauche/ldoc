@@ -489,12 +489,14 @@ export function useDocumentSession(editor: Editor | null) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Cheap checks first: this runs for every key typed, and the dialog
+      // lookup scans the whole document.
       if (
-        document.querySelector('[role=dialog], [role=alertdialog]') ||
         event.defaultPrevented ||
         event.altKey ||
         event.shiftKey ||
-        !(event.metaKey || event.ctrlKey)
+        !(event.metaKey || event.ctrlKey) ||
+        document.querySelector('[role=dialog], [role=alertdialog]')
       )
         return;
       if (event.key.toLowerCase() === 's') {
