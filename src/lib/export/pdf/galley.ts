@@ -246,7 +246,7 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
   const firstParagraph = paragraphIndexes[0];
   const lastParagraph = paragraphIndexes[paragraphIndexes.length - 1];
   blocks.forEach((block, index) => {
-    const margins = blockMargins(block, {
+    const context: MarginContext = {
       container: frame.container,
       index,
       last: index === blocks.length - 1,
@@ -254,7 +254,8 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
       listDepth: frame.listDepth,
       ...(frame.rootList ? { rootList: frame.rootList } : {}),
       inCell: Boolean(frame.cell),
-    });
+    };
+    const margins = blockMargins(block, context);
     switch (block.type) {
       case 'paragraph':
       case 'heading': {
@@ -296,7 +297,9 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
         layoutTable(builder, block, frame, margins);
         break;
       case 'image':
-        layoutImage(builder, block, frame, margins);
+        // An image that could not be embedded is drawn as the text that names
+        // it, in the same place: paragraph margins in the image's position.
+        layoutImage(builder, block, frame, margins, blockMargins({ type: 'paragraph', runs: [] }, context));
         break;
       case 'graphic':
         layoutGraphic(builder, block, frame, margins);
@@ -492,9 +495,15 @@ export function imageDisplaySize(image: ExportImageBlock, available: number, pag
   return { width, height };
 }
 
-function layoutImage(builder: GalleyBuilder, image: ExportImageBlock, frame: Frame, margins: { top: number; bottom: number }): void {
+function layoutImage(
+  builder: GalleyBuilder,
+  image: ExportImageBlock,
+  frame: Frame,
+  margins: { top: number; bottom: number },
+  placeholderMargins: { top: number; bottom: number },
+): void {
   if (!image.prepared) {
-    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, blockMargins({ type: 'paragraph', runs: [] }, { container: frame.container, index: 1, listDepth: frame.listDepth, ...(frame.rootList ? { rootList: frame.rootList } : {}), inCell: Boolean(frame.cell) }));
+    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, placeholderMargins);
     return;
   }
   const { width, height } = imageDisplaySize(image, frame.width, builder.env.pageHeight - DOCUMENT_STYLE.image.margin * 2);

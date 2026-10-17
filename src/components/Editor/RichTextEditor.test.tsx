@@ -1,5 +1,5 @@
 import { storedItem } from '@/test/documentStorage';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -14,7 +14,17 @@ import {
   getLibraryDocuments,
 } from '@/lib/documentLibrary';
 import { COMPACT_LAYOUT_QUERY } from '@/hooks/useMediaQuery';
+import { useLocale } from '@/hooks/useLocale';
 import { RichTextEditor } from './RichTextEditor';
+
+function SwitchToGerman() {
+  const { setLocale } = useLocale();
+  return (
+    <button type="button" onClick={() => void setLocale('de')}>
+      Switch to German
+    </button>
+  );
+}
 
 function renderEditor() {
   return render(
@@ -23,6 +33,7 @@ function renderEditor() {
         <LocaleProvider>
           <ConfirmProvider>
             <TooltipProvider>
+              <SwitchToGerman />
               <RichTextEditor />
             </TooltipProvider>
           </ConfirmProvider>
@@ -60,6 +71,32 @@ describe('RichTextEditor', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the document accessible name in the current language after later renders', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    expect(await screen.findByLabelText('Document editor')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Switch to German' }));
+    // Typing a new title re-renders the shell, which re-applies the editor options.
+    await user.type(await screen.findByLabelText('Dokumentname'), ' neu');
+    expect(screen.getByLabelText('Dokumenteditor')).toHaveAttribute('contenteditable', 'true');
+    expect(screen.queryByLabelText('Document editor')).not.toBeInTheDocument();
+  });
+
+  it('opens toolbar menus on a tap, not when a touch scroll starts on them', async () => {
+    renderEditor();
+    for (const name of ['Alignment', 'Line spacing']) {
+      const trigger = await screen.findByRole('button', { name }, { timeout: 3000 });
+      fireEvent.pointerDown(trigger, { pointerType: 'touch', button: 0 });
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      fireEvent.click(trigger);
+      expect(await screen.findByRole('menu')).toBeInTheDocument();
+      act(() => {
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    }
   });
 
   it('does not seed the full document library for current-format startup records', async () => {

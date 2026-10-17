@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useLocale } from '@/hooks/useLocale';
+import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRovingToolbar } from '@/hooks/useRovingToolbar';
 import { keepEditorFocus } from '@/lib/inputModality';
@@ -475,9 +476,11 @@ function AlignmentMenu({
 }) {
   const { t } = useLocale();
   const focus = useReturnToEditor(editor);
+  // Tablets use this toolbar: a scroll that starts on the button must not open it.
+  const menu = useTouchSafeMenu();
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
+      <DropdownMenuTrigger asChild {...menu.triggerProps}>
         <ToolbarButton label={label}>{icon}</ToolbarButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52" onCloseAutoFocus={focus.onCloseAutoFocus}>
@@ -516,9 +519,10 @@ function LineSpacingMenu({
   options: { name: string; value: string }[];
 }) {
   const focus = useReturnToEditor(editor);
+  const menu = useTouchSafeMenu();
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
+      <DropdownMenuTrigger asChild {...menu.triggerProps}>
         <ToolbarButton label={label}>
           <UnfoldVertical />
         </ToolbarButton>

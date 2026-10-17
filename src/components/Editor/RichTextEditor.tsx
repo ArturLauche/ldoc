@@ -82,7 +82,6 @@ export const RichTextEditor = () => {
 
   // The schema stays stable. Locale changes update decorations through a command.
   const [extensions] = useState(() => createEditorExtensions(() => t('placeholder')));
-  const [initialLabel] = useState(() => t('documentEditor'));
 
   const editor = useEditor({
     extensions,
@@ -92,7 +91,9 @@ export const RichTextEditor = () => {
     // expose an instance that TipTap has already disposed.
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
-    editorProps: { attributes: editorAttributes(initialLabel) },
+    // TipTap re-applies these options after every render, so the accessible
+    // name follows the current language here rather than in an effect.
+    editorProps: { attributes: editorAttributes(t('documentEditor')) },
   });
   const {
     isLoading,
@@ -123,7 +124,6 @@ export const RichTextEditor = () => {
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     editor.commands.setEditorPlaceholder(t('placeholder'));
-    editor.setOptions({ editorProps: { attributes: editorAttributes(t('documentEditor')) } });
   }, [editor, t]);
 
   useEffect(() => {
