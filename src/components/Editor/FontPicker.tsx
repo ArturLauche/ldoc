@@ -1,13 +1,27 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Check } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocale } from '@/hooks/useLocale';
-import { FONT_FAMILIES, loadFont } from '@/lib/fonts';
+import {
+  FONT_FAMILIES,
+  fontFamilyValue,
+  loadFont,
+  primaryFontName,
+  type FontCategory,
+} from '@/lib/fonts';
 import { isTouchInteraction, keepEditorFocus } from '@/lib/inputModality';
+import type { TranslationKey } from '@/lib/translations';
 import { cn } from '@/lib/utils';
+
+const CATEGORY_LABELS: Record<FontCategory, TranslationKey> = {
+  'sans-serif': 'fontCategorySansSerif',
+  serif: 'fontCategorySerif',
+  monospace: 'fontCategoryMonospace',
+  display: 'fontCategoryDisplay',
+  system: 'fontCategorySystem',
+};
 
 interface FontPickerProps {
   value: string;
@@ -18,6 +32,21 @@ interface FontPickerProps {
   align?: 'start' | 'center' | 'end';
 }
 
+/** Index of the option under a pointer event target, if any. */
+function optionIndexAt(target: EventTarget): number | null {
+  if (!(target instanceof Element)) return null;
+  const value = target.closest('[data-index]')?.getAttribute('data-index');
+  return value === null || value === undefined ? null : Number(value);
+}
+
+/** One option in the list: `''` is the document default. */
+type FontOption = { name: string; category: FontCategory | null };
+
+/**
+ * Searchable font list (ARIA combobox): typing filters, arrow keys move the
+ * active option, Enter applies it. Fonts load on hover or focus so the
+ * preview renders in the face itself.
+ */
 export const FontPicker = ({
   value,
   onChange,
@@ -25,63 +54,75 @@ export const FontPicker = ({
   label,
   align = 'start',
 }: FontPickerProps) => {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   // After a pick, focus stays in the document that `onChange` focused.
   const pickedRef = useRef(false);
+  const currentFontName = value ? primaryFontName(value) : '';
 
-  // Load current font
   useEffect(() => {
-    if (value) {
-      const fontName = value.split(',')[0].replace(/['"]/g, '').trim();
-      loadFont(fontName);
-    }
-  }, [value]);
+    if (currentFontName) loadFont(currentFontName);
+  }, [currentFontName]);
 
-  // Filter fonts based on search
-  const filteredFonts = useMemo(() => {
-    if (!search) return FONT_FAMILIES;
-    const searchLower = search.toLowerCase();
-    return FONT_FAMILIES.filter(
-      (font) =>
-        font.name.toLowerCase().includes(searchLower) ||
-        font.category.toLowerCase().includes(searchLower),
-    );
-  }, [search]);
+  const options = useMemo<FontOption[]>(() => {
+    const query = search.trim().toLocaleLowerCase(locale);
+    const fonts = query
+      ? FONT_FAMILIES.filter(
+          (font) =>
+            font.name.toLocaleLowerCase(locale).includes(query) ||
+            t(CATEGORY_LABELS[font.category]).toLocaleLowerCase(locale).includes(query),
+        )
+      : FONT_FAMILIES;
+    return [...(query ? [] : [{ name: '', category: null }]), ...fonts];
+  }, [locale, search, t]);
 
-  // Group fonts by category
-  const groupedFonts = useMemo(() => {
-    const groups: Record<string, typeof FONT_FAMILIES> = {};
-    for (const font of filteredFonts) {
-      if (!groups[font.category]) {
-        groups[font.category] = [];
-      }
-      groups[font.category].push(font);
-    }
-    return groups;
-  }, [filteredFonts]);
-
-  const currentFontName = value
-    ? value.split(',')[0].replace(/['"]/g, '').trim()
-    : t('fontDefault');
-
-  const handleSelectFont = (fontName: string) => {
-    loadFont(fontName);
-
-    // Get the font category for fallback
-    const font = FONT_FAMILIES.find((f) => f.name === fontName);
-    let fallback = 'sans-serif';
-    if (font?.category === 'serif' || ['Times New Roman', 'Georgia'].includes(fontName))
-      fallback = 'serif';
-    else if (font?.category === 'monospace' || fontName === 'Courier New') fallback = 'monospace';
-    else if (font?.category === 'display') fallback = 'cursive';
-
+  const select = (option: FontOption) => {
+    if (option.name) loadFont(option.name);
     pickedRef.current = true;
-    onChange(`"${fontName}", ${fallback}`);
+    onChange(option.name ? fontFamilyValue(option.name) : '');
     setOpen(false);
     setSearch('');
   };
+
+  const optionId = (index: number) => `${listId}-option-${index}`;
+
+  const moveActive = (index: number) => {
+    const next = Math.max(0, Math.min(options.length - 1, index));
+    setActiveIndex(next);
+    const option = options[next];
+    if (option?.name) loadFont(option.name);
+    listRef.current?.ownerDocument
+      .getElementById(optionId(next))
+      ?.scrollIntoView?.({ block: 'nearest' });
+  };
+
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveActive(activeIndex + 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveActive(activeIndex - 1);
+    } else if (event.key === 'Home' && !search) {
+      event.preventDefault();
+      moveActive(0);
+    } else if (event.key === 'End' && !search) {
+      event.preventDefault();
+      moveActive(options.length - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const option = options[activeIndex];
+      if (option) select(option);
+    }
+  };
+
+  const selectedIndex = options.findIndex((option) =>
+    option.name ? option.name === currentFontName : !currentFontName,
+  );
 
   return (
     <Popover
@@ -89,7 +130,11 @@ export const FontPicker = ({
       onOpenChange={(next) => {
         // A pick whose close was cut short (the panel unmounted) must not
         // swallow focus restoration the next time.
-        if (next) pickedRef.current = false;
+        if (next) {
+          pickedRef.current = false;
+          setSearch('');
+          setActiveIndex(Math.max(0, selectedIndex));
+        }
         setOpen(next);
       }}
     >
@@ -97,28 +142,28 @@ export const FontPicker = ({
         <Button
           variant="outline"
           className={cn(
-            'w-28 h-9 justify-between text-xs font-medium bg-card border-border',
+            'h-9 w-28 justify-between gap-1.5 border-input bg-card px-3 font-normal shadow-xs hover:border-ring/50 hover:bg-card data-[state=open]:border-ring',
             triggerClassName,
           )}
           aria-label={t('toolbarFontFamily')}
         >
           {label ? (
-            <span aria-hidden="true" className="shrink-0 font-normal text-muted-foreground">
+            <span aria-hidden="true" className="shrink-0 text-muted-foreground">
               {label}
             </span>
           ) : null}
           <span
-            className={cn('truncate', label && 'min-w-0 flex-1 text-start')}
+            className={cn('min-w-0 truncate text-start', label && 'flex-1')}
             style={{ fontFamily: value || 'inherit' }}
           >
-            {currentFontName}
+            {currentFontName || t('fontDefault')}
           </span>
-          <Search className="h-3 w-3 ml-1 opacity-50" />
+          <ChevronDown aria-hidden="true" className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         aria-label={t('toolbarFontFamily')}
-        className="flex w-64 flex-col overflow-hidden p-0 bg-popover border border-border shadow-lg z-50"
+        className="flex w-64 flex-col overflow-hidden p-0"
         align={align}
         onOpenAutoFocus={(event) => {
           // Keyboard users land in the search field; a tap shows the list
@@ -132,75 +177,87 @@ export const FontPicker = ({
         }}
         onMouseDown={keepEditorFocus}
       >
-        <div className="p-2 border-b border-border/50">
+        <div className="border-b p-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
+              role="combobox"
+              aria-expanded="true"
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={options[activeIndex] ? optionId(activeIndex) : undefined}
               placeholder={t('fontSearchPlaceholder')}
               aria-label={t('fontSearchPlaceholder')}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 bg-card pointer-coarse:h-10"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={onSearchKeyDown}
+              className="ps-8"
               enterKeyHint="search"
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
         </div>
-        <ScrollArea className="h-64 max-h-[calc(var(--radix-popover-content-available-height,16rem)-3.75rem)]">
-          <div className="p-1">
-            {/* Default option */}
-            <button
-              onClick={() => {
-                pickedRef.current = true;
-                onChange('');
-                setOpen(false);
-                setSearch('');
-              }}
-              className={cn(
-                'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors pointer-coarse:py-3',
-                !value && 'bg-accent',
-              )}
-            >
-              <span>{t('fontDefault')}</span>
-              {!value && <Check className="h-4 w-4" />}
-            </button>
-
-            {/* Grouped fonts */}
-            {Object.entries(groupedFonts).map(([category, fonts]) => (
-              <div key={category}>
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {category}
-                </div>
-                {fonts.map((font) => {
-                  // Preload font on hover
-                  const handleMouseEnter = () => loadFont(font.name);
-
-                  return (
-                    <button
-                      key={font.name}
-                      onClick={() => handleSelectFont(font.name)}
-                      onMouseEnter={handleMouseEnter}
-                      onFocus={handleMouseEnter}
-                      className={cn(
-                        'w-full flex items-center justify-between px-2 py-2 text-sm rounded-sm hover:bg-accent/50 transition-colors pointer-coarse:py-3',
-                        currentFontName === font.name && 'bg-accent',
-                      )}
-                      style={{ fontFamily: `"${font.name}", ${font.category}` }}
+        <div
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label={t('toolbarFontFamily')}
+          onPointerMove={(event) => {
+            const index = optionIndexAt(event.target);
+            if (index !== null && index !== activeIndex) moveActive(index);
+          }}
+          onClick={(event) => {
+            const index = optionIndexAt(event.target);
+            if (index !== null && options[index]) select(options[index]);
+          }}
+          className="h-72 max-h-[calc(var(--radix-popover-content-available-height,18rem)-3.5rem)] overflow-y-auto overscroll-contain p-1"
+        >
+          {options.length ? (
+            options.map((option, index) => {
+              const previous = options[index - 1];
+              const heading =
+                option.category && option.category !== previous?.category
+                  ? t(CATEGORY_LABELS[option.category])
+                  : null;
+              const selected = index === selectedIndex;
+              return (
+                <div key={option.name || 'default'} role="presentation">
+                  {heading ? (
+                    <div
+                      role="presentation"
+                      className="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground"
                     >
-                      <span>{font.name}</span>
-                      {currentFontName === font.name && <Check className="h-4 w-4" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-
-            {filteredFonts.length === 0 && (
-              <div className="px-2 py-8 text-center text-sm text-muted-foreground">
-                {t('fontNoResults')}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+                      {heading}
+                    </div>
+                  ) : null}
+                  <div
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={selected}
+                    data-index={index}
+                    data-active={index === activeIndex || undefined}
+                    className="flex min-h-8 cursor-default select-none items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm data-[active]:bg-accent pointer-coarse:min-h-11"
+                    style={option.name ? { fontFamily: fontFamilyValue(option.name) } : undefined}
+                  >
+                    <span className="truncate">{option.name || t('fontDefault')}</span>
+                    {selected ? (
+                      <Check aria-hidden="true" className="h-4 w-4 shrink-0 text-selected-foreground" />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="px-2 py-8 text-center text-sm text-muted-foreground">{t('fontNoResults')}</p>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );

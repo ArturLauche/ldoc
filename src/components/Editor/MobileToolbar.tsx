@@ -8,6 +8,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Code,
   IndentDecrease,
   IndentIncrease,
   Italic,
@@ -17,6 +18,7 @@ import {
   Plus,
   Redo,
   RemoveFormatting,
+  SeparatorHorizontal,
   Strikethrough,
   Subscript,
   Superscript,
@@ -230,6 +232,13 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                   <Subscript />
                 </BarButton>
                 <BarButton
+                  label={t('toolbarInlineCode')}
+                  pressed={state.code}
+                  onClick={() => run((chain) => chain.toggleCode())}
+                >
+                  <Code />
+                </BarButton>
+                <BarButton
                   label={t('toolbarClearFormatting')}
                   onClick={() => run((chain) => chain.unsetAllMarks().clearNodes())}
                 >
@@ -284,6 +293,7 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                 editor={editor}
                 kind="text"
                 colors={TEXT_COLORS}
+                current={state.textColor}
                 className="panel-swatches"
                 swatchClassName="h-9 w-full"
               />
@@ -292,6 +302,7 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                 editor={editor}
                 kind="highlight"
                 colors={HIGHLIGHT_COLORS}
+                current={state.highlightColor}
                 className="panel-swatches"
                 swatchClassName="h-9 w-full"
               />
@@ -342,14 +353,14 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
                     disabled={!state.canOutdent}
                     onClick={() => run((chain) => chain.liftListItem('listItem'))}
                   >
-                    <IndentDecrease />
+                    <IndentDecrease className="rtl:-scale-x-100" />
                   </BarButton>
                   <BarButton
                     label={t('toolbarIncreaseIndent')}
                     disabled={!state.canIndent}
                     onClick={() => run((chain) => chain.sinkListItem('listItem'))}
                   >
-                    <IndentIncrease />
+                    <IndentIncrease className="rtl:-scale-x-100" />
                   </BarButton>
                 </div>
               </div>
@@ -383,7 +394,7 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
           aria-label={t('insertPanelToggle')}
           className="mobile-panel"
         >
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             <LinkPopover
               editor={editor}
               onComplete={closePanel}
@@ -398,6 +409,15 @@ export const MobileToolbar = memo(function MobileToolbar({ editor }: { editor: E
             <ImageToolbar editor={editor} variant="tile" onComplete={closePanel} />
             <TableGridPicker editor={editor} variant="tile" onComplete={closePanel} />
             <SmartGraphicGallery editor={editor} variant="tile" onComplete={closePanel} />
+            <ToolTile
+              icon={<SeparatorHorizontal />}
+              label={t('insertDividerShort')}
+              aria-label={t('toolbarHorizontalRule')}
+              onClick={() => {
+                run((chain) => chain.setHorizontalRule());
+                closePanel();
+              }}
+            />
           </div>
         </div>
       ) : null}

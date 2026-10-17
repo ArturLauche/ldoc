@@ -28,9 +28,22 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
+  /* On, pressed and selected controls: the brand blue, distinct from hover. */
+  --color-selected: hsl(var(--selected));
+  --color-selected-foreground: hsl(var(--selected-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  /* Radius scale: sm 4px (swatches, marks), md 6px (controls), lg 8px
+     (menus, popovers, cards), xl 12px (dialogs and sheets). */
   --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  /* Interface elevation. Document content keeps the shadow scale below. */
+  --shadow-popover: 0 1px 2px hsl(var(--shadow-color) / calc(0.06 * var(--shadow-strength))),
+    0 10px 28px -6px hsl(var(--shadow-color) / calc(0.16 * var(--shadow-strength)));
+  --shadow-dialog: 0 2px 6px hsl(var(--shadow-color) / calc(0.06 * var(--shadow-strength))),
+    0 24px 56px -12px hsl(var(--shadow-color) / calc(0.3 * var(--shadow-strength)));
 }
 
 @theme {
@@ -71,6 +84,12 @@
     --border: 214 18% 85%;
     --input: 214 18% 78%;
     --ring: 204 80% 38%;
+    --selected: 204 80% 38%;
+    --selected-foreground: 204 85% 29%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 85% 30%;
+    --shadow-color: 222 30% 16%;
+    --shadow-strength: 1;
     /* Graphic fills share one readable foreground; these are not UI surfaces. */
     --chart-1: 215 22% 32%;
     --chart-3: 214 18% 36%;
@@ -98,6 +117,12 @@
     --border: 220 15% 27%;
     --input: 220 15% 36%;
     --ring: 199 86% 65%;
+    --selected: 199 86% 65%;
+    --selected-foreground: 199 90% 76%;
+    --warning: 38 92% 56%;
+    --warning-foreground: 43 96% 70%;
+    --shadow-color: 224 40% 3%;
+    --shadow-strength: 2.6;
     --chart-1: 215 22% 80%;
     --chart-3: 214 18% 74%;
     --chart-4: 214 16% 70%;
@@ -126,9 +151,14 @@
   ::selection {
     background: hsl(var(--ring) / 0.2);
   }
-  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  :where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
     outline: 2px solid hsl(var(--ring));
-    outline-offset: 3px;
+    outline-offset: 2px;
+  }
+  /* Search fields bring their own clear button. */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    appearance: none;
   }
   /* A dialog only receives focus itself when opened by touch (or when it
      has no controls); its own frame already marks it. */
@@ -150,10 +180,27 @@
     background: hsl(var(--card));
     border-bottom: 1px solid hsl(var(--border));
   }
+  .skip-link {
+    position: absolute;
+    inset-inline-start: 0.5rem;
+    top: 0.5rem;
+    z-index: 60;
+    border-radius: var(--radius-md);
+    background: hsl(var(--primary));
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--primary-foreground));
+    transform: translateY(calc(-100% - 1rem));
+  }
+  .skip-link:focus-visible {
+    transform: none;
+  }
 }
 .app-footer {
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--card));
+  padding-block: 0.625rem;
   padding-inline: max(1rem, env(safe-area-inset-left, 0px))
     max(1rem, env(safe-area-inset-right, 0px));
   /* Extends the footer under a home indicator (viewport-fit=cover). */
@@ -163,10 +210,77 @@
 .app-shell.is-compact .app-footer {
   border-bottom-width: 0;
 }
+.app-footer-link {
+  border-radius: var(--radius-sm);
+  transition: color 150ms ease;
+}
+.app-footer-link:hover {
+  color: hsl(var(--foreground));
+}
 /* Standalone sticky headers (legal pages) clear the notch and status bar. */
 header.app-bar {
   padding-top: env(safe-area-inset-top, 0px);
   padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+
+/* First paint before the scripts run (built HTML) and the route fallback:
+   the editor chrome's geometry, so the real interface replaces it in place. */
+.boot-shell {
+  min-height: 100dvh;
+  background: hsl(var(--background));
+}
+.boot-bar {
+  height: calc(3rem + 1px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+.boot-toolbar {
+  height: calc(2.25rem + 0.75rem + 1px);
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+.boot-main {
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+}
+.boot-page {
+  height: max(32rem, 65vh);
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--card));
+}
+.boot-dock {
+  display: none;
+}
+/* Matches COMPACT_LAYOUT_QUERY in src/hooks/useMediaQuery.ts. */
+@media (max-width: 639px), (max-height: 500px) and (pointer: coarse) and (max-width: 1023px) {
+  /* Below the page sits the footer, which is card-colored on phones too. */
+  .boot-shell {
+    background: hsl(var(--card));
+  }
+  .boot-toolbar {
+    display: none;
+  }
+  .boot-main {
+    padding: 0;
+  }
+  .boot-page {
+    /* The writing surface fills the screen above the footer (≈4rem) and dock. */
+    height: calc(100dvh - 10.125rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    min-height: 50dvh;
+    border-width: 0 0 1px;
+    border-radius: 0;
+  }
+  .boot-dock {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    display: block;
+    height: calc(3rem + 1px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+  }
 }
 
 /* Header: one compact row. Phones hide it while scrolling down. */
@@ -190,7 +304,35 @@ header.app-bar {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 22rem;
+  height: 2.25rem;
   margin-inline-end: auto;
+  padding-inline: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  outline: none;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+.document-title::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+.document-title:hover {
+  border-color: hsl(var(--input));
+}
+.document-title:focus-visible,
+.document-title:focus {
+  border-color: hsl(var(--ring));
+  background: hsl(var(--card));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.2);
+  outline: none;
+}
+.toolbar-bar {
+  /* The first control is a ghost button: its glyph lines up with the logo. */
+  padding: 0.375rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.375rem
+    max(0.125rem, env(safe-area-inset-left, 0px));
 }
 .header-icon-button {
   height: 2.25rem;
@@ -204,6 +346,10 @@ header.app-bar {
   .app-bar-row {
     gap: 0.5rem;
     padding-inline: max(1.25rem, env(safe-area-inset-left, 0px))
+      max(1.25rem, env(safe-area-inset-right, 0px));
+  }
+  .toolbar-bar {
+    padding-inline: max(0.625rem, env(safe-area-inset-left, 0px))
       max(1.25rem, env(safe-area-inset-right, 0px));
   }
 }
@@ -223,16 +369,37 @@ header.app-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 .toolbar-primary {
   width: 100%;
 }
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.toolbar-select {
+  height: 2.25rem;
+  padding-inline: 0.625rem;
+  font-size: 0.8125rem;
+}
+.toolbar-separator {
+  flex-shrink: 0;
+  width: 1px;
+  height: 1.25rem;
+  margin-inline: 0.375rem;
+  background: hsl(var(--border));
+}
+.toolbar-row-separator {
+  display: none;
+}
 .toolbar-context {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding-inline-start: 4px;
+  gap: 2px;
+  padding-inline-start: 0.375rem;
+  margin-inline-start: 0.25rem;
   border-inline-start: 1px solid hsl(var(--border));
 }
 .toolbar-secondary {
@@ -240,49 +407,59 @@ header.app-bar {
 }
 .toolbar-secondary.is-expanded {
   border-top: 1px solid hsl(var(--border));
-  padding-top: 8px;
-  margin-top: 4px;
+  padding-top: 0.375rem;
+  margin-top: 0.375rem;
   width: 100%;
 }
-.toolbar-separator {
-  display: none;
-}
 .session-notice {
+  border-bottom: 1px solid hsl(var(--warning) / 0.35);
+  background: hsl(var(--warning) / 0.1);
+  padding: 0.625rem max(1rem, env(safe-area-inset-right, 0px)) 0.625rem
+    max(1rem, env(safe-area-inset-left, 0px));
+  font-size: 0.875rem;
+}
+.session-notice-inner {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 20px;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  font-size: 14px;
+  align-items: flex-start;
+  gap: 0.5rem 0.75rem;
+  max-width: 56rem;
+  margin-inline: auto;
 }
-.session-notice p {
+.session-notice-inner p {
   max-width: 65ch;
+  line-height: 1.5;
+}
+.editor-loading {
+  padding: 2.5rem 3.5rem 0;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
 }
 
 @media (min-width: 640px) {
-  .toolbar-separator {
-    display: block;
-  }
   .editor-container {
     margin: 2rem 1.5rem;
   }
 }
 @media (min-width: 1280px) {
+  /* One row from 1280px wide, including with classic (space-taking)
+     scrollbars; the overflow toggle is not needed there. */
   .toolbar-primary,
   .toolbar-secondary,
   .toolbar-secondary.is-expanded {
     display: contents;
   }
-  /* Tight spacing keeps every control on one row from 1280px wide,
-     including with classic (space-taking) scrollbars. */
   .editor-toolbar {
     gap: 0;
   }
   .editor-toolbar .toolbar-separator {
-    margin-inline: 2px;
+    margin-inline: 0.25rem;
+  }
+  .toolbar-row-separator {
+    display: block;
+  }
+  .toolbar-more {
+    display: none;
   }
 }
 .header-context-slot {
@@ -341,6 +518,19 @@ header.app-bar {
   padding-top: 1.25rem;
   min-height: 50dvh;
 }
+/* A short document still gets a full-height writing surface down to the
+   footer, so any tap below the text starts writing. */
+.app-shell.is-compact .editor-main,
+.app-shell.is-compact .editor-container,
+.app-shell.is-compact .editor-content {
+  display: flex;
+  flex-direction: column;
+}
+.app-shell.is-compact .editor-container,
+.app-shell.is-compact .editor-content,
+.app-shell.is-compact .editor-content .ProseMirror {
+  flex: 1 0 auto;
+}
 
 /*
  * Phone toolbar: docked to the bottom of the visual viewport, so it rides
@@ -358,7 +548,7 @@ header.app-bar {
   z-index: 40;
   background: hsl(var(--card));
   border-top: 1px solid hsl(var(--border));
-  box-shadow: 0 -6px 18px hsl(222 30% 16% / 0.06);
+  box-shadow: 0 -1px 12px hsl(var(--shadow-color) / calc(0.05 * var(--shadow-strength)));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
 }
@@ -376,7 +566,7 @@ header.app-bar {
   flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  gap: 2px;
+  gap: 0;
 }
 .mobile-toolbar-pinned {
   display: flex;
@@ -389,10 +579,10 @@ header.app-bar {
 }
 .bar-button {
   height: 2.75rem;
-  min-width: 2.5rem;
+  min-width: 2.375rem;
   flex-shrink: 0;
   padding: 0 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
 }
 .bar-button svg {
   width: 1.25rem;
@@ -400,8 +590,8 @@ header.app-bar {
 }
 .bar-button[aria-pressed='true'],
 .bar-button.is-open {
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
+  background: hsl(var(--selected) / 0.12);
+  color: hsl(var(--selected-foreground));
 }
 .bar-separator {
   flex-shrink: 0;
@@ -473,23 +663,24 @@ header.app-bar {
   align-items: center;
   min-height: 2.5rem;
   padding: 0 0.875rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 9999px;
-  background: hsl(var(--background));
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius-md);
+  background: hsl(var(--card));
   font-size: 0.875rem;
   white-space: nowrap;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 .toolbar-chip[aria-pressed='true'] {
-  border-color: transparent;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--selected) / 0.5);
+  background: hsl(var(--selected) / 0.12);
+  color: hsl(var(--selected-foreground));
+  font-weight: 500;
 }
 .font-size-stepper {
   display: flex;
   align-items: center;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.625rem;
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius-md);
 }
 .font-size-stepper .bar-button {
   min-width: 2.5rem;
@@ -551,7 +742,7 @@ header.app-bar {
   align-items: center;
   gap: 0.875rem;
   padding: 0 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   font-size: 0.9375rem;
   text-align: start;
 }
@@ -577,20 +768,14 @@ header.app-bar {
 }
 .file-sheet-format {
   display: flex;
-  min-height: 3.75rem;
-  flex-direction: column;
+  min-height: 3rem;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.625rem;
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
-  font-weight: 500;
-}
-.file-sheet-format svg {
-  width: 1.25rem;
-  height: 1.25rem;
-  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 @media (hover: hover) {
   .file-sheet-action:hover,
@@ -618,7 +803,7 @@ header.app-bar {
     margin-inline: auto;
     translate: none;
     border-width: 1px 1px 0;
-    border-radius: 1rem 1rem 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding-bottom: calc(var(--sheet-padding-bottom, 1.5rem) + env(safe-area-inset-bottom, 0px));
   }
   :root[data-keyboard-open] .dialog-sheet {
@@ -722,6 +907,30 @@ header.app-bar {
   color: inherit;
 }
 
+/* Legal pages: long-form reading text on the interface tokens. */
+.legal-prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+  --tw-prose-counters: hsl(var(--muted-foreground));
+  --tw-prose-bullets: hsl(var(--muted-foreground));
+  --tw-prose-hr: hsl(var(--border));
+  --tw-prose-captions: hsl(var(--muted-foreground));
+  max-width: 68ch;
+}
+.legal-footer {
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding-block: 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Read-only document previews (version history) reuse the document styles. */
+.editor-content.document-preview .ProseMirror {
+  min-height: 0;
+  padding: 2rem 2.5rem;
+}
+
 .editor-content .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
@@ -807,8 +1016,23 @@ header.app-bar {
   list-style-type: square;
 }
 
+/* Tight lists: items 4px apart, paragraphs inside an item only spaced from
+   each other. Mirrored by DOCUMENT_STYLE.list in src/lib/export/typography.ts. */
 .editor-content .ProseMirror li {
-  margin-bottom: 0.125rem;
+  margin: 0.25em 0 0;
+}
+
+.editor-content .ProseMirror li > p {
+  margin: 0;
+}
+
+.editor-content .ProseMirror li > p + p {
+  margin-top: 0.5em;
+}
+
+.editor-content .ProseMirror :is(ul, ol) :is(ul, ol) {
+  margin-top: 0.25em;
+  margin-bottom: 0;
 }
 
 .editor-content .ProseMirror mark {
@@ -864,15 +1088,26 @@ header.app-bar {
   box-sizing: border-box;
   min-width: 48px;
   border: 1px solid hsl(var(--border));
-  padding: 0.2rem 0.5rem;
+  padding: 0.375rem 0.5rem;
   vertical-align: top;
   background-color: hsl(var(--background));
+}
+
+/* Cell content sits on the cell padding, like a word processor table. The
+   doubled class outranks block rules such as centered images; the last
+   child ignores the column-resize handle ProseMirror adds while hovering. */
+.editor-content .ProseMirror.ProseMirror :is(td, th) > :first-child {
+  margin-top: 0;
+}
+
+.editor-content .ProseMirror.ProseMirror :is(td, th) > :nth-last-child(1 of :not(.column-resize-handle)) {
+  margin-bottom: 0;
 }
 
 .editor-content .ProseMirror th {
   background-color: hsl(var(--muted) / 0.22);
   font-weight: 600;
-  text-align: left;
+  text-align: start;
 }
 
 .editor-content .ProseMirror .selectedCell::after {
@@ -1428,6 +1663,12 @@ header.app-bar {
   .editor-content .ProseMirror {
     padding: 1.25rem max(1rem, env(safe-area-inset-right, 0px)) 2rem
       max(1rem, env(safe-area-inset-left, 0px));
+  }
+  .editor-content.document-preview .ProseMirror {
+    padding: 1.25rem 1rem;
+  }
+  .editor-loading {
+    padding: 1.25rem 1rem 0;
   }
   .editor-content .ProseMirror h1 {
     font-size: 1.75rem;

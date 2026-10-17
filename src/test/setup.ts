@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
+import { loadLocale, supportedLocales } from '@/lib/translations';
+
+// The entry point loads the active catalog before React mounts; tests get
+// every catalog up front so language switches render synchronously.
+await Promise.all(supportedLocales.map(loadLocale));
 
 beforeEach(() => {
   Object.defineProperty(globalThis, 'indexedDB', {

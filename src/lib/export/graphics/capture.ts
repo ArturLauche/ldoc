@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { Locale } from '@/lib/translations';
-import { t } from '@/lib/translations';
+import { createTranslator, loadedCatalog } from '@/lib/translations';
 import type { SmartGraphicModel } from '@/lib/smartGraphic';
 import { resolveCssColor, type RgbaColor } from '../color';
 import { primaryFamilyName } from '../fonts/catalog';
@@ -600,7 +600,13 @@ async function mountGraphic(model: SmartGraphicModel, width: number, locale: Loc
       root.render(
         createElement(
           LocaleContext.Provider,
-          { value: { locale, setLocale: () => undefined, t: (key) => t(locale, key) } },
+          {
+            value: {
+              locale,
+              setLocale: () => Promise.resolve(),
+              ...createTranslator(loadedCatalog(locale), locale),
+            },
+          },
           createElement(SmartGraphicCanvas, { graphic: model }),
         ),
       );

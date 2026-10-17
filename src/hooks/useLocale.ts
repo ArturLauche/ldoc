@@ -1,10 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { Locale, TranslationKey } from '@/lib/translations';
+import { localeDirection, type Locale, type Translator } from '@/lib/translations';
 
-export interface LocaleContextValue {
+export interface LocaleContextValue extends Translator {
   locale: Locale;
-  setLocale: (locale: Locale) => void;
-  t: (key: TranslationKey) => string;
+  /** Resolves once the interface uses the locale; rejects if it could not load. */
+  setLocale: (locale: Locale) => Promise<void>;
 }
 
 export const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -15,4 +15,14 @@ export function useLocale(): LocaleContextValue {
     throw new Error('useLocale must be used within a LocaleProvider');
   }
   return context;
+}
+
+/**
+ * The interface direction, for primitives that set `dir` on their own
+ * elements (Radix menus, selects, tabs and toggle groups default to LTR).
+ * Outside a LocaleProvider it is LTR.
+ */
+export function useTextDirection(): 'ltr' | 'rtl' {
+  const context = useContext(LocaleContext);
+  return context ? localeDirection(context.locale) : 'ltr';
 }

@@ -17,14 +17,15 @@ describe('flowLeaves', () => {
     expect(gaps(`<h2>A</h2><img src="data:image/png;base64,AA==">`)).toEqual([28, 16]);
   });
 
-  it('spaces list paragraphs by the kind of the outermost list', () => {
-    // Bullet lists: first paragraph of a top-level item 1.25em, others 0.75em.
-    expect(gaps('<ul><li><p>A</p><p>B</p><ul><li><p>C</p></li></ul></li></ul>')).toEqual([20, 16, 16]);
-    expect(gaps('<ul><li><p>A</p><ul><li><p>B</p></li></ul></li><li><p>C</p></li></ul>')).toEqual([20, 16, 20]);
-    // Ordered lists only style the first paragraph; the rest keep paragraph spacing.
-    expect(gaps('<ol><li><p>A</p><p>B</p><ol><li><p>C</p></li></ol></li></ol>')).toEqual([20, 20, 20]);
-    // Lists inside a quote are not top-level lists.
-    expect(gaps('<blockquote><ul><li><p>A</p><p>B</p></li></ul></blockquote>')).toEqual([25.6, 20]);
+  it('keeps lists tight: items, nested lists and paragraphs within an item', () => {
+    // A list keeps its 20px distance to surrounding text; items are 4px apart,
+    // a second paragraph of the same item 8px, a nested list 4px.
+    expect(gaps('<p>Intro</p><ul><li><p>A</p></li><li><p>B</p></li></ul><p>After</p>')).toEqual([20, 20, 4, 20]);
+    expect(gaps('<ul><li><p>A</p><p>B</p><ul><li><p>C</p></li></ul></li></ul>')).toEqual([20, 8, 4]);
+    expect(gaps('<ul><li><p>A</p><ul><li><p>B</p></li></ul></li><li><p>C</p></li></ul>')).toEqual([20, 4, 4]);
+    // Ordered lists and lists inside quotes follow the same rhythm.
+    expect(gaps('<ol><li><p>A</p><p>B</p><ol><li><p>C</p></li></ol></li></ol>')).toEqual([20, 8, 4]);
+    expect(gaps('<blockquote><ul><li><p>A</p><p>B</p></li></ul></blockquote>')).toEqual([25.6, 8]);
   });
 
   it('marks the first leaf of each list item for numbering', () => {
@@ -37,10 +38,16 @@ describe('flowLeaves', () => {
     ]);
   });
 
-  it('keeps both edges in table cells and scales em margins to the 14px text', () => {
+  it('trims the outer margins of cell content and scales em margins to the 14px text', () => {
     const flow = flowLeaves(blocks('<p>A</p><ul><li><p>B</p></li></ul>'), 'cell');
-    expect(flow.leaves.map((leaf) => leaf.spaceBefore)).toEqual([DOCUMENT_STYLE.table.paragraphMarginTop, 17.5]);
-    expect(flow.trailing).toBe(16);
+    // The first block starts on the cell padding; the list keeps its 1.25em (14px text).
+    expect(flow.leaves.map((leaf) => leaf.spaceBefore)).toEqual([0, 17.5]);
+    expect(flow.trailing).toBe(0);
+    // Between paragraphs of one cell the paragraph spacing remains.
+    expect(flowLeaves(blocks('<p>A</p><p>B</p>'), 'cell').leaves.map((leaf) => leaf.spaceBefore)).toEqual([
+      0,
+      DOCUMENT_STYLE.table.paragraphMarginTop,
+    ]);
   });
 
   it('does not collapse floats with surrounding margins', () => {

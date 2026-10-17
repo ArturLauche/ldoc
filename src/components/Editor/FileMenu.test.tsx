@@ -98,22 +98,22 @@ describe('FileMenu startup', () => {
     // Every action is a direct button; nothing opens a nested menu.
     expect(sheet.querySelector('[aria-haspopup="menu"]')).toBeNull();
     for (const label of [
-      'Plain Text (.txt)',
-      'HTML Document (.html)',
+      'Plain text (.txt)',
+      'Web page (.html)',
       'Rich Text Format (.rtf)',
-      'Word Document (.docx)',
-      'OpenDocument Text (.odt)',
-      'PDF Document (.pdf)',
+      'Word document (.docx)',
+      'OpenDocument text (.odt)',
+      'PDF document (.pdf)',
     ]) {
       expect(within(sheet).getByRole('button', { name: label })).toBeInTheDocument();
     }
-    expect(within(sheet).getByRole('button', { name: 'Search Documents' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: 'Open from library…' })).toBeInTheDocument();
     expect(
-      within(sheet).getByRole('button', { name: 'Export All Docs (.json)' }),
+      within(sheet).getByRole('button', { name: 'Back up library (.json)' }),
     ).toBeInTheDocument();
 
     // Dialog actions wait for the sheet to close and release focus.
-    await user.click(within(sheet).getByRole('button', { name: 'Version History' }));
+    await user.click(within(sheet).getByRole('button', { name: 'Version history' }));
     await waitFor(() => expect(onShowVersionHistory).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('dialog', { name: 'File' })).not.toBeInTheDocument();
   });

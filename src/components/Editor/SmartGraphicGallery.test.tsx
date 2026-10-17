@@ -34,7 +34,7 @@ import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } 
 
 function GermanLanguageSwitch() {
   const { setLocale } = useLocale();
-  return <button onClick={() => setLocale('de')}>Deutsch</button>;
+  return <button onClick={() => void setLocale('de')}>Deutsch</button>;
 }
 
 async function typeMultiwordText(
@@ -101,7 +101,7 @@ describe('smart graphic insert and editing', () => {
     renderWithProviders(<SmartGraphicGallery editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
-    const dialog = screen.getByRole('dialog', { name: 'Insert Graphic' });
+    const dialog = screen.getByRole('dialog', { name: 'Insert graphic' });
     const tabs = within(dialog).getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual([
       'All',

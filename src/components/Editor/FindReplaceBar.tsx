@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
-import { ArrowDown, ArrowUp, CaseSensitive, ChevronDown, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CaseSensitive, ChevronDown, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { getSearchState } from './findReplaceExtension';
+import { ToolbarButton } from './toolbarControls';
 
 interface FindReplaceBarProps {
   editor: Editor | null;
@@ -18,12 +17,45 @@ interface FindReplaceBarProps {
   onClose: () => void;
 }
 
+/** A text field with an optional leading icon and trailing slot, styled like `Input`. */
+function Field({
+  icon,
+  trailing,
+  className,
+  children,
+}: {
+  icon?: ReactNode;
+  trailing?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex h-9 min-w-0 items-center rounded-md border border-input bg-card shadow-xs transition-[border-color,box-shadow] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/20 pointer-coarse:h-10',
+        className,
+      )}
+    >
+      {icon ? (
+        <span aria-hidden="true" className="ps-2.5 text-muted-foreground [&_svg]:size-4">
+          {icon}
+        </span>
+      ) : null}
+      {children}
+      {trailing}
+    </div>
+  );
+}
+
+const fieldInput =
+  'h-full min-w-0 flex-1 bg-transparent px-2.5 text-base outline-none placeholder:text-muted-foreground md:text-sm';
+
 /**
  * Find-and-replace bar. The parent mounts it while open; highlights are
  * cleared automatically when it unmounts.
  */
 export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplaceBarProps) => {
-  const { t } = useLocale();
+  const { t, tCount } = useLocale();
   const [showReplace, setShowReplace] = useState(false);
   const replaceVisible = !compact || showReplace;
   const [query, setQuery] = useState('');
@@ -57,7 +89,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
   }, [editor]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (
         event.key === 'Escape' &&
         !event.defaultPrevented &&
@@ -89,10 +121,10 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
     if (!editor || !matchCount) return;
     const replaced = matchCount;
     editor.commands.replaceAllMatches(replacement);
-    toast.success(formatMessage(t('replacedAllToast'), { count: replaced }));
+    toast.success(tCount('replacedAllToast', replaced));
   };
 
-  const handleFindKeyDown = (event: React.KeyboardEvent) => {
+  const handleFindKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       if (event.shiftKey) {
@@ -109,40 +141,27 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
       : t('findNoMatches')
     : null;
 
-  const iconButton = (
-    label: string,
-    icon: React.ReactNode,
-    onClick: () => void,
-    options: { disabled?: boolean; pressed?: boolean; expanded?: boolean } = {},
-  ) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-9 w-9 shrink-0 p-0',
-            compact && 'h-10 w-10 max-[379px]:w-9',
-            (options.pressed || options.expanded) && 'bg-primary/10 text-primary',
-          )}
-          onClick={onClick}
-          disabled={options.disabled}
-          aria-label={label}
-          aria-pressed={options.pressed}
-          aria-expanded={options.expanded}
-        >
-          {icon}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
+  const iconSize = compact ? 'size-10 max-[379px]:w-9!' : undefined;
+
+  const matchCaseButton = (
+    <ToolbarButton
+      label={t('matchCase')}
+      pressed={caseSensitive}
+      className={iconSize}
+      onClick={handleCaseSensitiveToggle}
+    >
+      <CaseSensitive />
+    </ToolbarButton>
   );
 
-  const matchCaseButton = iconButton(
-    t('matchCase'),
-    <CaseSensitive className="h-4 w-4" />,
-    handleCaseSensitiveToggle,
-    { pressed: caseSensitive },
+  const closeButton = (
+    <ToolbarButton
+      label={t('findCloseAria')}
+      className={cn(iconSize, !compact && 'ms-auto')}
+      onClick={onClose}
+    >
+      <X />
+    </ToolbarButton>
   );
 
   return (
@@ -150,25 +169,31 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
       role="search"
       aria-label={t('findReplaceTitle')}
       className={cn(
-        'find-bar app-bar flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border/20',
+        'find-bar flex flex-wrap items-center gap-2 border-b bg-card px-3 py-2 sm:px-5',
         compact && 'is-compact gap-x-1 gap-y-1.5 px-2 py-1.5',
       )}
     >
-      <div
-        className={cn(
-          'flex min-w-0 flex-wrap items-center gap-1.5',
-          compact && 'w-full flex-nowrap gap-0.5',
-        )}
-      >
-        {/* Phones show the match count inside the field, taking only the width it needs. */}
-        <div
-          className={cn(
-            'min-w-0',
-            compact &&
-              'flex h-10 flex-1 items-center rounded-md border border-input bg-background ring-offset-background has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-offset-2',
-          )}
+      <div className={cn('flex min-w-0 items-center gap-1', compact && 'w-full')}>
+        <Field
+          icon={compact ? undefined : <Search />}
+          className={compact ? 'flex-1' : 'w-60'}
+          trailing={
+            query ? (
+              // A find-bar style counter fits every language; the sentence
+              // stays available to screen readers.
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'shrink-0 whitespace-nowrap pe-2.5 text-xs tabular-nums text-muted-foreground',
+                  !matchCount && 'text-destructive',
+                )}
+              >
+                {`${matchCount ? activeIndex + 1 : 0}/${matchCount}`}
+              </span>
+            ) : null
+          }
         >
-          <Input
+          <input
             ref={findInputRef}
             data-find-input
             value={query}
@@ -176,85 +201,67 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
             onKeyDown={handleFindKeyDown}
             placeholder={t('findPlaceholder')}
             aria-label={t('findPlaceholder')}
+            aria-keyshortcuts="Enter Shift+Enter"
             enterKeyHint="search"
             autoComplete="off"
             spellCheck={false}
-            className={cn(
-              'h-9 w-36 min-w-0 sm:w-44',
-              compact &&
-                'h-full w-auto flex-1 border-0 bg-transparent pe-2 focus-visible:ring-0 focus-visible:ring-offset-0',
-            )}
+            className={fieldInput}
           />
-          {compact ? (
-            <>
-              {/* A find-bar style counter fits every language; the sentence
-                  stays available to screen readers. */}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'shrink-0 whitespace-nowrap pe-3 text-xs text-muted-foreground tabular-nums empty:pe-0',
-                  query && !matchCount && 'text-destructive',
-                )}
-              >
-                {query ? `${matchCount ? activeIndex + 1 : 0}/${matchCount}` : null}
-              </span>
-              <span className="sr-only" aria-live="polite">
-                {matchStatus}
-              </span>
-            </>
-          ) : null}
-        </div>
-        {compact ? null : (
-          <span className="min-w-16 text-xs text-muted-foreground tabular-nums" aria-live="polite">
-            {matchStatus}
-          </span>
-        )}
+        </Field>
+        <span className="sr-only" aria-live="polite">
+          {matchStatus}
+        </span>
         {compact ? null : matchCaseButton}
-        {iconButton(
-          t('findPrevious'),
-          <ArrowUp className="h-4 w-4" />,
-          () => editor?.commands.findPreviousMatch(),
-          { disabled: !matchCount },
-        )}
-        {iconButton(
-          t('findNext'),
-          <ArrowDown className="h-4 w-4" />,
-          () => editor?.commands.findNextMatch(),
-          { disabled: !matchCount },
-        )}
+        <ToolbarButton
+          label={t('findPrevious')}
+          shortcut="Shift+Enter"
+          className={iconSize}
+          onClick={() => editor?.commands.findPreviousMatch()}
+          disabled={!matchCount}
+        >
+          <ArrowUp />
+        </ToolbarButton>
+        <ToolbarButton
+          label={t('findNext')}
+          shortcut="Enter"
+          className={iconSize}
+          onClick={() => editor?.commands.findNextMatch()}
+          disabled={!matchCount}
+        >
+          <ArrowDown />
+        </ToolbarButton>
         {compact ? (
           <>
-            {iconButton(
-              t('findToggleReplace'),
-              <ChevronDown
-                className={cn('h-4 w-4 transition-transform', showReplace && 'rotate-180')}
-              />,
-              () => setShowReplace((value) => !value),
-              { expanded: showReplace },
-            )}
-            {iconButton(t('findCloseAria'), <X className="h-4 w-4" />, onClose)}
+            <ToolbarButton
+              label={t('findToggleReplace')}
+              className={iconSize}
+              aria-expanded={showReplace}
+              onClick={() => setShowReplace((value) => !value)}
+            >
+              <ChevronDown className={cn('transition-transform', showReplace && 'rotate-180')} />
+            </ToolbarButton>
+            {closeButton}
           </>
         ) : null}
       </div>
 
       {replaceVisible ? (
-        <div
-          className={cn('flex min-w-0 flex-wrap items-center gap-1.5', compact && 'w-full gap-1')}
-        >
+        <div className={cn('flex min-w-0 items-center gap-1', compact && 'w-full flex-wrap gap-1')}>
           {/* Narrow phones wrap the buttons below the field instead of squeezing it. */}
           {compact ? matchCaseButton : null}
-          <Input
-            value={replacement}
-            onChange={(event) => setReplacement(event.target.value)}
-            placeholder={t('replacePlaceholder')}
-            aria-label={t('replacePlaceholder')}
-            autoComplete="off"
-            className={cn('h-9 w-36 min-w-0 sm:w-44', compact && 'h-10 w-auto flex-[3_1_7rem]')}
-          />
+          <Field className={compact ? 'flex-[3_1_7rem]' : 'w-60'}>
+            <input
+              value={replacement}
+              onChange={(event) => setReplacement(event.target.value)}
+              placeholder={t('replacePlaceholder')}
+              aria-label={t('replacePlaceholder')}
+              autoComplete="off"
+              className={fieldInput}
+            />
+          </Field>
           <Button
             variant="outline"
-            size="sm"
-            className={cn('h-9', compact && 'h-10 grow px-3')}
+            className={cn('ms-1', compact && 'ms-0 grow px-3')}
             onClick={() => editor?.commands.replaceCurrentMatch(replacement)}
             disabled={!matchCount}
           >
@@ -262,8 +269,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className={cn('h-9', compact && 'h-10 grow px-3')}
+            className={cn(compact && 'grow px-3')}
             onClick={handleReplaceAll}
             disabled={!matchCount}
           >
@@ -272,17 +278,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
         </div>
       ) : null}
 
-      {compact ? null : (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto h-9 w-9 p-0"
-          onClick={onClose}
-          aria-label={t('findCloseAria')}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
+      {compact ? null : closeButton}
     </div>
   );
 };

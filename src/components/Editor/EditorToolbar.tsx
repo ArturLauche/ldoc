@@ -1,30 +1,31 @@
-import { Editor } from '@tiptap/react';
+import { memo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import type { Editor } from '@tiptap/react';
 import {
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  Superscript,
-  Subscript,
-  List,
-  ListOrdered,
-  AlignLeft,
   AlignCenter,
-  AlignRight,
   AlignJustify,
-  Undo,
-  Redo,
-  Link,
-  RemoveFormatting,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Code,
+  Highlighter,
   IndentDecrease,
   IndentIncrease,
-  Type,
-  Palette,
-  Highlighter,
-  ChevronsUpDown,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
   MoreHorizontal,
+  Redo,
+  RemoveFormatting,
+  SeparatorHorizontal,
+  Strikethrough,
+  Subscript,
+  Superscript,
+  Underline,
+  Undo,
+  UnfoldVertical,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -32,20 +33,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { memo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useLocale } from '@/hooks/useLocale';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useRovingToolbar } from '@/hooks/useRovingToolbar';
 import { keepEditorFocus } from '@/lib/inputModality';
+import type { TranslationKey } from '@/lib/translations';
+import { cn } from '@/lib/utils';
+import { SHORTCUTS } from './editorShortcuts';
 import { FontPicker } from './FontPicker';
 import { ImageToolbar } from './ImageToolbar';
 import { SmartGraphicGallery } from './SmartGraphicGallery';
 import { SmartGraphicToolbar } from './SmartGraphicToolbar';
 import { TableGridPicker } from './TableGridPicker';
 import { TableToolbar } from './TableToolbar';
-import { ColorSwatchGrid, LinkPopover } from './toolbarControls';
+import {
+  ColorIndicator,
+  ColorSwatchGrid,
+  LinkPopover,
+  PopoverSection,
+  ShortcutLabel,
+  ToolbarButton,
+  ToolbarSeparator,
+} from './toolbarControls';
 import {
   FONT_SIZES,
   HIGHLIGHT_COLORS,
@@ -54,10 +73,9 @@ import {
   applyTextBlockStyle,
   useLineSpacings,
   useToolbarState,
+  type TextAlignment,
   type TextBlockStyle,
 } from './toolbarModel';
-import { useLocale } from '@/hooks/useLocale';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -69,45 +87,85 @@ interface EditorToolbarProps {
   contextSlot?: HTMLElement | null;
 }
 
-const ToolbarButton = ({
-  onClick,
-  isActive,
-  disabled = false,
-  children,
-  tooltip,
+const ALIGNMENTS: {
+  value: TextAlignment;
+  label: TranslationKey;
+  icon: typeof AlignLeft;
+  shortcut: string;
+}[] = [
+  { value: 'left', label: 'toolbarAlignLeft', icon: AlignLeft, shortcut: SHORTCUTS.alignLeft },
+  { value: 'center', label: 'toolbarAlignCenter', icon: AlignCenter, shortcut: SHORTCUTS.alignCenter },
+  { value: 'right', label: 'toolbarAlignRight', icon: AlignRight, shortcut: SHORTCUTS.alignRight },
+  { value: 'justify', label: 'toolbarAlignJustify', icon: AlignJustify, shortcut: SHORTCUTS.alignJustify },
+];
+
+/** Style previews in the menu; the trigger keeps plain text. */
+const BLOCK_STYLE_PREVIEW: Record<TextBlockStyle, string> = {
+  paragraph: '',
+  h1: 'text-lg font-bold',
+  h2: 'text-base font-semibold',
+  h3: 'font-semibold',
+  blockquote: 'italic',
+  codeBlock: 'font-mono text-[13px]',
+};
+
+/** Returns focus to the document after a menu choice, but not after Escape. */
+function useReturnToEditor(editor: Editor) {
+  const pickedRef = useRef(false);
+  return {
+    markPicked: () => {
+      pickedRef.current = true;
+    },
+    onCloseAutoFocus: (event: Event) => {
+      if (!pickedRef.current) return;
+      pickedRef.current = false;
+      event.preventDefault();
+      if (!editor.isDestroyed) editor.commands.focus();
+    },
+  };
+}
+
+function ColorButton({
+  editor,
+  kind,
+  current,
+  label,
+  icon,
   shortcut,
 }: {
-  onClick: () => void;
-  isActive?: boolean;
-  disabled?: boolean;
-  children: React.ReactNode;
-  tooltip: string;
+  editor: Editor;
+  kind: 'text' | 'highlight';
+  current?: string;
+  label: string;
+  icon: ReactNode;
   shortcut?: string;
-}) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onClick}
-        disabled={disabled}
-        className={cn('h-9 w-9 p-0 transition-colors', isActive && 'bg-primary/10 text-primary')}
-        aria-label={tooltip}
-        aria-pressed={isActive}
-      >
-        {children}
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent side="bottom" className="flex items-center gap-2">
-      <span>{tooltip}</span>
-      {shortcut && (
-        <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-          {shortcut}
-        </kbd>
-      )}
-    </TooltipContent>
-  </Tooltip>
-);
+}) {
+  const [open, setOpen] = useState(false);
+  const focus = useReturnToEditor(editor);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <ToolbarButton label={label} shortcut={shortcut}>
+          <ColorIndicator color={current}>{icon}</ColorIndicator>
+        </ToolbarButton>
+      </PopoverTrigger>
+      <PopoverContent aria-label={label} className="w-auto p-3" onCloseAutoFocus={focus.onCloseAutoFocus}>
+        <PopoverSection title={label}>
+          <ColorSwatchGrid
+            editor={editor}
+            kind={kind}
+            colors={kind === 'text' ? TEXT_COLORS : HIGHLIGHT_COLORS}
+            current={current}
+            onPick={() => {
+              focus.markPicked();
+              setOpen(false);
+            }}
+          />
+        </PopoverSection>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Top toolbar for tablets and desktops; phones use `MobileToolbar`. */
 export const EditorToolbar = memo(function EditorToolbar({
@@ -119,8 +177,15 @@ export const EditorToolbar = memo(function EditorToolbar({
   const [expanded, setExpanded] = useState(false);
   const state = useToolbarState(editor);
   const lineSpacings = useLineSpacings(t);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const onToolbarKeyDown = useRovingToolbar(toolbarRef);
 
   if (!editor || !state) return null;
+
+  const run = (command: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) =>
+    command(editor.chain().focus()).run();
+  const alignment = ALIGNMENTS.find((item) => item.value === state.alignment) ?? ALIGNMENTS[0];
+  const AlignmentIcon = alignment.icon;
 
   const contextTools =
     state.inTable || state.inGraphic ? (
@@ -137,34 +202,51 @@ export const EditorToolbar = memo(function EditorToolbar({
 
   return (
     <div
+      ref={toolbarRef}
       className="editor-toolbar"
-      role="group"
+      role="toolbar"
       aria-label={t('formattingToolbar')}
+      onKeyDown={onToolbarKeyDown}
       // Buttons keep the editor's selection (and a touch keyboard) in place.
       onMouseDown={keepEditorFocus}
     >
       <div className="toolbar-primary">
-        <div className="flex items-center gap-1">
-          {/* Styles (Headings) */}
+        <div className="toolbar-group">
+          <ToolbarButton
+            label={t('toolbarUndo')}
+            shortcut={SHORTCUTS.undo}
+            disabled={!state.canUndo}
+            onClick={() => run((chain) => chain.undo())}
+          >
+            <Undo />
+          </ToolbarButton>
+          <ToolbarButton
+            label={t('toolbarRedo')}
+            shortcut={SHORTCUTS.redo}
+            disabled={!state.canRedo}
+            onClick={() => run((chain) => chain.redo())}
+          >
+            <Redo />
+          </ToolbarButton>
+        </div>
+        <ToolbarSeparator />
+        <div className="toolbar-group">
           <Select
             value={state.blockStyle}
             onValueChange={(value) => applyTextBlockStyle(editor, value as TextBlockStyle)}
           >
-            <SelectTrigger
-              className="w-28 h-9 text-xs font-medium bg-card border-border"
-              aria-label={t('toolbarTextStyle')}
-            >
-              <Type className="h-3.5 w-3.5 mr-1.5" />
+            <SelectTrigger className="toolbar-select w-[7.25rem]" aria-label={t('toolbarTextStyle')}>
               <SelectValue placeholder={t('toolbarTextStyle')} />
             </SelectTrigger>
             <SelectContent
+              className="min-w-44"
               onCloseAutoFocus={(event) => {
                 event.preventDefault();
                 editor.commands.focus();
               }}
             >
               {TEXT_BLOCK_STYLES.map((style) => (
-                <SelectItem key={style.value} value={style.value}>
+                <SelectItem key={style.value} value={style.value} className={BLOCK_STYLE_PREVIEW[style.value]}>
                   {t(style.label)}
                 </SelectItem>
               ))}
@@ -172,16 +254,12 @@ export const EditorToolbar = memo(function EditorToolbar({
           </Select>
           <FontPicker
             value={state.fontFamily}
+            triggerClassName="toolbar-select w-[7.25rem]"
             onChange={(value) => {
-              if (value === '') {
-                editor.chain().focus().unsetFontFamily().run();
-              } else {
-                editor.chain().focus().setFontFamily(value).run();
-              }
+              if (value === '') editor.chain().focus().unsetFontFamily().run();
+              else editor.chain().focus().setFontFamily(value).run();
             }}
           />
-
-          {/* Font Size */}
           <Select
             value={state.fontSize}
             onValueChange={(value) => {
@@ -190,10 +268,7 @@ export const EditorToolbar = memo(function EditorToolbar({
               editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
             }}
           >
-            <SelectTrigger
-              className="w-16 h-9 text-xs font-medium bg-card border-border"
-              aria-label={t('toolbarFontSize')}
-            >
+            <SelectTrigger className="toolbar-select w-[4.25rem] tabular-nums" aria-label={t('toolbarFontSize')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent
@@ -205,273 +280,270 @@ export const EditorToolbar = memo(function EditorToolbar({
               }}
             >
               {FONT_SIZES.map((size) => (
-                <SelectItem key={size} value={size}>
+                <SelectItem key={size} value={size} className="tabular-nums">
                   {Number.parseInt(size, 10)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <Separator orientation="vertical" className="toolbar-separator h-6 mx-1" />
-        {/* Undo/Redo */}
-        <div className="flex items-center gap-0.5">
+        <ToolbarSeparator />
+        <div className="toolbar-group">
           <ToolbarButton
-            onClick={() => editor.chain().focus().undo().run()}
-            disabled={!state.canUndo}
-            tooltip={t('toolbarUndo')}
-            shortcut="⌘Z"
+            label={t('toolbarBold')}
+            shortcut={SHORTCUTS.bold}
+            pressed={state.bold}
+            onClick={() => run((chain) => chain.toggleBold())}
           >
-            <Undo className="h-4 w-4" />
+            <Bold />
           </ToolbarButton>
           <ToolbarButton
-            onClick={() => editor.chain().focus().redo().run()}
-            disabled={!state.canRedo}
-            tooltip={t('toolbarRedo')}
-            shortcut="⌘⇧Z"
+            label={t('toolbarItalic')}
+            shortcut={SHORTCUTS.italic}
+            pressed={state.italic}
+            onClick={() => run((chain) => chain.toggleItalic())}
           >
-            <Redo className="h-4 w-4" />
-          </ToolbarButton>
-        </div>
-        <Separator orientation="vertical" className="toolbar-separator h-6 mx-1" />
-        {/* Text Formatting */}
-        <div className="flex items-center gap-0.5">
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            isActive={state.bold}
-            tooltip={t('toolbarBold')}
-            shortcut="⌘B"
-          >
-            <Bold className="h-4 w-4" />
+            <Italic />
           </ToolbarButton>
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            isActive={state.italic}
-            tooltip={t('toolbarItalic')}
-            shortcut="⌘I"
+            label={t('toolbarUnderline')}
+            shortcut={SHORTCUTS.underline}
+            pressed={state.underline}
+            onClick={() => run((chain) => chain.toggleUnderline())}
           >
-            <Italic className="h-4 w-4" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            isActive={state.underline}
-            tooltip={t('toolbarUnderline')}
-            shortcut="⌘U"
-          >
-            <Underline className="h-4 w-4" />
+            <Underline />
           </ToolbarButton>
         </div>
-        <Separator orientation="vertical" className="toolbar-separator h-6 mx-1" />
-        {/* Lists */}
-        <div className="flex items-center gap-0.5">
+        <ToolbarSeparator />
+        <div className="toolbar-group">
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            isActive={state.bulletList}
-            tooltip={t('toolbarBulletList')}
+            label={t('toolbarBulletList')}
+            shortcut={SHORTCUTS.bulletList}
+            pressed={state.bulletList}
+            onClick={() => run((chain) => chain.toggleBulletList())}
           >
-            <List className="h-4 w-4" />
+            <List />
           </ToolbarButton>
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            isActive={state.orderedList}
-            tooltip={t('toolbarOrderedList')}
+            label={t('toolbarOrderedList')}
+            shortcut={SHORTCUTS.orderedList}
+            pressed={state.orderedList}
+            onClick={() => run((chain) => chain.toggleOrderedList())}
           >
-            <ListOrdered className="h-4 w-4" />
+            <ListOrdered />
           </ToolbarButton>
         </div>
         {/* Contextual tools stay visible on tablets even while the secondary
             row is collapsed; wide screens show them in the header row. */}
-        {contextTools && wide && contextSlot
-          ? createPortal(contextTools, contextSlot)
-          : contextTools}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 xl:hidden"
-          aria-label={t(expanded ? 'lessFormatting' : 'moreFormatting')}
+        {contextTools && wide && contextSlot ? createPortal(contextTools, contextSlot) : contextTools}
+        <ToolbarButton
+          label={t(expanded ? 'lessFormatting' : 'moreFormatting')}
+          className="toolbar-more ms-auto"
           aria-expanded={expanded}
           aria-controls="secondary-formatting"
           onClick={() => setExpanded((value) => !value)}
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+          <MoreHorizontal />
+        </ToolbarButton>
       </div>
       <div id="secondary-formatting" className={cn('toolbar-secondary', expanded && 'is-expanded')}>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          isActive={state.strike}
-          tooltip={t('toolbarStrikethrough')}
-        >
-          <Strikethrough className="h-4 w-4" />
-        </ToolbarButton>
-        {/* Superscript/Subscript */}
-        <div className="flex items-center gap-0.5">
+        <ToolbarSeparator className="toolbar-row-separator" />
+        <div className="toolbar-group">
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleSuperscript().run()}
-            isActive={state.superscript}
-            tooltip={t('toolbarSuperscript')}
+            label={t('toolbarStrikethrough')}
+            shortcut={SHORTCUTS.strike}
+            pressed={state.strike}
+            onClick={() => run((chain) => chain.toggleStrike())}
           >
-            <Superscript className="h-4 w-4" />
+            <Strikethrough />
           </ToolbarButton>
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleSubscript().run()}
-            isActive={state.subscript}
-            tooltip={t('toolbarSubscript')}
+            label={t('toolbarInlineCode')}
+            shortcut={SHORTCUTS.code}
+            pressed={state.code}
+            onClick={() => run((chain) => chain.toggleCode())}
           >
-            <Subscript className="h-4 w-4" />
+            <Code />
+          </ToolbarButton>
+          <ToolbarButton
+            label={t('toolbarSuperscript')}
+            shortcut={SHORTCUTS.superscript}
+            pressed={state.superscript}
+            onClick={() => run((chain) => chain.toggleSuperscript())}
+          >
+            <Superscript />
+          </ToolbarButton>
+          <ToolbarButton
+            label={t('toolbarSubscript')}
+            shortcut={SHORTCUTS.subscript}
+            pressed={state.subscript}
+            onClick={() => run((chain) => chain.toggleSubscript())}
+          >
+            <Subscript />
           </ToolbarButton>
         </div>
-
-        {/* Text Color */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0"
-              aria-label={t('toolbarTextColor')}
-            >
-              <Palette className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            aria-label={t('toolbarTextColor')}
-            className="w-auto p-3 bg-popover border border-border shadow-lg z-50"
-          >
-            <ColorSwatchGrid editor={editor} kind="text" colors={TEXT_COLORS} />
-          </PopoverContent>
-        </Popover>
-
-        {/* Highlight */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0"
-              aria-label={t('toolbarHighlight')}
-            >
-              <Highlighter className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            aria-label={t('toolbarHighlight')}
-            className="w-auto p-3 bg-popover border border-border shadow-lg z-50"
-          >
-            <ColorSwatchGrid editor={editor} kind="highlight" colors={HIGHLIGHT_COLORS} />
-          </PopoverContent>
-        </Popover>
-
-        {/* Clear Formatting */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-          tooltip={t('toolbarClearFormatting')}
-        >
-          <RemoveFormatting className="h-4 w-4" />
-        </ToolbarButton>
-        <Separator orientation="vertical" className="toolbar-separator h-6 mx-1" />
-        {/* Indentation */}
-        <div className="flex items-center gap-0.5">
+        <ToolbarSeparator />
+        <div className="toolbar-group">
+          <ColorButton
+            editor={editor}
+            kind="text"
+            current={state.textColor}
+            label={t('toolbarTextColor')}
+            icon={<span className="text-[15px] font-semibold leading-none">A</span>}
+          />
+          <ColorButton
+            editor={editor}
+            kind="highlight"
+            current={state.highlightColor}
+            label={t('toolbarHighlight')}
+            shortcut={SHORTCUTS.highlight}
+            icon={<Highlighter className="size-3.5!" />}
+          />
           <ToolbarButton
-            onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-            tooltip={t('toolbarDecreaseIndent')}
+            label={t('toolbarClearFormatting')}
+            onClick={() => run((chain) => chain.unsetAllMarks().clearNodes())}
+          >
+            <RemoveFormatting />
+          </ToolbarButton>
+        </div>
+        <ToolbarSeparator />
+        <div className="toolbar-group">
+          <AlignmentMenu
+            editor={editor}
+            value={state.alignment}
+            label={t('paragraphAlignment')}
+            icon={<AlignmentIcon />}
+          />
+          <LineSpacingMenu
+            editor={editor}
+            value={state.lineHeight}
+            label={t('toolbarLineSpacing')}
+            options={[{ name: t('fontDefault'), value: '' }, ...lineSpacings]}
+          />
+          <ToolbarButton
+            label={t('toolbarDecreaseIndent')}
+            shortcut={SHORTCUTS.outdent}
             disabled={!state.canOutdent}
+            onClick={() => run((chain) => chain.liftListItem('listItem'))}
           >
-            <IndentDecrease className="h-4 w-4" />
+            <IndentDecrease className="rtl:-scale-x-100" />
           </ToolbarButton>
           <ToolbarButton
-            onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-            tooltip={t('toolbarIncreaseIndent')}
+            label={t('toolbarIncreaseIndent')}
+            shortcut={SHORTCUTS.indent}
             disabled={!state.canIndent}
+            onClick={() => run((chain) => chain.sinkListItem('listItem'))}
           >
-            <IndentIncrease className="h-4 w-4" />
+            <IndentIncrease className="rtl:-scale-x-100" />
           </ToolbarButton>
         </div>
-
-        {/* Alignment */}
-        <div className="flex items-center gap-0.5">
+        <ToolbarSeparator />
+        <div className="toolbar-group">
+          <LinkPopover
+            editor={editor}
+            trigger={
+              <ToolbarButton label={t('toolbarLink')} pressed={state.link}>
+                <Link />
+              </ToolbarButton>
+            }
+          />
+          <ImageToolbar editor={editor} />
+          <TableGridPicker editor={editor} />
+          <SmartGraphicGallery editor={editor} />
           <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            isActive={state.alignment === 'left'}
-            tooltip={t('toolbarAlignLeft')}
+            label={t('toolbarHorizontalRule')}
+            onClick={() => run((chain) => chain.setHorizontalRule())}
           >
-            <AlignLeft className="h-4 w-4" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            isActive={state.alignment === 'center'}
-            tooltip={t('toolbarAlignCenter')}
-          >
-            <AlignCenter className="h-4 w-4" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            isActive={state.alignment === 'right'}
-            tooltip={t('toolbarAlignRight')}
-          >
-            <AlignRight className="h-4 w-4" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-            isActive={state.alignment === 'justify'}
-            tooltip={t('toolbarAlignJustify')}
-          >
-            <AlignJustify className="h-4 w-4" />
+            <SeparatorHorizontal />
           </ToolbarButton>
         </div>
-
-        {/* Line Spacing */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0"
-              aria-label={t('toolbarLineSpacing')}
-            >
-              <ChevronsUpDown className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            aria-label={t('toolbarLineSpacing')}
-            className="w-32 p-2 bg-popover border border-border shadow-lg z-50"
-          >
-            {lineSpacings.map((spacing) => (
-              <Button
-                key={spacing.value}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-sm"
-                onClick={() => {
-                  editor.chain().focus().setMark('textStyle', { lineHeight: spacing.value }).run();
-                }}
-              >
-                {spacing.name}
-              </Button>
-            ))}
-          </PopoverContent>
-        </Popover>
-
-        {/* Link */}
-        <LinkPopover
-          editor={editor}
-          trigger={
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn('h-9 w-9 p-0', state.link && 'bg-primary/10 text-primary')}
-              aria-label={t('toolbarLink')}
-            >
-              <Link className="h-4 w-4" />
-            </Button>
-          }
-        />
-
-        {/* Image */}
-        <ImageToolbar editor={editor} />
-
-        <TableGridPicker editor={editor} />
-        <SmartGraphicGallery editor={editor} />
       </div>
     </div>
   );
 });
+
+function AlignmentMenu({
+  editor,
+  value,
+  label,
+  icon,
+}: {
+  editor: Editor;
+  value?: TextAlignment;
+  label: string;
+  icon: ReactNode;
+}) {
+  const { t } = useLocale();
+  const focus = useReturnToEditor(editor);
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <ToolbarButton label={label}>{icon}</ToolbarButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52" onCloseAutoFocus={focus.onCloseAutoFocus}>
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={value ?? 'left'}
+          onValueChange={(next) => {
+            focus.markPicked();
+            editor.chain().focus().setTextAlign(next).run();
+          }}
+        >
+          {ALIGNMENTS.map(({ value: option, label: optionLabel, icon: Icon, shortcut }) => (
+            <DropdownMenuRadioItem key={option} value={option}>
+              <Icon aria-hidden="true" />
+              {t(optionLabel)}
+              <DropdownMenuShortcut>
+                <ShortcutLabel shortcut={shortcut} />
+              </DropdownMenuShortcut>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function LineSpacingMenu({
+  editor,
+  value,
+  label,
+  options,
+}: {
+  editor: Editor;
+  value: string;
+  label: string;
+  options: { name: string; value: string }[];
+}) {
+  const focus = useReturnToEditor(editor);
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <ToolbarButton label={label}>
+          <UnfoldVertical />
+        </ToolbarButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-40" onCloseAutoFocus={focus.onCloseAutoFocus}>
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(next) => {
+            focus.markPicked();
+            editor
+              .chain()
+              .focus()
+              .setMark('textStyle', { lineHeight: next || null })
+              .removeEmptyTextStyle()
+              .run();
+          }}
+        >
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.value || 'default'} value={option.value} className="tabular-nums">
+              {option.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

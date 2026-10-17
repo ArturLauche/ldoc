@@ -1,4 +1,6 @@
-import type { Plugin } from 'vite';
+import type { Plugin, Rollup } from 'vite';
+import de from '../src/lib/locales/de.ts';
+import { translateFrom, type TranslationKey } from '../src/lib/translations.ts';
 import { createLegalCopies, type LegalCopy } from '../src/lib/legalContent.ts';
 import {
   DEFAULT_SITE_URL,
@@ -13,11 +15,53 @@ const escape = (value: string) =>
     (character) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
   );
+/** Static pages are in English or German, so only those catalogs are needed here. */
+const t = (locale: 'en' | 'de', key: TranslationKey) =>
+  translateFrom(locale === 'de' ? de : undefined, key);
 const jsonLd = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 const HEAD_START = '<!-- route-head:start -->';
 const HEAD_END = '<!-- route-head:end -->';
 const BODY_START = '<!-- route-body:start -->';
 const BODY_END = '<!-- route-body:end -->';
+const PRELOAD_START = '<!-- editor-preload:start -->';
+const PRELOAD_END = '<!-- editor-preload:end -->';
+
+/** Lazy modules the editor needs on its first render (its static imports come along). */
+const EDITOR_MODULES = ['/src/pages/Index.tsx', '/src/components/Editor/FileMenu.tsx'];
+
+/**
+ * Module preloads for the editor route: the browser fetches the editor
+ * chunks alongside the entry script instead of after it has run. Low
+ * priority keeps the stylesheet and entry first on slow connections
+ * (measured: about 3% faster to an editable document at 1.6 Mbit/s and
+ * 150 ms RTT, 6–11% at 10 Mbit/s and 40 ms). Only `index.html` gets them;
+ * legal pages do not load the editor.
+ */
+function editorPreloads(
+  bundle: Rollup.OutputBundle | undefined,
+  entry: Rollup.OutputChunk | undefined,
+): string {
+  if (!bundle) return '';
+  const chunks = Object.values(bundle).filter((item): item is Rollup.OutputChunk => item.type === 'chunk');
+  const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const alreadyLoaded = new Set<string>();
+  const collect = (fileName: string, into: Set<string>) => {
+    if (into.has(fileName)) return;
+    into.add(fileName);
+    byName.get(fileName)?.imports.forEach((next) => collect(next, into));
+  };
+  if (entry) collect(entry.fileName, alreadyLoaded);
+  const files = new Set<string>();
+  for (const chunk of chunks) {
+    if (EDITOR_MODULES.some((module) => chunk.facadeModuleId?.endsWith(module))) {
+      collect(chunk.fileName, files);
+    }
+  }
+  const links = [...files]
+    .filter((file) => !alreadyLoaded.has(file))
+    .map((file) => `<link rel="modulepreload" crossorigin fetchpriority="low" href="/${file}" />`);
+  return links.length ? `${PRELOAD_START}\n    ${links.join('\n    ')}\n    ${PRELOAD_END}` : '';
+}
 
 /** Generate static HTML for existing routes. No server rendering or runtime service. */
 export function staticPages(env: Record<string, string>): Plugin {
@@ -39,7 +83,7 @@ export function staticPages(env: Record<string, string>): Plugin {
     } catch {
       /* Optional contact URL. */
     }
-    return `<section><h2>${escape(copy.contactHeading)}</h2>${name ? `<p>${escape(name)}</p>` : ''}${email ? `<p>${escape(email)}</p>` : ''}${contactUrl ? `<p><a href="${escape(contactUrl)}">${escape(copy.contactUrlLabel)}</a></p>` : ''}${!email && !contactUrl ? `<p>${escape(copy.contactPlaceholder)}</p>` : ''}<p>${escape(copy.jurisdictionLabel)}: ${escape(jurisdiction)}</p></section>`;
+    return `<section class="not-prose my-6 border-y border-border py-5 text-card-foreground"><h2 class="mb-2 text-base font-semibold">${escape(copy.contactHeading)}</h2><div class="space-y-1 text-sm">${name ? `<p>${escape(name)}</p>` : ''}${email ? `<p>${escape(email)}</p>` : ''}${contactUrl ? `<p><a class="underline" href="${escape(contactUrl)}">${escape(copy.contactUrlLabel)}</a></p>` : ''}${!email && !contactUrl ? `<p class="text-muted-foreground">${escape(copy.contactPlaceholder)}</p>` : ''}</div><p class="mt-3 text-sm"><span class="text-muted-foreground">${escape(copy.jurisdictionLabel)}:</span> ${escape(jurisdiction)}</p></section>`;
   };
 
   const headFor = (path: string) => {
@@ -83,9 +127,16 @@ export function staticPages(env: Record<string, string>): Plugin {
     ].join('\n    ');
   };
 
+  const legalHeader = (locale: 'en' | 'de') =>
+    `<header class="app-bar sticky top-0 z-40"><div class="mx-auto flex h-12 w-full max-w-3xl items-center justify-between px-5"><a href="/" class="flex min-w-0 items-center gap-2 rounded-sm"><img src="/favicon.svg" alt="" width="20" height="20" class="h-5 w-5 shrink-0 rounded-[0.35rem]" /><span class="truncate text-sm font-semibold tracking-tight">${escape(siteName)}</span></a><a href="/" aria-label="${escape(t(locale, 'legalBackToEditor'))}" class="-me-2 flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg><span class="hidden sm:inline">${escape(t(locale, 'legalBackToEditor'))}</span></a></div></header>`;
+
+  const legalFooter = (locale: 'en' | 'de') =>
+    `<footer class="legal-footer"><nav aria-label="${escape(t(locale, 'legalLinks'))}" class="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-1 px-5 text-sm text-muted-foreground"><a href="/" class="app-footer-link">${escape(siteName)}</a><a href="${locale === 'de' ? '/datenschutz' : '/privacy'}" class="app-footer-link">${escape(t(locale, 'privacyPolicy'))}</a><a href="${locale === 'de' ? '/nutzung' : '/terms'}" class="app-footer-link">${escape(t(locale, 'termsOfUse'))}</a></nav></footer>`;
+
+  /** Static markup with the same structure and classes as the React pages that replace it. */
   const bodyFor = (path: string) => {
     if (path === '/')
-      return `<div id="root"></div><noscript><main class="mx-auto max-w-3xl p-6"><h1>${escape(siteName)} – Private rich text editor</h1><p>Enable JavaScript to write, format and export documents. Documents are stored in this browser; no account is required.</p><nav><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Use</a></nav></main></noscript>`;
+      return `<div id="root"><div class="boot-shell" aria-hidden="true"><div class="boot-bar"></div><div class="boot-toolbar"></div><div class="boot-main"><div class="boot-page"></div></div><div class="boot-dock"></div></div></div><noscript><main class="mx-auto max-w-3xl p-6"><h1>${escape(siteName)} – Private rich text editor</h1><p>Enable JavaScript to write, format and export documents. Documents are stored in this browser; no account is required.</p><nav><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Use</a></nav></main></noscript>`;
     const copy =
       path === '/privacy'
         ? copies.privacyEn
@@ -97,12 +148,15 @@ export function staticPages(env: Record<string, string>): Plugin {
               ? copies.termsDe
               : null;
     if (!copy)
-      return `<div id="root"><main class="mx-auto max-w-3xl p-6"><h1>Page not found</h1><p>The page you requested could not be found.</p><a href="/">Return to the editor</a></main></div>`;
-    return `<div id="root"><main class="prose mx-auto max-w-3xl px-5 py-10"><nav><a href="/">${escape(siteName)}</a></nav><h1>${escape(copy.title)}</h1><p>${escape(copy.lastUpdatedLabel)}: ${escape(lastUpdated)}</p><p>${escape(copy.intro)}</p>${contact(copy)}${copy.blocks.map((block) => `<section><h2>${escape(block.heading)}</h2>${(block.paragraphs ?? []).map((paragraph) => `<p>${escape(paragraph)}</p>`).join('')}${block.bullets ? `<ul>${block.bullets.map((bullet) => `<li>${escape(bullet)}</li>`).join('')}</ul>` : ''}</section>`).join('')}</main></div>`;
+      return `<div id="root"><main class="flex min-h-dvh items-center justify-center bg-background px-6"><div class="w-full max-w-md"><img src="/favicon.svg" alt="" width="32" height="32" class="mb-6 h-8 w-8" /><p class="text-sm font-medium tabular-nums text-muted-foreground">404</p><h1 class="mt-1 text-2xl font-semibold tracking-tight">${escape(t('en', 'notFoundTitle'))}</h1><p class="mt-2 text-muted-foreground">${escape(t('en', 'notFoundDescription'))}</p><a href="/" class="mt-6 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">${escape(t('en', 'legalBackToEditor'))}</a></div></main></div>`;
+    const locale = path === '/datenschutz' || path === '/nutzung' ? 'de' : 'en';
+    return `<div id="root"><div class="app-shell flex min-h-dvh flex-col bg-background">${legalHeader(locale)}<main class="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:py-14"><article class="legal-prose prose max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-3xl"><h1>${escape(copy.title)}</h1><p class="text-sm text-muted-foreground">${escape(copy.lastUpdatedLabel)}: ${escape(lastUpdated)}</p><p>${escape(copy.intro)}</p>${contact(copy)}${copy.blocks.map((block) => `<section><h2>${escape(block.heading)}</h2>${(block.paragraphs ?? []).map((paragraph) => `<p>${escape(paragraph)}</p>`).join('')}${block.bullets ? `<ul>${block.bullets.map((bullet) => `<li>${escape(bullet)}</li>`).join('')}</ul>` : ''}</section>`).join('')}</article></main>${legalFooter(locale)}</div></div>`;
   };
 
-  const render = (html: string, path: string) =>
+  const render = (html: string, path: string, preloads = '') =>
     html
+      .replace(new RegExp(`\\s*${PRELOAD_START}[\\s\\S]*?${PRELOAD_END}`), '')
+      .replace('</head>', preloads ? `  ${preloads}\n  </head>` : '</head>')
       .replace(/<html lang="[^"]*"/, `<html lang="${pageMetadata(path, origin).language}"`)
       .replace(
         new RegExp(`${HEAD_START}[\\s\\S]*?${HEAD_END}`),
@@ -117,7 +171,10 @@ export function staticPages(env: Record<string, string>): Plugin {
     name: 'lwrite-static-pages',
     apply: 'build',
     enforce: 'post',
-    transformIndexHtml: { order: 'post', handler: (html) => render(html, '/') },
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, context) => render(html, '/', editorPreloads(context.bundle, context.chunk)),
+    },
     generateBundle: {
       order: 'post',
       handler(_options, bundle) {
