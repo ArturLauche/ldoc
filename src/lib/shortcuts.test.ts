@@ -9,6 +9,14 @@ describe('shortcut labels', () => {
     expect(formatShortcut('Mod+/', true)).toBe('⌘/');
   });
 
+  it('prints modifiers as keyboards in the interface language name them', () => {
+    const german = { Ctrl: 'Strg', Shift: 'Umschalt', Alt: 'Alt' };
+    expect(formatShortcut('Mod+Shift+Z', false, german)).toBe('Strg+Umschalt+Z');
+    expect(formatShortcut('Mod+Alt+2', false, german)).toBe('Strg+Alt+2');
+    // Apple symbols are the same in every language.
+    expect(formatShortcut('Mod+Shift+Z', true, german)).toBe('⌘⇧Z');
+  });
+
   it('keeps the plus key', () => {
     expect(formatShortcut('Mod++', false)).toBe('Ctrl++');
   });

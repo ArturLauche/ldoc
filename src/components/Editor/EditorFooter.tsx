@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Editor } from '@tiptap/react';
 import { useLocale } from '@/hooks/useLocale';
-import { formatMessage } from '@/lib/translations';
+import { formatNumber, formatTime } from '@/lib/translations';
 import { useDocumentStats } from './useDocumentStats';
 
 /**
@@ -16,10 +16,8 @@ export const EditorFooter = memo(function EditorFooter({
   editor: Editor | null;
   lastSaved: Date | null;
 }) {
-  const { t, locale } = useLocale();
+  const { t, tCount, locale } = useLocale();
   const { wordCount, characterCount, selectedWordCount } = useDocumentStats(editor, locale);
-  const plural = new Intl.PluralRules(locale);
-  const words = wordCount.toLocaleString(locale);
 
   return (
     <footer className="app-footer" data-editor-chrome>
@@ -27,26 +25,23 @@ export const EditorFooter = memo(function EditorFooter({
         <p className="flex flex-wrap items-center gap-x-3 tabular-nums" aria-live="off">
           <span>
             {selectedWordCount !== null
-              ? formatMessage(t('selectedWords'), {
-                  selected: selectedWordCount.toLocaleString(locale),
-                  total: words,
+              ? tCount('selectedWords', wordCount, {
+                  selected: formatNumber(selectedWordCount, locale),
+                  total: formatNumber(wordCount, locale),
                 })
-              : `${words} ${t(plural.select(wordCount) === 'one' ? 'word' : 'words')}`}
+              : tCount('wordCount', wordCount)}
           </span>
           <span aria-hidden="true" className="text-border">
             ·
           </span>
-          <span>
-            {characterCount.toLocaleString(locale)}{' '}
-            {t(plural.select(characterCount) === 'one' ? 'character' : 'characters')}
-          </span>
+          <span>{tCount('characterCount', characterCount)}</span>
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {lastSaved ? (
             <span className="tabular-nums">
               {t('lastSaved')}{' '}
               <time dateTime={lastSaved.toISOString()}>
-                {lastSaved.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                {formatTime(lastSaved, locale)}
               </time>
             </span>
           ) : null}

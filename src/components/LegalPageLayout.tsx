@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import { t as translate, type TranslationKey } from '@/lib/translations';
+import { useLocaleMessages } from '@/hooks/useLocaleMessages';
 import { ObfuscatedEmail } from '@/components/ObfuscatedEmail';
 import { siteConfig, hasControllerContact } from '@/lib/siteConfig';
 import type { LegalCopy } from '@/lib/legalContent';
@@ -16,7 +16,8 @@ interface LegalPageLayoutProps {
  * both pages share the same header, contact card, typography and footer links.
  */
 export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
-  const t = (key: TranslationKey) => translate(locale, key);
+  // The page's language follows its URL, not the interface language.
+  const { t } = useLocaleMessages(locale);
 
   return (
     <div className="app-shell flex min-h-dvh flex-col bg-background">

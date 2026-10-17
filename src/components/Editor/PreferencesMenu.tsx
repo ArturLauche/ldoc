@@ -1,4 +1,5 @@
 import { EllipsisVertical, Keyboard, Languages, Monitor, Moon, Settings2, Sun } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +17,6 @@ import {
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/hooks/useTheme';
 import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
-import { formatShortcut } from '@/lib/shortcuts';
 import { isThemePreference, type ThemePreference } from '@/lib/theme';
 import {
   isSupportedLocale,
@@ -25,7 +25,7 @@ import {
   type TranslationKey,
 } from '@/lib/translations';
 import { SHORTCUTS } from './editorShortcuts';
-import { ToolbarButton } from './toolbarControls';
+import { ShortcutLabel, ToolbarButton } from './toolbarControls';
 
 const THEMES: { value: ThemePreference; label: TranslationKey; icon: typeof Sun }[] = [
   { value: 'system', label: 'themeSystem', icon: Monitor },
@@ -52,7 +52,8 @@ export function PreferencesMenu({
     <DropdownMenuRadioGroup
       value={locale}
       onValueChange={(value) => {
-        if (isSupportedLocale(value)) setLocale(value);
+        if (!isSupportedLocale(value)) return;
+        setLocale(value).catch(() => toast.error(t('languageLoadFailed')));
       }}
     >
       {supportedLocales.map((code) => (
@@ -110,7 +111,9 @@ export function PreferencesMenu({
             <DropdownMenuItem onSelect={onShowShortcuts}>
               <Keyboard />
               {t('keyboardShortcuts')}
-              <DropdownMenuShortcut>{formatShortcut(SHORTCUTS.shortcuts)}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>
+                <ShortcutLabel shortcut={SHORTCUTS.shortcuts} />
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}

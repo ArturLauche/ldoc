@@ -47,7 +47,6 @@ import { useLocale } from '@/hooks/useLocale';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useRovingToolbar } from '@/hooks/useRovingToolbar';
 import { keepEditorFocus } from '@/lib/inputModality';
-import { formatShortcut } from '@/lib/shortcuts';
 import type { TranslationKey } from '@/lib/translations';
 import { cn } from '@/lib/utils';
 import { SHORTCUTS } from './editorShortcuts';
@@ -62,6 +61,7 @@ import {
   ColorSwatchGrid,
   LinkPopover,
   PopoverSection,
+  ShortcutLabel,
   ToolbarButton,
   ToolbarSeparator,
 } from './toolbarControls';
@@ -493,7 +493,9 @@ function AlignmentMenu({
             <DropdownMenuRadioItem key={option} value={option}>
               <Icon aria-hidden="true" />
               {t(optionLabel)}
-              <DropdownMenuShortcut>{formatShortcut(shortcut)}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>
+                <ShortcutLabel shortcut={shortcut} />
+              </DropdownMenuShortcut>
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

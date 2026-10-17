@@ -1,5 +1,6 @@
 import type { Plugin, Rollup } from 'vite';
-import { t } from '../src/lib/translations.ts';
+import de from '../src/lib/locales/de.ts';
+import { translateFrom, type TranslationKey } from '../src/lib/translations.ts';
 import { createLegalCopies, type LegalCopy } from '../src/lib/legalContent.ts';
 import {
   DEFAULT_SITE_URL,
@@ -14,6 +15,9 @@ const escape = (value: string) =>
     (character) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
   );
+/** Static pages are in English or German, so only those catalogs are needed here. */
+const t = (locale: 'en' | 'de', key: TranslationKey) =>
+  translateFrom(locale === 'de' ? de : undefined, key);
 const jsonLd = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 const HEAD_START = '<!-- route-head:start -->';
 const HEAD_END = '<!-- route-head:end -->';

@@ -60,7 +60,7 @@ export function useFileActions({
   onCreateNewDocument,
   onImportDocument,
 }: FileActionsOptions) {
-  const { t, locale } = useLocale();
+  const { t, tCount, locale } = useLocale();
   const confirm = useConfirm();
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -95,9 +95,13 @@ export function useFileActions({
     if (await onCreateNewDocument()) toast.success(t('newDocumentCreated'));
   };
 
+  const pickFiles = (options: Parameters<typeof openFilePicker>[0]) => {
+    if (!openFilePicker(options)) toast.error(t('openFailed'));
+  };
+
   const openFile = () => {
     if (!editor) return;
-    openFilePicker({
+    pickFiles({
       accept: SUPPORTED_IMPORT_FORMATS,
       onSelect: async ([file]) => {
         setIsImporting(true);
@@ -136,7 +140,7 @@ export function useFileActions({
       );
       const fileName = `lwrite-library-${new Date().toISOString().slice(0, 10)}.lwrite.json`;
       downloadBlob(new Blob([payload], { type: 'application/json' }), fileName);
-      toast.success(formatMessage(t('exportedLibraryToast'), { count }));
+      toast.success(tCount('exportedLibraryToast', count));
       if (includesDraft) toast.info(t('backupIncludesDraft'));
     } catch (error) {
       logError('Library export failed', error);
@@ -147,7 +151,7 @@ export function useFileActions({
   };
 
   const importLibrary = () => {
-    openFilePicker({
+    pickFiles({
       accept: LIBRARY_FILE_TYPES,
       onSelect: async ([file]) => {
         setIsImporting(true);
@@ -177,7 +181,7 @@ export function useFileActions({
    * .txt, ...). The open document is never replaced.
    */
   const importFiles = () => {
-    openFilePicker({
+    pickFiles({
       accept: `${SUPPORTED_IMPORT_FORMATS},${LIBRARY_FILE_TYPES}`,
       multiple: true,
       onSelect: async (files) => {

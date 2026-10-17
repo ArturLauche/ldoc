@@ -33,6 +33,29 @@ describe('toolbar controls', () => {
     await waitFor(() => expect(editor!.getHTML()).toMatch(/<a [^>]*href="https:\/\/example\.com\/?"[^>]*>Hello<\/a>/));
   });
 
+  it('edits or removes an existing link', async () => {
+    const user = userEvent.setup();
+    editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content: '<p><a href="https://example.com">Hello</a> world</p>',
+    });
+    editor.commands.setTextSelection(3);
+    withProviders(
+      <LinkPopover editor={editor} trigger={<button type="button">Link</button>} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Link' }));
+    const field = screen.getByRole('textbox', { name: 'Edit link' });
+    expect(field).toHaveValue('https://example.com');
+    await user.clear(field);
+    await user.type(field, 'example.org');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(editor!.getHTML()).toContain('href="https://example.org'));
+
+    await user.click(screen.getByRole('button', { name: 'Link' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(editor!.getHTML()).not.toContain('<a '));
+  });
+
   it('marks the current color and offers an automatic color', async () => {
     const user = userEvent.setup();
     editor = new Editor({

@@ -1,6 +1,9 @@
+import { logError } from './logger';
+
 /**
  * Opens the browser's file chooser. Must run inside a user gesture (a click
  * or tap handler). `onSelect` is not called when the chooser is cancelled.
+ * Returns false when the browser refused to open the chooser.
  */
 export function openFilePicker({
   accept,
@@ -10,7 +13,7 @@ export function openFilePicker({
   accept: string;
   multiple?: boolean;
   onSelect: (files: File[]) => void;
-}): void {
+}): boolean {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;
@@ -23,5 +26,11 @@ export function openFilePicker({
     },
     { once: true },
   );
-  input.click();
+  try {
+    input.click();
+    return true;
+  } catch (error) {
+    logError('File chooser could not open', error);
+    return false;
+  }
 }

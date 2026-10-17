@@ -319,7 +319,7 @@ img[data-align=left]{float:left;margin:${s.image.floatMargin}px ${s.image.floatG
 img[data-align=right]{float:right;margin:${s.image.floatMargin}px 0 ${s.image.floatMargin}px ${s.image.floatGap}px}
 .lwrite-table{margin:${s.table.margin}px 0;overflow-x:auto;max-width:100%}
 table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0;font-size:${em(s.table.sizePx)};line-height:${s.table.lineHeight};background:#${s.table.cellBackground}}
-th,td{min-width:${s.table.minColumnWidth}px;border:${s.table.borderWidth}px solid ${border};padding:${s.table.cellPaddingY}px ${s.table.cellPaddingX}px;vertical-align:top;text-align:left;background-color:#${s.table.cellBackground}}
+th,td{min-width:${s.table.minColumnWidth}px;border:${s.table.borderWidth}px solid ${border};padding:${s.table.cellPaddingY}px ${s.table.cellPaddingX}px;vertical-align:top;text-align:start;background-color:#${s.table.cellBackground}}
 th{background-color:#${s.table.headerBackground};font-weight:${s.table.headerWeight}}
 :is(th,td) p{margin:${em(s.paragraph.marginTop)} 0 ${s.table.paragraphMarginBottom}px}
 .lwrite-document :is(th,td)>:first-child{margin-top:0}

@@ -55,7 +55,7 @@ const fieldInput =
  * cleared automatically when it unmounts.
  */
 export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplaceBarProps) => {
-  const { t } = useLocale();
+  const { t, tCount } = useLocale();
   const [showReplace, setShowReplace] = useState(false);
   const replaceVisible = !compact || showReplace;
   const [query, setQuery] = useState('');
@@ -121,7 +121,7 @@ export const FindReplaceBar = ({ editor, compact = false, onClose }: FindReplace
     if (!editor || !matchCount) return;
     const replaced = matchCount;
     editor.commands.replaceAllMatches(replacement);
-    toast.success(formatMessage(t('replacedAllToast'), { count: replaced }));
+    toast.success(tCount('replacedAllToast', replaced));
   };
 
   const handleFindKeyDown = (event: KeyboardEvent) => {

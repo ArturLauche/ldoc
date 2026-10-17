@@ -2,9 +2,13 @@ import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
+import { useTextDirection } from "@/hooks/useLocale";
 import { cn } from "@/lib/utils";
 
-const Select = SelectPrimitive.Root;
+/** Follows the interface direction (Radix defaults to LTR). */
+function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  return <SelectPrimitive.Root dir={useTextDirection()} {...props} />;
+}
 
 const SelectGroup = SelectPrimitive.Group;
 

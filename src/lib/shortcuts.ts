@@ -34,11 +34,26 @@ function splitShortcut(shortcut: string): string[] {
   return parts.filter(Boolean);
 }
 
-/** Visible label: `⌘⇧Z` on Apple platforms, `Ctrl+Shift+Z` elsewhere. */
-export function formatShortcut(shortcut: string, apple = isApplePlatform()): string {
+/** Modifier names as printed on keyboards in the interface language (Strg, Maj, …). */
+export type ModifierNames = Partial<Record<'Ctrl' | 'Shift' | 'Alt', string>>;
+
+/** Visible label: `⌘⇧Z` on Apple platforms, `Ctrl+Shift+Z` (or `Strg+Umschalt+Z`) elsewhere. */
+export function formatShortcut(
+  shortcut: string,
+  apple = isApplePlatform(),
+  names: ModifierNames = {},
+): string {
   const parts = splitShortcut(shortcut);
   if (apple) return parts.map((part) => APPLE_SYMBOLS[part] ?? part.toUpperCase()).join('');
-  return parts.map((part) => (part === 'Mod' ? 'Ctrl' : part.length === 1 ? part.toUpperCase() : part)).join('+');
+  return parts
+    .map((part) => {
+      const modifier = part === 'Mod' ? 'Ctrl' : part;
+      if (modifier === 'Ctrl' || modifier === 'Shift' || modifier === 'Alt') {
+        return names[modifier] ?? modifier;
+      }
+      return part.length === 1 ? part.toUpperCase() : part;
+    })
+    .join('+');
 }
 
 /** Value for `aria-keyshortcuts`, e.g. `Control+Shift+Z` or `Meta+Shift+Z`. */

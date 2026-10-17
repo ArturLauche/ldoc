@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { loadLocale, type Locale } from '@/lib/translations';
 
 /**
  * Route modules load on demand. The entry point preloads the route of the
@@ -32,4 +33,22 @@ export async function preloadRoute(key: RouteKey): Promise<void> {
 /** The route's component once its module has loaded. */
 export function readyRoute(key: RouteKey): ComponentType | undefined {
   return loaded[key];
+}
+
+/** Legal pages are in German under their German paths, English otherwise. */
+export function legalPageLocale(pathname: string): 'en' | 'de' {
+  const path = pathname.toLowerCase().replace(/\/+$/, '');
+  return path === '/datenschutz' || path === '/nutzung' ? 'de' : 'en';
+}
+
+/**
+ * Loads the first page's module and every catalog its first render reads.
+ * Settles either way: a failed chunk still mounts so the error boundary can
+ * offer a reload, and a missing catalog falls back to English.
+ */
+export function preloadPage(pathname: string, interfaceLocale: Locale): Promise<unknown> {
+  const key = routeKeyFor(pathname);
+  const locales = new Set<Locale>([interfaceLocale]);
+  if (key === 'privacy' || key === 'terms') locales.add(legalPageLocale(pathname));
+  return Promise.allSettled([preloadRoute(key), ...Array.from(locales, loadLocale)]);
 }

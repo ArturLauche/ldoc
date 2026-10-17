@@ -16,7 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
 import { normalizeLinkUrl } from '@/lib/links';
-import { ariaKeyShortcut, formatShortcut } from '@/lib/shortcuts';
+import { useShortcutLabel } from '@/hooks/useShortcutLabel';
+import { ariaKeyShortcut } from '@/lib/shortcuts';
 import { formatMessage } from '@/lib/translations';
 import { cn } from '@/lib/utils';
 import { NO_COLOR } from './toolbarModel';
@@ -32,6 +33,11 @@ interface ToolbarButtonProps extends Omit<ButtonProps, 'children'> {
   hint?: string;
   tooltipSide?: 'top' | 'bottom';
   children: ReactNode;
+}
+
+/** A `Mod+Shift+Z`-style shortcut as the platform and interface language print it. */
+export function ShortcutLabel({ shortcut }: { shortcut: string }) {
+  return useShortcutLabel()(shortcut);
 }
 
 /**
@@ -61,7 +67,9 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         <span className="flex items-center gap-2">
           <span>{label}</span>
           {shortcut ? (
-            <kbd className="font-sans text-background/60">{formatShortcut(shortcut)}</kbd>
+            <kbd className="font-sans text-background/60">
+              <ShortcutLabel shortcut={shortcut} />
+            </kbd>
           ) : null}
         </span>
         {hint ? <span className="block font-normal text-background/70">{hint}</span> : null}
@@ -266,7 +274,7 @@ export function LinkPopover({ editor, trigger, align = 'center', onComplete }: L
     >
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
-        aria-label={t('toolbarLink')}
+        aria-label={t(editing ? 'toolbarLinkEdit' : 'toolbarLink')}
         align={align}
         className="w-[min(22rem,calc(100vw-1rem))] p-3"
         onCloseAutoFocus={(event) => {
@@ -288,7 +296,7 @@ export function LinkPopover({ editor, trigger, align = 'center', onComplete }: L
           }}
         >
           <Label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
-            {t('toolbarLink')}
+            {t(editing ? 'toolbarLinkEdit' : 'toolbarLink')}
           </Label>
           <div className="flex gap-2">
             <Input

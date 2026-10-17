@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale } from '@/hooks/useLocale';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useScrollFade } from '@/hooks/useScrollFade';
 import { focusContainerOnTouch } from '@/lib/inputModality';
 import {
   SMART_GRAPHIC_CATEGORIES,
@@ -104,6 +105,8 @@ function GalleryBody({
   const { t, locale } = useLocale();
   const wide = useMediaQuery('(min-width: 640px)');
   const [query, setQuery] = useState('');
+  // On phones the categories form a strip; a faded edge shows it scrolls.
+  const categoriesRef = useScrollFade<HTMLDivElement>();
 
   const previews = useMemo(
     () => new Map(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id, createStarterGraphic(layout.id, locale)])),
@@ -163,6 +166,7 @@ function GalleryBody({
           <SearchField query={query} onQueryChange={setQuery} />
         </div>
         <TabsList
+          ref={categoriesRef}
           aria-label={t('graphicGalleryCategories')}
           className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
         >

@@ -4,13 +4,13 @@
 
 ## Features
 
-- Rich text, headings, nested lists, links, tables, images, and editable graphics.
-- Self-hosted font choices, light/dark themes, and eleven interface languages.
+- Rich text, headings, quotes, code blocks, nested lists, links, tables, images, and editable graphics. Images can be pasted or dropped straight into the document.
+- Self-hosted font choices, light, dark, and system themes, and eleven interface languages that load on demand.
 - Autosave after three seconds of inactivity, with a fifteen-second maximum wait during continuous editing, manual save, and visible storage errors.
 - Document library with text search, rename, duplication, deletion, and JSON backup/import.
 - Up to twenty versions per document, previews, restore, and safety snapshots before replacing a document.
 - Cross-tab conflict detection with actions to reload the saved document or save a separate copy.
-- Find/replace, word/character counts, and document-only printing.
+- Find/replace, word/character counts (also for the selection, with CJK-aware word segmentation), a keyboard shortcut reference (Ctrl/⌘ + /), and document-only printing.
 - Import TXT, HTML, RTF, DOCX, ODT/OTT, and FODT. Export TXT, HTML, RTF, DOCX, ODT, and PDF. Exports report unsupported content rather than silently claiming a perfect conversion.
 
 ## Development
@@ -69,19 +69,24 @@ Disable Cloudflare Web Analytics for this Pages project to match the existing no
 
 ## Architecture
 
-| Location                                                       | Responsibility                                                      |
-| -------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `src/App.tsx`, `src/pages/`                                    | Existing editor, legal, and not-found routes                        |
-| `src/components/Editor/RichTextEditor.tsx`                     | Editor shell and chrome                                             |
-| `src/components/Editor/useDocumentSession.ts`                  | Persistence lifecycle, document transitions, conflicts, shortcuts   |
-| `src/components/Editor/useDocumentStats.ts`                    | Coalesced document counts and font discovery                        |
-| `src/components/Editor/editorExtensions.ts`                    | TipTap schema and extensions                                        |
-| `src/lib/storage.ts`, `currentDocument.ts`                     | Typed browser storage and current-record validation                 |
-| `src/lib/documentLibrary.ts`, `versionHistory.ts`              | Library, backup/migration, and version retention                    |
-| `src/lib/sanitizeDocumentHtml.ts`                              | One document HTML sanitation boundary                               |
-| `src/lib/export/`, `src/components/Editor/DocumentImporter.ts` | Format conversion; heavy parsers/exporters load on demand           |
-| `src/lib/siteMetadata.ts`, `build/staticPages.ts`              | Shared browser/build metadata and static public output              |
-| `src/index.css`, `src/components/ui/`                          | Semantic tokens, document styling, reusable Radix/shadcn primitives |
+| Location                                                        | Responsibility                                                         |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/main.tsx`, `src/routeLoading.ts`                           | Preloads the first route and its language before React mounts          |
+| `src/App.tsx`, `src/pages/`                                     | Existing editor, legal, and not-found routes                           |
+| `src/components/Editor/RichTextEditor.tsx`                      | Editor shell and chrome                                                |
+| `src/components/Editor/useDocumentSession.ts`                   | Persistence lifecycle, document transitions, conflicts, shortcuts      |
+| `src/components/Editor/useFileActions.ts`                       | File, library, import, and export actions for the menu and phone sheet |
+| `src/components/Editor/EditorToolbar.tsx`, `toolbarModel.ts`    | Desktop toolbar; state and commands shared with the phone toolbar      |
+| `src/components/Editor/useDocumentStats.ts`, `EditorFooter.tsx` | Coalesced document counts and font discovery                           |
+| `src/components/Editor/editorExtensions.ts`                     | TipTap schema and extensions, including image paste/drop               |
+| `src/lib/storage.ts`, `currentDocument.ts`                      | Typed browser storage and current-record validation                    |
+| `src/lib/documentLibrary.ts`, `versionHistory.ts`               | Library, backup/migration, and version retention                       |
+| `src/lib/sanitizeDocumentHtml.ts`                               | One document HTML sanitation boundary                                  |
+| `src/lib/export/`, `src/components/Editor/DocumentImporter.ts`  | Format conversion; heavy parsers/exporters load on demand              |
+| `src/lib/translations.ts`, `src/lib/locales/`                   | English in the entry chunk; other languages load as separate chunks    |
+| `src/lib/theme.ts`, `src/components/theme-provider.tsx`         | Theme preference, pre-paint script in `index.html`, cross-tab sync     |
+| `src/lib/siteMetadata.ts`, `build/staticPages.ts`               | Shared browser/build metadata and static public output                 |
+| `src/index.css`, `src/components/ui/`                           | Semantic tokens, document styling, reusable Radix/shadcn primitives    |
 
 ## License
 

@@ -40,11 +40,11 @@ import { Label } from '@/components/ui/label';
 import { useLocale } from '@/hooks/useLocale';
 import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import type { StoredDocument } from '@/lib/documentLibrary';
-import { formatShortcut } from '@/lib/shortcuts';
 import { DocumentLibraryDialog } from './DocumentLibraryDialog';
 import { SHORTCUTS } from './editorShortcuts';
 import { FileSheet } from './FileSheet';
 import { EXPORT_FORMATS, useFileActions } from './useFileActions';
+import { ShortcutLabel } from './toolbarControls';
 
 interface FileMenuProps {
   /** Phones open the file actions as a bottom sheet instead of nested menus. */
@@ -203,7 +203,9 @@ export const FileMenu = ({
             <DropdownMenuItem onSelect={() => void actions.save()}>
               <Save />
               {t('fileMenuSave')}
-              <DropdownMenuShortcut>{formatShortcut(SHORTCUTS.save)}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>
+                <ShortcutLabel shortcut={SHORTCUTS.save} />
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => actions.renameDialog.setOpen(true)}>
               <PenLine />
@@ -256,7 +258,9 @@ export const FileMenu = ({
             <DropdownMenuItem onSelect={actions.print}>
               <Printer />
               {t('fileMenuPrint')}
-              <DropdownMenuShortcut>{formatShortcut('Mod+P')}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>
+                <ShortcutLabel shortcut="Mod+P" />
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

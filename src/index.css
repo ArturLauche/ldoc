@@ -255,6 +255,10 @@ header.app-bar {
 }
 /* Matches COMPACT_LAYOUT_QUERY in src/hooks/useMediaQuery.ts. */
 @media (max-width: 639px), (max-height: 500px) and (pointer: coarse) and (max-width: 1023px) {
+  /* Below the page sits the footer, which is card-colored on phones too. */
+  .boot-shell {
+    background: hsl(var(--card));
+  }
   .boot-toolbar {
     display: none;
   }
@@ -262,7 +266,9 @@ header.app-bar {
     padding: 0;
   }
   .boot-page {
-    height: 50dvh;
+    /* The writing surface fills the screen above the footer (≈4rem) and dock. */
+    height: calc(100dvh - 10.125rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    min-height: 50dvh;
     border-width: 0 0 1px;
     border-radius: 0;
   }
@@ -511,6 +517,19 @@ header.app-bar {
 .app-shell.is-compact .editor-content .ProseMirror {
   padding-top: 1.25rem;
   min-height: 50dvh;
+}
+/* A short document still gets a full-height writing surface down to the
+   footer, so any tap below the text starts writing. */
+.app-shell.is-compact .editor-main,
+.app-shell.is-compact .editor-container,
+.app-shell.is-compact .editor-content {
+  display: flex;
+  flex-direction: column;
+}
+.app-shell.is-compact .editor-container,
+.app-shell.is-compact .editor-content,
+.app-shell.is-compact .editor-content .ProseMirror {
+  flex: 1 0 auto;
 }
 
 /*
@@ -1088,7 +1107,7 @@ header.app-bar {
 .editor-content .ProseMirror th {
   background-color: hsl(var(--muted) / 0.22);
   font-weight: 600;
-  text-align: left;
+  text-align: start;
 }
 
 .editor-content .ProseMirror .selectedCell::after {

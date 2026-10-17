@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocale } from '@/hooks/useLocale';
+import { useScrollFade } from '@/hooks/useScrollFade';
 import {
   SMART_GRAPHIC_CATEGORIES,
   getSmartGraphicLayout,
@@ -25,6 +26,8 @@ export function LayoutPicker({
   onChange: (layoutId: SmartGraphicLayoutId) => void;
 }) {
   const { t, locale } = useLocale();
+  // Fades the clipped edge so the category strip reads as scrollable.
+  const categoriesRef = useScrollFade<HTMLDivElement>();
   const [category, setCategory] = useState<SmartGraphicCategory>(
     () => getSmartGraphicLayout(graphic.layoutId).category,
   );
@@ -44,6 +47,7 @@ export function LayoutPicker({
         <p className="text-xs text-muted-foreground">{t('graphicLayoutKeepsText')}</p>
       </div>
       <div
+        ref={categoriesRef}
         role="group"
         aria-label={t('graphicGalleryCategories')}
         className="scroll-strip -mx-3 flex gap-1 px-3 pb-0.5"

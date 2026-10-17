@@ -1,9 +1,13 @@
 import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 
+import { useTextDirection } from "@/hooks/useLocale";
 import { cn } from "@/lib/utils";
 
-const Tabs = TabsPrimitive.Root;
+/** Follows the interface direction (Radix defaults to LTR). */
+function Tabs(props: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  return <TabsPrimitive.Root dir={useTextDirection()} {...props} />;
+}
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
