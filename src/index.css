@@ -537,7 +537,10 @@ header.app-bar {
 }
 .app-shell.is-compact .editor-content .ProseMirror {
   padding-top: 1.25rem;
-  min-height: 50dvh;
+  /* The surface already fills the room above the footer (below); a smaller
+     floor keeps the footer from sliding half under an open panel or the
+     keyboard in a short document. */
+  min-height: 10rem;
 }
 /* A short document still gets a full-height writing surface down to the
    footer, so any tap below the text starts writing. */

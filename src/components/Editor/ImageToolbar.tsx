@@ -148,8 +148,9 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
     editor
       .chain()
       .focus()
-      .setImage({ src, alt: sanitizeAltText(altText) || fallbackAlt })
-      .updateAttributes('image', {
+      .insertImage({
+        src,
+        alt: sanitizeAltText(altText) || fallbackAlt,
         align: normalizeImageAlignment(imageAlignment),
         width: normalizeImageWidth(imageWidth),
       })

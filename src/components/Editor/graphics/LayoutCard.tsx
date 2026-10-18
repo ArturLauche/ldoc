@@ -47,9 +47,11 @@ export function LayoutCard({
         )}
       />
       <span className={cn('flex min-w-0 flex-col', size === 'small' ? 'px-0.5' : 'px-1 pb-0.5')}>
+        {/* Names wrap: on a phone, two cards share a row and many languages
+            need more than one line for "Horizontal timeline". */}
         <span
           className={cn(
-            'truncate font-medium text-foreground',
+            'line-clamp-2 font-medium leading-snug text-foreground wrap-break-word',
             size === 'small' ? 'text-xs' : 'text-[0.8125rem] sm:text-sm',
           )}
         >

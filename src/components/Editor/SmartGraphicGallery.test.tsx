@@ -223,6 +223,19 @@ describe('smart graphic insert and editing', () => {
     expect(coerceGraphic(editor.getAttributes('smartGraphic').graphic).layoutId).toBe('process-chevron');
   });
 
+  it.each([
+    ['at the start of a paragraph', 1, ['smartGraphic', 'paragraph']],
+    ['inside a paragraph', 3, ['paragraph', 'smartGraphic', 'paragraph']],
+    ['at the end of a paragraph', 5, ['paragraph', 'smartGraphic', 'paragraph']],
+  ])('selects a graphic inserted %s', (_where, pos, blocks) => {
+    editor = createTestEditor('<p>Text</p>');
+    editor.commands.setTextSelection(pos);
+    expect(editor.commands.insertSmartGraphic('process-chevron')).toBe(true);
+    expect(editor.state.doc.content.content.map((node) => node.type.name)).toEqual(blocks);
+    expect(editor.isActive('smartGraphic')).toBe(true);
+    expect(coerceGraphic(editor.getAttributes('smartGraphic').graphic).layoutId).toBe('process-chevron');
+  });
+
   it('includes graphic labels in document text', () => {
     editor = createTestEditor();
     editor.commands.insertSmartGraphic('list-block');

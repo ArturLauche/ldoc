@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { LocaleProvider } from '@/components/locale-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { createEditorExtensions } from './editorExtensions';
-import { ColorSwatchGrid, LinkPopover, ToolbarButton } from './toolbarControls';
+import { ColorSwatchGrid, LinkPopover, ShortcutLabel, ToolbarButton } from './toolbarControls';
 import { TEXT_COLORS } from './toolbarModel';
 
 function withProviders(ui: React.ReactElement) {
@@ -81,5 +81,15 @@ describe('toolbar controls', () => {
     const button = screen.getByRole('button', { name: 'Bold' });
     expect(button).toHaveAttribute('aria-pressed', 'true');
     expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+B');
+  });
+
+  it('keeps shortcut labels left to right in right-to-left interfaces', () => {
+    withProviders(
+      <div dir="rtl">
+        <ShortcutLabel shortcut="Mod+/" />
+      </div>,
+    );
+    const label = screen.getByText('Ctrl+/');
+    expect(label).toHaveAttribute('dir', 'ltr');
   });
 });

@@ -362,7 +362,7 @@ const ru: TranslationCatalog = {
 
   // Font picker
   fontSearchPlaceholder: 'Поиск шрифтов…',
-  fontDefault: 'По умолчанию',
+  fontDefault: 'Стандарт',
   fontNoResults: 'Шрифты не найдены',
   fontCategorySansSerif: 'Без засечек',
   fontCategorySerif: 'С засечками',

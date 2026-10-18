@@ -1,6 +1,5 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { DOMOutputSpec } from '@tiptap/pm/model';
-import { NodeSelection } from '@tiptap/pm/state';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import {
   coerceGraphic,
@@ -14,6 +13,7 @@ import {
   type SmartGraphicModel,
 } from '@/lib/smartGraphic';
 import type { Locale } from '@/lib/translations';
+import { selectInsertedNode } from './insertedNode';
 import { SmartGraphicView } from './SmartGraphicView';
 
 declare module '@tiptap/core' {
@@ -118,8 +118,9 @@ export const SmartGraphic = Node.create({
         },
       insertSmartGraphic:
         (layoutId, locale = 'en') =>
-        ({ chain, state }) => {
+        ({ chain, state, tr }) => {
           const insertPos = state.selection.from;
+          const firstStep = tr.steps.length;
           return chain()
             .insertContentAt(
               insertPos,
@@ -131,16 +132,7 @@ export const SmartGraphic = Node.create({
               },
               { updateSelection: false },
             )
-            .command(({ tr, dispatch }) => {
-              const pos = tr.mapping.map(insertPos, -1);
-              if (tr.doc.nodeAt(pos)?.type.name !== this.name) {
-                return false;
-              }
-              if (dispatch) {
-                tr.setSelection(NodeSelection.create(tr.doc, pos));
-              }
-              return true;
-            })
+            .command(({ tr, dispatch }) => selectInsertedNode(tr, firstStep, this.name, dispatch))
             .run();
         },
       updateSmartGraphic:

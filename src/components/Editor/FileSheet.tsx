@@ -48,7 +48,8 @@ function SheetAction({
   return (
     <button type="button" className="file-sheet-action" onClick={onClick} disabled={disabled}>
       {icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {/* Long labels (Japanese, German) wrap instead of losing their ending. */}
+      <span className="min-w-0 flex-1 py-2.5 leading-snug wrap-break-word">{label}</span>
     </button>
   );
 }

@@ -35,9 +35,12 @@ interface ToolbarButtonProps extends Omit<ButtonProps, 'children'> {
   children: ReactNode;
 }
 
-/** A `Mod+Shift+Z`-style shortcut as the platform and interface language print it. */
+/**
+ * A `Mod+Shift+Z`-style shortcut as the platform and interface language print
+ * it. Always left to right: in Arabic, `Ctrl+/` would otherwise read `/+Ctrl`.
+ */
 export function ShortcutLabel({ shortcut }: { shortcut: string }) {
-  return useShortcutLabel()(shortcut);
+  return <span dir="ltr">{useShortcutLabel()(shortcut)}</span>;
 }
 
 /**

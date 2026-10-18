@@ -81,6 +81,27 @@ describe('ImageToolbar uploads', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
+  it.each([
+    ['at the start of a paragraph', 1],
+    ['inside a paragraph', 3],
+    ['at the end of a paragraph', 5],
+  ])('keeps the chosen alignment and size for an image inserted %s', async (_where, pos) => {
+    const user = userEvent.setup();
+    editor.commands.setTextSelection(pos);
+    await user.click(tile());
+    const dialog = await screen.findByRole('dialog', { name: 'Insert image' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Align left' }));
+    await user.click(within(dialog).getByRole('radio', { name: '50%' }));
+    chooseFile();
+    await act(async () => finishUpload(PIXEL));
+    await user.click(within(dialog).getByRole('button', { name: 'Insert image' }));
+
+    // The new image is selected, so its own toolbar shows right away.
+    expect(editor.isActive('image')).toBe(true);
+    expect(editor.getAttributes('image')).toMatchObject({ align: 'left', width: '50', alt: 'pixel.png' });
+    expect(editor.state.doc.textContent).toBe('Text');
+  });
+
   it('cancels an upload when the dialog is dismissed', async () => {
     const user = userEvent.setup();
     await user.click(tile());

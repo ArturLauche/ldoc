@@ -12,8 +12,10 @@ import Placeholder, { type PlaceholderOptions } from '@tiptap/extension-placehol
 import Image from '@tiptap/extension-image';
 import { Extension, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { ImageAlignment, ImageWidth } from '@/lib/media';
 import { FindReplace } from './findReplaceExtension';
 import { ImageFiles } from './imageFileExtension';
+import { selectInsertedNode } from './insertedNode';
 import { SmartGraphic } from './smartGraphicExtension';
 import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
 
@@ -21,6 +23,15 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     editorPlaceholder: {
       setEditorPlaceholder: (text: string) => ReturnType;
+    };
+    enhancedImage: {
+      /** Inserts an image with its layout at the cursor and selects it. */
+      insertImage: (attributes: {
+        src: string;
+        alt: string;
+        align: ImageAlignment;
+        width: ImageWidth;
+      }) => ReturnType;
     };
   }
   interface Storage {
@@ -72,6 +83,22 @@ const EnhancedImage = Image.extend({
   },
   renderHTML({ HTMLAttributes }) {
     return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
+  },
+  addCommands() {
+    return {
+      ...this.parent?.(),
+      // One step with every attribute: a follow-up `updateAttributes` only
+      // reached the image when the cursor happened to end up on it.
+      insertImage:
+        (attributes) =>
+        ({ chain, tr }) => {
+          const firstStep = tr.steps.length;
+          return chain()
+            .insertContent({ type: this.name, attrs: attributes })
+            .command(({ tr, dispatch }) => selectInsertedNode(tr, firstStep, this.name, dispatch))
+            .run();
+        },
+    };
   },
 });
 
