@@ -37,8 +37,11 @@ export function selectInsertedNode(
   typeName: string,
   dispatch: unknown,
 ): boolean {
+  // A dry run (`editor.can()`) applies no steps, so there is nothing to
+  // select yet; that is not a failure.
+  if (!dispatch) return true;
   const pos = insertedNodePos(tr, firstStep, typeName);
   if (pos === null) return false;
-  if (dispatch) tr.setSelection(NodeSelection.create(tr.doc, pos));
+  tr.setSelection(NodeSelection.create(tr.doc, pos));
   return true;
 }
