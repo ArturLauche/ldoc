@@ -421,13 +421,12 @@ header.app-bar {
 .session-notice-inner {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem 0.75rem;
   max-width: 56rem;
   margin-inline: auto;
 }
 .session-notice-inner p {
-  max-width: 65ch;
   line-height: 1.5;
 }
 .editor-loading {
@@ -465,7 +464,9 @@ header.app-bar {
 .header-context-slot {
   display: none;
 }
-@media (min-width: 1280px) {
+/* Matches the `wide` query in EditorToolbar.tsx: from here the header row has
+   room for contextual tools, so they never wrap the toolbar. */
+@media (min-width: 1024px) {
   .header-context-slot:not(:empty) {
     display: flex;
     min-width: 0;
@@ -474,6 +475,26 @@ header.app-bar {
   .header-context-slot .toolbar-context {
     border-inline-start: 0;
     padding-inline-start: 0;
+  }
+  /* One row: the document title gives up width first. */
+  .header-context-slot,
+  .header-context-slot .toolbar-context > * {
+    flex-shrink: 0;
+  }
+  .header-context-slot .toolbar-context > * {
+    flex-wrap: nowrap;
+  }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* While contextual tools share the row, the save status shows its icon
+     only; the label stays available to assistive technology. */
+  .app-bar-row:has(.header-context-slot:not(:empty)) .save-status-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -1035,9 +1056,126 @@ header.app-bar {
   margin-bottom: 0;
 }
 
+/*
+ * No generated quotation marks or backticks (typography defaults): they
+ * doubled the quotes people type, sat after attributions, and looked like
+ * unrendered Markdown. Exports do the same.
+ */
+.editor-content .ProseMirror blockquote p::before,
+.editor-content .ProseMirror blockquote p::after,
+.editor-content .ProseMirror code::before,
+.editor-content .ProseMirror code::after {
+  content: none;
+}
+
 .editor-content .ProseMirror mark {
   border-radius: 0.25rem;
   padding: 0.125rem 0.25rem;
+}
+
+/*
+ * Dark mode keeps document colors readable without changing what is stored
+ * (light mode, print and exports use the stored values). Highlights are
+ * pastels, so their text uses dark ink unless the text has its own color;
+ * text set to black or near-black (palette or pasted, which parseHTML
+ * normalizes to these forms) shows in the theme's text color.
+ */
+.dark .editor-content .ProseMirror mark {
+  /* Beats the inline color: inherit that the highlight mark writes. */
+  color: hsl(222 47% 11%) !important;
+}
+.dark .editor-content .ProseMirror span[style*='color' i] mark {
+  color: inherit !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #000000' i],
+    [style*='; color: #000000' i],
+    [style^='color: rgb(0, 0, 0)'],
+    [style*='; color: rgb(0, 0, 0)'],
+    [style^='color: black' i],
+    [style*='; color: black' i],
+    [style^='color: windowtext' i],
+    [style*='; color: windowtext' i],
+    [style^='color: #374151' i],
+    [style*='; color: #374151' i],
+    [style^='color: rgb(55, 65, 81)'],
+    [style*='; color: rgb(55, 65, 81)']
+  ) {
+  color: hsl(var(--foreground)) !important;
+}
+/* Palette colors too dark for the dark page show lighter (on highlights, as stored). */
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #2563EB' i],
+    [style*='; color: #2563EB' i],
+    [style^='color: rgb(37, 99, 235)'],
+    [style*='; color: rgb(37, 99, 235)']
+  ) {
+  color: #60A5FA !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #2563EB' i],
+    [style*='; color: #2563EB' i],
+    [style^='color: rgb(37, 99, 235)'],
+    [style*='; color: rgb(37, 99, 235)']
+  )
+  mark {
+  color: #2563EB !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #7C3AED' i],
+    [style*='; color: #7C3AED' i],
+    [style^='color: rgb(124, 58, 237)'],
+    [style*='; color: rgb(124, 58, 237)']
+  ) {
+  color: #A78BFA !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #7C3AED' i],
+    [style*='; color: #7C3AED' i],
+    [style^='color: rgb(124, 58, 237)'],
+    [style*='; color: rgb(124, 58, 237)']
+  )
+  mark {
+  color: #7C3AED !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #6B7280' i],
+    [style*='; color: #6B7280' i],
+    [style^='color: rgb(107, 114, 128)'],
+    [style*='; color: rgb(107, 114, 128)']
+  ) {
+  color: #9CA3AF !important;
+}
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #6B7280' i],
+    [style*='; color: #6B7280' i],
+    [style^='color: rgb(107, 114, 128)'],
+    [style*='; color: rgb(107, 114, 128)']
+  )
+  mark {
+  color: #6B7280 !important;
+}
+/*
+ * Highlighted dark-ink text stays dark: the highlight behind it is a pastel.
+ * (Text style spans always wrap highlight marks: ProseMirror orders marks by
+ * schema rank.)
+ */
+.dark .editor-content .ProseMirror span:is(
+    [style^='color: #000000' i],
+    [style*='; color: #000000' i],
+    [style^='color: rgb(0, 0, 0)'],
+    [style*='; color: rgb(0, 0, 0)'],
+    [style^='color: black' i],
+    [style*='; color: black' i],
+    [style^='color: windowtext' i],
+    [style*='; color: windowtext' i],
+    [style^='color: #374151' i],
+    [style*='; color: #374151' i],
+    [style^='color: rgb(55, 65, 81)'],
+    [style*='; color: rgb(55, 65, 81)']
+  )
+  mark {
+  color: hsl(222 47% 11%) !important;
 }
 
 .editor-content .ProseMirror a {
@@ -1114,13 +1252,10 @@ header.app-bar {
   content: '';
   position: absolute;
   inset: 0;
-  background: hsl(var(--primary) / 0.18);
+  /* The same tint as text selection (::selection uses the ring color). */
+  background: hsl(var(--ring) / 0.2);
   pointer-events: none;
   z-index: 2;
-}
-
-.editor-content .ProseMirror .selectedCell {
-  background-color: hsl(var(--primary) / 0.08);
 }
 
 .editor-content .ProseMirror .tableWrapper {
@@ -1151,7 +1286,7 @@ header.app-bar {
 }
 
 .editor-content .ProseMirror table.ProseMirror-selectednode {
-  outline: 2px solid hsl(var(--primary) / 0.75);
+  outline: 2px solid hsl(var(--ring) / 0.8);
   outline-offset: 1px;
 }
 

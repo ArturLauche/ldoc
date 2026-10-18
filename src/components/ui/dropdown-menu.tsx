@@ -98,25 +98,35 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
-  <DropdownMenuPrimitive.CheckboxItem
-    ref={ref}
-    className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 ps-8 pe-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
-      className,
-    )}
-    checked={checked}
-    {...props}
-  >
-    <span className="absolute start-2 flex h-4 w-4 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-selected-foreground" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
-  </DropdownMenuPrimitive.CheckboxItem>
-));
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+    /** `end` keeps the item's own icon in line with plain items and checks at the end. */
+    indicator?: "start" | "end";
+  }
+>(({ className, children, checked, indicator = "start", ...props }, ref) => {
+  const mark = (
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Check className="h-4 w-4 text-selected-foreground" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  );
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(
+        "relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 pe-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        indicator === "start" ? "ps-8" : "ps-2 [&>svg:first-child]:text-muted-foreground",
+        className,
+      )}
+      checked={checked}
+      {...props}
+    >
+      {indicator === "start" ? (
+        <span className="absolute start-2 flex h-4 w-4 items-center justify-center">{mark}</span>
+      ) : null}
+      {children}
+      {indicator === "end" ? <span className="ms-auto flex h-4 w-4 items-center justify-center">{mark}</span> : null}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
 DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName;
 
 const DropdownMenuRadioItem = React.forwardRef<

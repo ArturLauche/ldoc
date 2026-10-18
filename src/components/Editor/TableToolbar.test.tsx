@@ -37,7 +37,9 @@ describe('table insert and tools', () => {
     renderWithProviders(<TableGridPicker editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
-    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('1 × 1 table');
+    // The caption names the same default size as the Rows/Columns fields.
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('3 × 3 table');
+    expect(screen.getByLabelText('Rows')).toHaveValue(3);
     await user.hover(screen.getByTestId('table-picker-cell-3-4'));
     expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('3 × 4 table');
     expect(screen.getByRole('grid')).toHaveAttribute(
@@ -60,9 +62,9 @@ describe('table insert and tools', () => {
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
     const grid = screen.getByRole('grid');
     grid.focus();
-    expect(grid).toHaveAttribute('aria-activedescendant', screen.getByTestId('table-picker-cell-1-1').id);
+    expect(grid).toHaveAttribute('aria-activedescendant', screen.getByTestId('table-picker-cell-3-3').id);
 
-    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowDown}');
+    await user.keyboard('{ArrowUp}');
     expect(grid).toHaveAttribute('aria-activedescendant', screen.getByTestId('table-picker-cell-2-3').id);
     expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('2 × 3 table');
 
@@ -79,16 +81,16 @@ describe('table insert and tools', () => {
     screen.getByRole('grid').focus();
     await user.keyboard('{ArrowRight}{ArrowDown}{Escape}');
     await user.click(screen.getByRole('button', { name: 'Insert table' }));
-    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('1 × 1 table');
+    expect(screen.getByTestId('table-picker-caption')).toHaveTextContent('3 × 3 table');
     expect(screen.getByRole('grid')).toHaveAttribute(
-      'aria-activedescendant', screen.getByTestId('table-picker-cell-1-1').id,
+      'aria-activedescendant', screen.getByTestId('table-picker-cell-3-3').id,
     );
   });
 
   it.each([
     [2, 3],
-    // The picker opens on 1 × 1, which must still need a confirming tap.
-    [1, 1],
+    // The picker opens on 3 × 3, which must still need a confirming tap.
+    [3, 3],
   ])('previews %i × %i on the first tap and inserts on a confirming tap', async (rows, cols) => {
     const user = userEvent.setup();
     editor = createTestEditor();
@@ -165,6 +167,22 @@ describe('table insert and tools', () => {
     expect(screen.queryByRole('button', { name: 'Insert table' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Table' })).toHaveTextContent('Table');
     expect(screen.getByRole('button', { name: 'Cell fill' })).toHaveTextContent('Cell fill');
+  });
+
+  it('shows whether the header row and column are on', async () => {
+    const user = userEvent.setup();
+    editor = createTestEditor();
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: true });
+    renderWithProviders(<TableToolbar editor={editor} showInsert={false} />);
+    await user.click(screen.getByRole('button', { name: 'Table' }));
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'Header row' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Header column' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
 
   it('keeps imported tables editable in the schema', () => {

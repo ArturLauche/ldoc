@@ -242,9 +242,6 @@ function textContext(frame: Frame, block?: ExportTextBlock): TextContext {
 }
 
 function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Frame): void {
-  const paragraphIndexes = blocks.map((block, index) => (block.type === 'paragraph' ? index : -1)).filter((index) => index >= 0);
-  const firstParagraph = paragraphIndexes[0];
-  const lastParagraph = paragraphIndexes[paragraphIndexes.length - 1];
   blocks.forEach((block, index) => {
     const context: MarginContext = {
       container: frame.container,
@@ -258,14 +255,9 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
     const margins = blockMargins(block, context);
     switch (block.type) {
       case 'paragraph':
-      case 'heading': {
-        // The editor quotes the first and last paragraph of each quote level (prose `p:first-of-type::before`).
-        const quotes = frame.quote && block.type === 'paragraph'
-          ? { open: index === firstParagraph, close: index === lastParagraph }
-          : undefined;
-        layoutText(builder, block, frame, margins, quotes);
+      case 'heading':
+        layoutText(builder, block, frame, margins);
         break;
-      }
       case 'blockquote': {
         builder.pendingTop = Math.max(builder.pendingTop, margins.top);
         const first = builder.atoms.length;
@@ -320,7 +312,6 @@ function layoutText(
   block: ExportTextBlock,
   frame: Frame,
   margins: { top: number; bottom: number },
-  quotes?: { open: boolean; close: boolean },
 ): void {
   const context = textContext(frame, block);
   const base = textBaseStyle(context);
@@ -328,11 +319,6 @@ function layoutText(
     const href = run.link?.href ? followableHref(run.link.href, builder.env.warnings) : undefined;
     return { text, style, ...(href ? { href } : {}) };
   });
-  if (quotes?.open || quotes?.close) {
-    const quoteStyle = styledRuns({ runs: [{ text: '', marks: {} }], context })[0].style;
-    if (quotes.open) runs.unshift({ text: DOCUMENT_STYLE.blockquote.open, style: quoteStyle });
-    if (quotes.close) runs.push({ text: DOCUMENT_STYLE.blockquote.close, style: quoteStyle });
-  }
   const gap = builder.advance(margins.top);
   const align = block.align ?? frame.cell?.align;
   const top = builder.y;

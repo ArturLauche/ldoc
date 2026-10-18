@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -34,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { selectionNodes, type SelectionNodes } from './selectionNodes';
 import { TableGridPicker } from './TableGridPicker';
 import { ColorIndicator, PopoverSection, ToolbarButton } from './toolbarControls';
+import { focusPressedSwatch } from './toolbarModel';
 
 const swatchClass = (selected: boolean) =>
   cn(
@@ -42,6 +45,15 @@ const swatchClass = (selected: boolean) =>
   );
 
 /** Fill of the cell at the selection (header or body cell). */
+function isHeaderRow(row: ProseMirrorNode | null | undefined): boolean {
+  if (!row) return false;
+  let header = true;
+  row.forEach((cell) => {
+    if (cell.type.name !== 'tableHeader') header = false;
+  });
+  return header;
+}
+
 function cellBackground(nodes: SelectionNodes): string | undefined {
   const value: unknown =
     nodes.attributes('tableCell').backgroundColor ?? nodes.attributes('tableHeader').backgroundColor;
@@ -77,6 +89,7 @@ export function TableToolbar({ editor, showInsert = true, showLabels = false }: 
     selector: ({ editor: current }) => {
       // One walk over the selection answers the node questions (see selectionNodes).
       const nodes = selectionNodes(current.state);
+      const table = nodes.node('table');
       // One dry-run command set for all checks (each can() call builds one).
       const can = current.can();
       return {
@@ -93,6 +106,12 @@ export function TableToolbar({ editor, showInsert = true, showLabels = false }: 
         canToggleHeaderRow: can.toggleHeaderRow(),
         canToggleHeaderColumn: can.toggleHeaderColumn(),
         bordersHidden: nodes.attributes('table').borders === 'hidden',
+        headerRow: Boolean(table?.firstChild?.childCount) && isHeaderRow(table?.firstChild),
+        headerColumn:
+          Boolean(table?.childCount) &&
+          Array.from({ length: table?.childCount ?? 0 }, (_, index) => table?.child(index)).every(
+            (row) => row?.firstChild?.type.name === 'tableHeader',
+          ),
         cellFill: cellBackground(nodes),
       };
     },
@@ -175,20 +194,24 @@ export function TableToolbar({ editor, showInsert = true, showLabels = false }: 
                 {t('tableSplitCell')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
+              <DropdownMenuCheckboxItem
+                indicator="end"
+                checked={tableState.headerRow}
                 disabled={!tableState.canToggleHeaderRow}
                 onSelect={() => editor.chain().focus().toggleHeaderRow().run()}
               >
                 <PanelTop />
                 {t('tableHeaderRowToggle')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                indicator="end"
+                checked={tableState.headerColumn}
                 disabled={!tableState.canToggleHeaderColumn}
                 onSelect={() => editor.chain().focus().toggleHeaderColumn().run()}
               >
                 <PanelLeft className="rtl:-scale-x-100" />
                 {t('tableHeaderColumnToggle')}
-              </DropdownMenuItem>
+              </DropdownMenuCheckboxItem>
               <DropdownMenuItem
                 onSelect={() =>
                   editor
@@ -236,13 +259,17 @@ export function TableToolbar({ editor, showInsert = true, showLabels = false }: 
                 size={showLabels ? 'sm' : 'icon'}
                 className={cn(showLabels && 'h-10 gap-1.5 px-3')}
               >
-                <ColorIndicator color={tableState.cellFill}>
+                <ColorIndicator color={tableState.cellFill} empty="none">
                   <PaintBucket className="size-3.5!" />
                 </ColorIndicator>
                 {showLabels ? <span className="max-w-[8rem] truncate">{t('tableCellFill')}</span> : null}
               </ToolbarButton>
             </PopoverTrigger>
-            <PopoverContent aria-label={t('tableCellFill')} className="w-auto p-3">
+            <PopoverContent
+              aria-label={t('tableCellFill')}
+              className="w-auto p-3"
+              onOpenAutoFocus={focusPressedSwatch}
+            >
               <PopoverSection title={t('tableCellFill')}>
                 <div className="grid grid-cols-6 gap-1.5">
                   <button

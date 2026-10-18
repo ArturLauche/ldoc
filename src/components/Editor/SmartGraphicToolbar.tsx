@@ -285,6 +285,16 @@ export function SmartGraphicToolbar({
           aria-label={t('graphicTextPane')}
           align="end"
           className="w-[min(21rem,calc(100vw-1.5rem))] p-3"
+          onOpenAutoFocus={(event) => {
+            // Typing goes to the item selected in the graphic, not to the title.
+            if (!selectedId || !(event.currentTarget instanceof HTMLElement)) return;
+            const input = Array.from(
+              event.currentTarget.querySelectorAll<HTMLInputElement>('[data-text-pane-item]'),
+            ).find((element) => element.dataset.textPaneItem === selectedId);
+            if (!input) return;
+            event.preventDefault();
+            input.focus();
+          }}
         >
           <TextPane
             graphic={graphic}

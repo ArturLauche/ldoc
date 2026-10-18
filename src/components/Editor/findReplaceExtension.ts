@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { cycleMatchIndex, findMatchesInText } from '@/lib/findReplace';
 
@@ -37,6 +37,8 @@ declare module '@tiptap/core' {
 }
 
 export const searchPluginKey = new PluginKey<SearchPluginState>('lwrite-find-replace');
+/** Counts navigations that should bring the active match into view. */
+const revealPluginKey = new PluginKey<number>('lwrite-find-reveal');
 
 /** Collects absolute document positions for every query match in textblocks. */
 function findDocumentMatches(
@@ -110,7 +112,27 @@ export function getSearchState(state: EditorState): SearchPluginState | undefine
 function selectMatch(tr: Transaction, match: DocumentMatch): Transaction {
   return tr
     .setSelection(TextSelection.create(tr.doc, match.from, match.to))
+    .setMeta(revealPluginKey, true)
     .scrollIntoView();
+}
+
+/**
+ * ProseMirror only scrolls to the selection while the DOM selection is inside
+ * the editor; during find, focus stays in the find field. So the active match
+ * is scrolled into view here, centered when it is hidden behind the sticky
+ * header, the docked phone toolbar or the edge of the (keyboard-shortened)
+ * viewport.
+ */
+function revealActiveMatch(view: EditorView) {
+  const match = view.dom.querySelector<HTMLElement>('.search-match--active');
+  if (!match || typeof match.scrollIntoView !== 'function') return;
+  const rect = match.getBoundingClientRect();
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  const top = document.querySelector('[data-scroll-inset="top"]')?.getBoundingClientRect().bottom ?? 0;
+  const bottom =
+    document.querySelector('[data-scroll-inset="bottom"]')?.getBoundingClientRect().top ?? viewportHeight;
+  if (rect.top >= top + 8 && rect.bottom <= Math.min(bottom, viewportHeight) - 8) return;
+  match.scrollIntoView({ block: 'center' });
 }
 
 export const FindReplace = Extension.create({
@@ -144,6 +166,20 @@ export const FindReplace = Extension.create({
             return searchPluginKey.getState(state)?.decorations ?? DecorationSet.empty;
           },
         },
+      }),
+      new Plugin<number>({
+        key: revealPluginKey,
+        state: {
+          init: () => 0,
+          apply: (tr, count) => (tr.getMeta(revealPluginKey) ? count + 1 : count),
+        },
+        view: () => ({
+          update(view, previous) {
+            if (revealPluginKey.getState(view.state) !== revealPluginKey.getState(previous)) {
+              revealActiveMatch(view);
+            }
+          },
+        }),
       }),
     ];
   },

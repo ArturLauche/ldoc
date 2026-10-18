@@ -87,16 +87,22 @@ export function ToolbarSeparator({ className }: { className?: string }) {
 /** Letter or icon with a bar showing the current color underneath. */
 export function ColorIndicator({
   color,
+  empty = 'current',
   children,
 }: {
   color?: string;
+  /** Without a color: `current` (automatic text color) or `none` (no fill: an outline). */
+  empty?: 'current' | 'none';
   children: ReactNode;
 }) {
   return (
     <span aria-hidden="true" className="flex flex-col items-center gap-[3px]">
       {children}
       <span
-        className={cn('h-[3px] w-4 rounded-full', !color && 'bg-current opacity-80')}
+        className={cn(
+          'h-[3px] w-4 rounded-full',
+          !color && (empty === 'current' ? 'bg-current opacity-80' : 'border border-current opacity-40'),
+        )}
         style={color ? { backgroundColor: color, boxShadow: 'inset 0 0 0 1px hsl(var(--foreground) / 0.12)' } : undefined}
       />
     </span>

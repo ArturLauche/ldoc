@@ -46,7 +46,7 @@ export function SaveStatus({
       ) : (
         <HardDrive aria-hidden="true" className="h-3.5 w-3.5" />
       )}
-      <span className="sr-only md:not-sr-only md:whitespace-nowrap">{label}</span>
+      <span className="save-status-label sr-only md:not-sr-only md:whitespace-nowrap">{label}</span>
     </div>
   );
 }

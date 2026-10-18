@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils';
 import { ToolbarButton, ToolTile } from './toolbarControls';
 
 export const TABLE_PICKER_MAX = 10;
+/** Size the picker starts at, in the grid and the size fields. */
+const DEFAULT_SIZE = 3;
 export const TABLE_CUSTOM_MAX = 20;
 export const TABLE_PICKER_CELL_PX = 16;
 export const TABLE_PICKER_HIT_PX = 24;
@@ -73,11 +75,13 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
   // After inserting, writing continues in the document instead of the trigger.
   const insertedRef = useRef(false);
   const [open, setOpen] = useState(false);
-  const [hoverRows, setHoverRows] = useState(1);
-  const [hoverCols, setHoverCols] = useState(1);
+  // The grid starts at the same 3 × 3 the size fields offer, so the caption
+  // and Insert never name two different sizes.
+  const [hoverRows, setHoverRows] = useState(DEFAULT_SIZE);
+  const [hoverCols, setHoverCols] = useState(DEFAULT_SIZE);
   const [withHeaderRow, setWithHeaderRow] = useState(true);
-  const [customRows, setCustomRows] = useState('3');
-  const [customCols, setCustomCols] = useState('3');
+  const [customRows, setCustomRows] = useState(String(DEFAULT_SIZE));
+  const [customCols, setCustomCols] = useState(String(DEFAULT_SIZE));
 
   useEffect(() => {
     if (!open) return;
@@ -126,8 +130,8 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
           previewedRef.current = false;
-          setHoverRows(1);
-          setHoverCols(1);
+          setHoverRows(DEFAULT_SIZE);
+          setHoverCols(DEFAULT_SIZE);
         }
         setOpen(nextOpen);
       }}

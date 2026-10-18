@@ -74,7 +74,7 @@ export function PreferencesMenu({
           {compact ? <EllipsisVertical /> : <Settings2 />}
         </ToolbarButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent aria-label={t('displayOptions')} align="end" className="w-60">
+      <DropdownMenuContent aria-label={t('displayOptions')} align="end" className="w-max min-w-60 max-w-[calc(100vw-1rem)]">
         <DropdownMenuLabel>{t('themeLabel')}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={theme}
@@ -98,7 +98,8 @@ export function PreferencesMenu({
         ) : (
           <>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
+              {/* inset: icons line up with the theme items after their check column. */}
+              <DropdownMenuSubTrigger inset>
                 <Languages />
                 {t('language')}
                 <span className="ms-auto ps-3 text-xs text-muted-foreground">
@@ -108,7 +109,7 @@ export function PreferencesMenu({
               <DropdownMenuSubContent className="min-w-44">{languages}</DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onShowShortcuts}>
+            <DropdownMenuItem inset onSelect={onShowShortcuts}>
               <Keyboard />
               {t('keyboardShortcuts')}
               <DropdownMenuShortcut>

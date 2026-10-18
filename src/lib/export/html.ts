@@ -293,15 +293,11 @@ sub,sup{font-size:${s.script.scale * 100}%;line-height:0;position:relative;verti
 sub{bottom:-${s.script.subShift}em}
 sup{top:-${s.script.superShift}em}
 code{font-family:${MONO_STACK};font-size:${s.inlineCode.scale}em;font-weight:${s.inlineCode.weight};color:${text}}
-code::before,code::after{content:"${s.inlineCode.before}"}
 :is(a,h1,h2,h3,blockquote) code{color:inherit}
 pre{font-family:${MONO_STACK};font-size:${em(s.codeBlock.sizePx)};line-height:${s.codeBlock.lineHeightPx / s.codeBlock.sizePx};margin:${s.codeBlock.margin / s.codeBlock.sizePx}em 0;padding:${s.codeBlock.paddingY / s.codeBlock.sizePx}em ${s.codeBlock.paddingX / s.codeBlock.sizePx}em;border-radius:${s.codeBlock.radius}px;background:#${s.codeBlock.background};color:${text};font-weight:400;overflow-x:auto;white-space:pre}
 pre code{font:inherit;color:inherit;background:none;padding:0}
-pre code::before,pre code::after{content:none}
-blockquote{margin:${em(s.blockquote.margin)} 0;padding-left:${s.blockquote.paddingLeft}px;border-left:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text};quotes:"\\201C""\\201D""\\2018""\\2019"}
+blockquote{margin:${em(s.blockquote.margin)} 0;padding-left:${s.blockquote.paddingLeft}px;border-left:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text}}
 blockquote strong{color:inherit}
-blockquote p:first-of-type::before{content:open-quote}
-blockquote p:last-of-type::after{content:close-quote}
 hr{height:0;margin:${em(s.rule.margin)} 0;border:0;border-top:${s.rule.width}px solid ${border}}
 ul,ol{margin:${em(s.list.marginTop)} 0 ${s.list.marginBottom}px;padding-left:${s.list.indent}px}
 ul{list-style-type:disc}

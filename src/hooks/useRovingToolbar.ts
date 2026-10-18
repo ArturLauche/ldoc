@@ -14,24 +14,26 @@ function toolbarItems(root: HTMLElement): HTMLElement[] {
 
 /**
  * WAI-ARIA toolbar keyboard model: the toolbar is one tab stop, arrow keys
- * (Home/End) move between its controls, and the last used control stays the
- * entry point. Popovers and menus opened from it keep their own keys.
+ * (Home/End) move between its controls, and the control the user last
+ * focused stays the entry point (the first control until then, including
+ * one that was disabled when the toolbar appeared). Popovers and menus
+ * opened from it keep their own keys.
  */
 export function useRovingToolbar(ref: RefObject<HTMLElement | null>) {
   const normalize = useCallback(
-    (active?: HTMLElement | null) => {
+    (focused?: HTMLElement | null) => {
       const root = ref.current;
       if (!root) return;
       const items = toolbarItems(root);
+      const chosen = focused && items.includes(focused) ? focused : null;
       const current =
-        (active && items.includes(active) ? active : null) ??
-        items.find((item) => item.tabIndex === 0 && item.dataset.rovingActive === 'true') ??
-        items[0];
+        chosen ?? items.find((item) => item.dataset.rovingChosen === 'true') ?? items[0];
       for (const item of root.querySelectorAll<HTMLElement>(ITEM_SELECTOR)) {
-        const isCurrent = item === current;
-        item.tabIndex = isCurrent ? 0 : -1;
-        if (isCurrent) item.dataset.rovingActive = 'true';
-        else delete item.dataset.rovingActive;
+        item.tabIndex = item === current ? 0 : -1;
+        if (chosen) {
+          if (item === chosen) item.dataset.rovingChosen = 'true';
+          else delete item.dataset.rovingChosen;
+        }
       }
     },
     [ref],

@@ -196,7 +196,7 @@ function GalleryBody({
           <TabsContent
             key={item}
             value={item}
-            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-5"
+            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
           >
             {empty ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">

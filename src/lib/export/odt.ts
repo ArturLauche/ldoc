@@ -434,7 +434,7 @@ class OdtWriter {
   private paragraph(block: ExportTextBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const line = lineBoxPx(base, runs.map(({ style }) => style));
     const parent = this.parentStyle(block, leaf, scope);
     const name = this.paragraphStyle({
@@ -551,7 +551,7 @@ class OdtWriter {
     const margins = this.margins(leaf, scope);
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       const name = this.paragraphStyle({ parent: scope.cell ? 'Table_20_Contents' : 'Standard', before, after, ...margins, align: 'center' });
       return `<text:p text:style-name="${name}">${this.takeFloats()}${this.runs(runs)}</text:p>`;
     }

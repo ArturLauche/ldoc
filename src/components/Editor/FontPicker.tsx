@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -80,6 +80,33 @@ export const FontPicker = ({
     return [...(query ? [] : [{ name: '', category: null }]), ...fonts];
   }, [locale, search, t]);
 
+  // Each font shows in its own face once its row scrolls into view, so the
+  // list can be scanned by appearance (faces still load only when needed).
+  // A callback ref: the popover mounts its list a render after opening.
+  const listCallbackRef = useCallback(
+    (list: HTMLDivElement | null) => {
+      listRef.current = list;
+      if (!list || typeof IntersectionObserver === 'undefined') return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting || !(entry.target instanceof HTMLElement)) continue;
+            const name = options[Number(entry.target.dataset.index)]?.name;
+            if (name) loadFont(name);
+            observer.unobserve(entry.target);
+          }
+        },
+        { root: list, rootMargin: '64px 0px' },
+      );
+      list.querySelectorAll('[role="option"]').forEach((option) => observer.observe(option));
+      return () => {
+        observer.disconnect();
+        listRef.current = null;
+      };
+    },
+    [options],
+  );
+
   const select = (option: FontOption) => {
     if (option.name) loadFont(option.name);
     pickedRef.current = true;
@@ -142,7 +169,8 @@ export const FontPicker = ({
         <Button
           variant="outline"
           className={cn(
-            'h-9 w-28 justify-between gap-1.5 border-input bg-card px-3 font-normal shadow-xs hover:border-ring/50 hover:bg-card data-[state=open]:border-ring',
+            // Same field look and focus treatment as the Select triggers beside it.
+            'h-9 w-28 justify-between gap-1.5 border-input bg-card px-3 font-normal shadow-xs outline-none hover:border-ring/50 hover:bg-card focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20 data-[state=open]:border-ring',
             triggerClassName,
           )}
           aria-label={t('toolbarFontFamily')}
@@ -205,7 +233,7 @@ export const FontPicker = ({
           </div>
         </div>
         <div
-          ref={listRef}
+          ref={listCallbackRef}
           id={listId}
           role="listbox"
           aria-label={t('toolbarFontFamily')}
@@ -232,7 +260,7 @@ export const FontPicker = ({
                   {heading ? (
                     <div
                       role="presentation"
-                      className="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground"
+                      className="pb-1 pe-2 ps-8 pt-2.5 text-xs font-medium text-muted-foreground"
                     >
                       {heading}
                     </div>
@@ -243,13 +271,17 @@ export const FontPicker = ({
                     aria-selected={selected}
                     data-index={index}
                     data-active={index === activeIndex || undefined}
-                    className="flex min-h-8 cursor-default select-none items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm data-[active]:bg-accent pointer-coarse:min-h-11"
+                    className="relative flex min-h-8 cursor-default select-none items-center rounded-md py-1.5 pe-2 ps-8 text-sm data-[active]:bg-accent pointer-coarse:min-h-11"
                     style={option.name ? { fontFamily: fontFamilyValue(option.name) } : undefined}
                   >
-                    <span className="truncate">{option.name || t('fontDefault')}</span>
+                    {/* The check sits where the Select menus beside it put theirs. */}
                     {selected ? (
-                      <Check aria-hidden="true" className="h-4 w-4 shrink-0 text-selected-foreground" />
+                      <Check
+                        aria-hidden="true"
+                        className="absolute start-2 h-4 w-4 text-selected-foreground"
+                      />
                     ) : null}
+                    <span className="truncate">{option.name || t('fontDefault')}</span>
                   </div>
                 </div>
               );

@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 import { getSearchState } from './findReplaceExtension';
 
@@ -33,6 +33,27 @@ describe('findReplaceExtension', () => {
     expect(firstMatch).toBeDefined();
     expect(editor.state.selection.from).toBe(firstMatch?.from);
     expect(editor.state.selection.to).toBe(firstMatch?.to);
+  });
+
+  it('scrolls the active match into view while focus stays in the find field', () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    try {
+      editor.commands.setSearchQuery('alpha');
+      editor.commands.findNextMatch();
+      editor.commands.findPreviousMatch();
+      // One reveal per navigation, always the match marked active.
+      expect(scrolled).toHaveLength(3);
+      expect(scrolled.map((element) => element.classList.contains('search-match--active'))).toEqual([true, true, true]);
+      // Edits that are not navigation do not scroll.
+      editor.commands.insertContentAt(1, 'x');
+      expect(scrolled).toHaveLength(3);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it('respects case sensitivity', () => {

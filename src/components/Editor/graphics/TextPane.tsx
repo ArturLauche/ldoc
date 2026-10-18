@@ -124,8 +124,10 @@ export function TextPane({
             <span
               aria-hidden="true"
               className={cn(
-                'flex w-5 shrink-0 justify-center text-[0.6875rem] tabular-nums text-muted-foreground',
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[0.6875rem] tabular-nums text-muted-foreground',
                 row.depth > 0 && 'border-s border-border',
+                // The item selected in the graphic; the focus ring stays the field's own.
+                row.item.id === activeId && 'bg-selected/12 font-semibold text-selected-foreground',
               )}
             >
               {numbered && row.depth === 0 ? row.position + 1 : '•'}
@@ -136,11 +138,13 @@ export function TextPane({
                 else inputs.current.delete(row.item.id);
               }}
               value={row.item.label}
+              data-text-pane-item={row.item.id}
+              aria-current={row.item.id === activeId ? 'true' : undefined}
               aria-label={row.item.label || t('graphicItemPlaceholder')}
               onFocus={() => onSelect(row.item.id)}
               onChange={(event) => onChange(updateItemLabel(graphic, row.item.id, event.target.value))}
               onKeyDown={(event) => onKeyDown(event, row, index)}
-              className={cn('h-8', row.item.id === activeId && 'border-ring ring-1 ring-ring')}
+              className="h-8"
             />
           </div>
         ))}

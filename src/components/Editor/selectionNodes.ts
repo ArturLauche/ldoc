@@ -56,6 +56,8 @@ export interface SelectionNodes {
   isActive: (typeName: string | null, attributes?: Record<string, unknown>) => boolean;
   /** `editor.getAttributes(nodeName)`: the last such node the selection touches. */
   attributes: (typeName: string) => Record<string, unknown>;
+  /** The last node of that type the selection touches (the innermost for a cursor). */
+  node: (typeName: string) => ProseMirrorNode | undefined;
 }
 
 /** Node questions about the selection, answered from one walk over it. */
@@ -74,11 +76,16 @@ export function selectionNodes(state: EditorState): SelectionNodes {
       return matched.reduce((sum, range) => sum + range.to - range.from, 0) >= to - from;
     },
     attributes: (typeName) => {
-      for (let index = ranges.length - 1; index >= 0; index--) {
-        const { node } = ranges[index];
-        if (node.type.name === typeName) return { ...node.attrs };
-      }
-      return {};
+      const node = lastOfType(ranges, typeName);
+      return node ? { ...node.attrs } : {};
     },
+    node: (typeName) => lastOfType(ranges, typeName),
   };
+}
+
+function lastOfType(ranges: NodeRange[], typeName: string): ProseMirrorNode | undefined {
+  for (let index = ranges.length - 1; index >= 0; index--) {
+    if (ranges[index].node.type.name === typeName) return ranges[index].node;
+  }
+  return undefined;
 }

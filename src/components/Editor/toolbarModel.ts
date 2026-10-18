@@ -54,6 +54,7 @@ export const HIGHLIGHT_COLORS = [
   '#FED7AA',
   '#E0E7FF',
   '#CCE5FF',
+  '#E5E7EB',
 ] as const;
 
 export type TextBlockStyle = 'paragraph' | 'h1' | 'h2' | 'h3' | 'blockquote' | 'codeBlock';
@@ -173,3 +174,18 @@ export function useToolbarState(editor: Editor | null) {
 }
 
 export type ToolbarState = NonNullable<ReturnType<typeof useToolbarState>>;
+
+/**
+ * `onOpenAutoFocus` for swatch popovers: focus starts on the applied swatch,
+ * so the focus ring and the selection mark the same color instead of the
+ * first swatch looking selected too.
+ */
+export function focusPressedSwatch(event: Event) {
+  const pressed =
+    event.currentTarget instanceof HTMLElement
+      ? event.currentTarget.querySelector<HTMLElement>('[aria-pressed="true"]')
+      : null;
+  if (!pressed) return;
+  event.preventDefault();
+  pressed.focus();
+}

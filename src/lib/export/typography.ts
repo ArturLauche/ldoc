@@ -42,8 +42,8 @@ export const DOCUMENT_STYLE = {
     /** Paragraphs in an item have no margins, except between two of them. */
     itemParagraphGap: 8,
   },
-  blockquote: { margin: 25.6, paddingLeft: 16, borderWidth: 4, weight: 500, italic: true, open: '“', close: '”' },
-  inlineCode: { scale: 0.875, weight: 600, before: '`', after: '`' },
+  blockquote: { margin: 25.6, paddingLeft: 16, borderWidth: 4, weight: 500, italic: true },
+  inlineCode: { scale: 0.875, weight: 600 },
   codeBlock: { sizePx: 14, lineHeightPx: 24, paddingX: 16, paddingY: 12, radius: 6, background: 'FAFBFB', margin: 24 },
   rule: { margin: 48, width: 1 },
   table: {

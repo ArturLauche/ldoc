@@ -21,7 +21,7 @@ export const EditorFooter = memo(function EditorFooter({
 
   return (
     <footer className="app-footer" data-editor-chrome>
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground sm:px-6">
         <p className="flex flex-wrap items-center gap-x-3 tabular-nums" aria-live="off">
           <span>
             {selectedWordCount !== null

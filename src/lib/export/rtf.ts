@@ -350,7 +350,7 @@ ${body}
   private paragraph(block: ExportTextBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const left = this.indent(leaf, scope);
     const quote = leaf.quoteDepth > 0 && block.type !== 'heading';
     return this.paragraphGroup(
@@ -501,7 +501,7 @@ ${body}
     const left = this.indent(leaf, scope);
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       return this.paragraphGroup({ before, after, left, align: 'center', inTable: scope.inTable }, `${this.runs(runs)}`);
     }
     const { width, height } = this.imageSize(image, image.prepared, this.available(leaf, scope));

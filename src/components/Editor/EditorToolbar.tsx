@@ -67,15 +67,16 @@ import {
   ToolbarSeparator,
 } from './toolbarControls';
 import {
+  applyTextBlockStyle,
+  focusPressedSwatch,
   FONT_SIZES,
   HIGHLIGHT_COLORS,
   TEXT_BLOCK_STYLES,
   TEXT_COLORS,
-  applyTextBlockStyle,
-  useLineSpacings,
-  useToolbarState,
   type TextAlignment,
   type TextBlockStyle,
+  useLineSpacings,
+  useToolbarState,
 } from './toolbarModel';
 
 interface EditorToolbarProps {
@@ -147,10 +148,17 @@ function ColorButton({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <ToolbarButton label={label} shortcut={shortcut}>
-          <ColorIndicator color={current}>{icon}</ColorIndicator>
+          <ColorIndicator color={current} empty={kind === 'highlight' ? 'none' : 'current'}>
+            {icon}
+          </ColorIndicator>
         </ToolbarButton>
       </PopoverTrigger>
-      <PopoverContent aria-label={label} className="w-auto p-3" onCloseAutoFocus={focus.onCloseAutoFocus}>
+      <PopoverContent
+        aria-label={label}
+        className="w-auto p-3"
+        onOpenAutoFocus={focusPressedSwatch}
+        onCloseAutoFocus={focus.onCloseAutoFocus}
+      >
         <PopoverSection title={label}>
           <ColorSwatchGrid
             editor={editor}
@@ -174,7 +182,8 @@ export const EditorToolbar = memo(function EditorToolbar({
   contextSlot,
 }: EditorToolbarProps) {
   const { t } = useLocale();
-  const wide = useMediaQuery('(min-width: 1280px)');
+  // Matches `.header-context-slot` in index.css.
+  const wide = useMediaQuery('(min-width: 1024px)');
   const [expanded, setExpanded] = useState(false);
   const state = useToolbarState(editor);
   const lineSpacings = useLineSpacings(t);
@@ -483,7 +492,7 @@ function AlignmentMenu({
       <DropdownMenuTrigger asChild {...menu.triggerProps}>
         <ToolbarButton label={label}>{icon}</ToolbarButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52" onCloseAutoFocus={focus.onCloseAutoFocus}>
+      <DropdownMenuContent align="start" className="min-w-52" onCloseAutoFocus={focus.onCloseAutoFocus}>
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={value ?? 'left'}

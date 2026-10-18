@@ -232,15 +232,18 @@ export const RichTextEditor = () => {
               aria-label={t('documentName')}
             />
 
+            {/* The status comes before the contextual tools, so its changing
+                width moves into the free space instead of shifting them. */}
+            <SaveStatus
+              saveError={Boolean(saveError)}
+              hasExternalChanges={hasExternalChanges}
+              hasUnsavedChanges={hasUnsavedChanges}
+              lastSaved={lastSaved}
+            />
+
             {compact ? null : <div ref={setContextSlot} className="header-context-slot" />}
 
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-              <SaveStatus
-                saveError={Boolean(saveError)}
-                hasExternalChanges={hasExternalChanges}
-                hasUnsavedChanges={hasUnsavedChanges}
-                lastSaved={lastSaved}
-              />
               <ToolbarButton
                 label={t('findReplaceTitle')}
                 shortcut={SHORTCUTS.find}

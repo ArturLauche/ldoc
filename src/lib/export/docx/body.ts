@@ -190,7 +190,7 @@ export class DocxBodyWriter {
   ): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const line = lineBoxPx(base, runs.map(({ style }) => style));
     const pStyle = this.paragraphStyle(block, leaf, scope);
     const align = block.align ?? scope.cell?.align;
@@ -313,7 +313,7 @@ export class DocxBodyWriter {
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
       const base = textBaseStyle(context);
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       return `<w:p><w:pPr>${spacing(before, after, null)}${indentXml(leaf, scope.indent)}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.runs(runs, base)}</w:p>`;
     }
     return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.drawing(image, leaf, false, scope)}</w:p>`;

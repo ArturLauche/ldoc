@@ -62,17 +62,10 @@ export function visitDocumentText(
   });
 }
 
-/** Run styles for a visit, with generated text (code backticks, quote marks) the editor draws via CSS. */
-export function styledRuns(entry: TextVisit, generated = true): Array<{ text: string; style: RunStyle; run: ExportInlineRun }> {
+/** Run styles for a visit. */
+export function styledRuns(entry: TextVisit): Array<{ text: string; style: RunStyle; run: ExportInlineRun }> {
   const base = textBaseStyle(entry.context);
-  return entry.runs.map((run) => {
-    const style = resolveRunStyle(run.marks, run.link, base);
-    const text =
-      generated && style.code && entry.context.kind !== 'code-block'
-        ? `${DOCUMENT_STYLE.inlineCode.before}${run.text}${DOCUMENT_STYLE.inlineCode.after}`
-        : run.text;
-    return { text, style, run };
-  });
+  return entry.runs.map((run) => ({ text: run.text, style: resolveRunStyle(run.marks, run.link, base), run }));
 }
 
 /** Records every styled string of the document in the font registry. */
@@ -84,19 +77,13 @@ export function noteDocumentFonts(
   visitDocumentText(
     blocks,
     (entry) => {
-      styledRuns(entry, options.generated).forEach(({ text, style }) => {
+      styledRuns(entry).forEach(({ text, style }) => {
         registry.note({ family: style.family, weight: style.weight, italic: style.italic }, text);
       });
       if (options.generated) {
-        // List numbers and quote marks drawn in the paragraph's base style.
+        // List numbers drawn in the paragraph's base style.
         const base = textBaseStyle(entry.context);
         registry.note({ family: base.family, weight: 400, italic: false }, '0123456789.• ');
-        if (entry.context.quote) {
-          registry.note(
-            { family: base.family, weight: base.weight, italic: true },
-            `${DOCUMENT_STYLE.blockquote.open}${DOCUMENT_STYLE.blockquote.close}`,
-          );
-        }
       }
     },
     options,

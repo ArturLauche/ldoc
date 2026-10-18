@@ -29,10 +29,10 @@ export function SessionNotice({
   return (
     <div role="alert" className="session-notice" data-editor-chrome>
       <div className="session-notice-inner">
-        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground" />
+        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 self-start text-warning-foreground" />
         <p className="min-w-0 flex-1">{message}</p>
         {hasExternalChanges ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="ms-auto flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={onReloadSaved}>
               {t('reloadSaved')}
             </Button>
@@ -41,7 +41,7 @@ export function SessionNotice({
             </Button>
           </div>
         ) : saveError === 'save' ? (
-          <Button size="sm" onClick={onRetrySave}>
+          <Button size="sm" className="ms-auto" onClick={onRetrySave}>
             {t('retrySave')}
           </Button>
         ) : null}
