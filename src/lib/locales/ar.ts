@@ -182,7 +182,7 @@ const ar: TranslationCatalog = {
   toolbarBlockquote: 'اقتباس',
   toolbarCodeBlock: 'كتلة شيفرة',
   toolbarHorizontalRule: 'خط أفقي',
-  insertDividerShort: 'فاصل',
+  insertDividerShort: 'خط',
   toolbarInlineCode: 'شيفرة مضمّنة',
   toolbarDefaultColor: 'لون تلقائي',
   keyboardShortcuts: 'اختصارات لوحة المفاتيح',

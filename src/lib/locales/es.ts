@@ -195,7 +195,7 @@ const es: TranslationCatalog = {
   toolbarBlockquote: 'Cita',
   toolbarCodeBlock: 'Bloque de código',
   toolbarHorizontalRule: 'Línea horizontal',
-  insertDividerShort: 'Separador',
+  insertDividerShort: 'Línea',
   toolbarInlineCode: 'Código en línea',
   toolbarDefaultColor: 'Color automático',
   keyboardShortcuts: 'Atajos de teclado',

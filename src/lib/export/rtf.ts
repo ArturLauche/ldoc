@@ -216,7 +216,7 @@ ${body}
 
   /** Renders the blocks of one flow (the page, or a table cell) as paragraphs and rows. */
   flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string[] {
-    const { leaves, trailing } = flowLeaves(blocks, container);
+    const { leaves, trailing } = flowLeaves(blocks, container, container === 'cell' || Boolean(scope.cell));
     const parts: Array<{ render: (after: number) => string; table?: boolean }> = [];
     leaves.forEach((leaf, index) => {
       const before = container === 'root' && index === 0 ? 0 : leaf.spaceBefore;
@@ -259,7 +259,8 @@ ${body}
           } else {
             this.warnings.add('graphic-layout-simplified');
             // Rendered in turn, like every part, so paragraphs are written in document order.
-            parts.push({ render: () => this.flow(graphicToFallbackBlocks(block), container === 'cell' ? 'cell' : 'blockquote', scope).join('\n') });
+            // Not the cell's own children: no edge trimming (the graphic's space above stays).
+            parts.push({ render: () => this.flow(graphicToFallbackBlocks(block), 'blockquote', scope).join('\n') });
           }
           break;
         case 'table': {

@@ -49,7 +49,7 @@ export async function renderHtml(documentModel: ExportDocumentModel, warnings: W
 ${css}</style>
 </head>
 <body>
-<main class="lwrite-document">${body}</main>
+<main class="lwrite-document" dir="auto">${body}</main>
 </body>
 </html>
 `;
@@ -296,16 +296,16 @@ code{font-family:${MONO_STACK};font-size:${s.inlineCode.scale}em;font-weight:${s
 :is(a,h1,h2,h3,blockquote) code{color:inherit}
 pre{font-family:${MONO_STACK};font-size:${em(s.codeBlock.sizePx)};line-height:${s.codeBlock.lineHeightPx / s.codeBlock.sizePx};margin:${s.codeBlock.margin / s.codeBlock.sizePx}em 0;padding:${s.codeBlock.paddingY / s.codeBlock.sizePx}em ${s.codeBlock.paddingX / s.codeBlock.sizePx}em;border-radius:${s.codeBlock.radius}px;background:#${s.codeBlock.background};color:${text};font-weight:400;overflow-x:auto;white-space:pre}
 pre code{font:inherit;color:inherit;background:none;padding:0}
-blockquote{margin:${em(s.blockquote.margin)} 0;padding-left:${s.blockquote.paddingLeft}px;border-left:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text}}
+blockquote{margin:${em(s.blockquote.margin)} 0;padding-inline-start:${s.blockquote.paddingLeft}px;border-inline-start:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text}}
 blockquote strong{color:inherit}
 hr{height:0;margin:${em(s.rule.margin)} 0;border:0;border-top:${s.rule.width}px solid ${border}}
-ul,ol{margin:${em(s.list.marginTop)} 0 ${s.list.marginBottom}px;padding-left:${s.list.indent}px}
+ul,ol{margin:${em(s.list.marginTop)} 0 ${s.list.marginBottom}px;padding-inline-start:${s.list.indent}px}
 ul{list-style-type:disc}
 ol{list-style-type:decimal}
 ul ul{list-style-type:circle}
 ul ul ul{list-style-type:square}
 :is(ul,ol) :is(ul,ol){margin-top:${em(s.list.nestedMarginTop)};margin-bottom:${s.list.nestedMarginBottom}px}
-li{margin:${em(s.list.itemMarginTop)} 0 ${em(s.list.itemMarginBottom)};padding-left:${s.list.itemPadding}px}
+li{margin:${em(s.list.itemMarginTop)} 0 ${em(s.list.itemMarginBottom)};padding-inline-start:${s.list.itemPadding}px}
 li::marker{color:${muted};font-weight:400}
 .lwrite-document li>p{margin:0}
 .lwrite-document li>p+p{margin-top:${em(s.list.itemParagraphGap)}}

@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { Editor } from '@tiptap/core';
+import { CellSelection } from '@tiptap/pm/tables';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 import { useDocumentStats } from './useDocumentStats';
@@ -65,6 +66,53 @@ describe('document statistics lifecycle', () => {
     });
     expect(editor.state.selection.empty).toBe(false);
     expect(hook.result.current.selectedWordCount).toBeNull();
+    hook.unmount();
+    editor.destroy();
+  });
+
+  it('counts a selection the way it counts the document', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content:
+        '<table><tr><td><p>alpha</p></td><td><p>beta gamma</p></td></tr>' +
+        '<tr><td><p>delta epsilon zeta</p></td><td><p>eta theta iota kappa</p></td></tr></table><p>end</p>',
+    });
+    const hook = renderHook(() => useDocumentStats(editor));
+    expect(hook.result.current.wordCount).toBe(11);
+
+    // Every selected cell counts, not only the selection's first range.
+    const cells: number[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell') cells.push(pos);
+    });
+    act(() => {
+      editor.view.dispatch(
+        editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0], cells[3])),
+      );
+    });
+    expect(hook.result.current.selectedWordCount).toBe(10);
+    act(() => {
+      editor.view.dispatch(
+        editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[1], cells[3])),
+      );
+    });
+    expect(hook.result.current.selectedWordCount).toBe(6);
+    hook.unmount();
+    editor.destroy();
+  });
+
+  it('counts graphic text and mixed scripts in Select All like the total', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content: '<p>Send an e-mail to bob@example.com about re-use</p><p>日本語</p>',
+    });
+    editor.commands.focus('end');
+    editor.commands.insertSmartGraphic('list-block', 'en');
+    const hook = renderHook(() => useDocumentStats(editor));
+    act(() => {
+      editor.commands.selectAll();
+    });
+    expect(hook.result.current.selectedWordCount).toBe(hook.result.current.wordCount);
     hook.unmount();
     editor.destroy();
   });

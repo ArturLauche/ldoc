@@ -168,7 +168,7 @@ function GalleryBody({
         <TabsList
           ref={categoriesRef}
           aria-label={t('graphicGalleryCategories')}
-          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
+          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground max-sm:-my-1 max-sm:py-1 sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
         >
           {tabs.map((item) => (
             <TabsTrigger
@@ -196,7 +196,7 @@ function GalleryBody({
           <TabsContent
             key={item}
             value={item}
-            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
           >
             {empty ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">

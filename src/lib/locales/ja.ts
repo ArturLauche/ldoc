@@ -193,7 +193,7 @@ const ja: TranslationCatalog = {
   toolbarBlockquote: '引用',
   toolbarCodeBlock: 'コードブロック',
   toolbarHorizontalRule: '水平線',
-  insertDividerShort: '区切り線',
+  insertDividerShort: '水平線',
   toolbarInlineCode: 'インラインコード',
   toolbarDefaultColor: '自動',
   keyboardShortcuts: 'キーボードショートカット',

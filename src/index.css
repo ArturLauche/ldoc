@@ -327,7 +327,10 @@ header.app-bar {
   border-color: hsl(var(--ring));
   background: hsl(var(--card));
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.2);
-  outline: none;
+  /* Invisible normally; forced colors (High Contrast) paint it, since they
+     drop the box shadow. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 .toolbar-bar {
   /* The first control is a ghost button: its glyph lines up with the logo. */
@@ -383,6 +386,12 @@ header.app-bar {
   height: 2.25rem;
   padding-inline: 0.625rem;
   font-size: 0.8125rem;
+}
+@media (pointer: coarse) {
+  /* As tall as the 40px touch buttons beside them. */
+  .toolbar-select {
+    height: 2.5rem;
+  }
 }
 .toolbar-separator {
   flex-shrink: 0;
@@ -440,9 +449,10 @@ header.app-bar {
     margin: 2rem 1.5rem;
   }
 }
-@media (min-width: 1280px) {
-  /* One row from 1280px wide, including with classic (space-taking)
-     scrollbars; the overflow toggle is not needed there. */
+/* One row from 1280px wide, including with classic (space-taking)
+   scrollbars; the overflow toggle is not needed there. Touch screens use
+   40px controls, so their single row needs about 70px more. */
+@media (min-width: 1280px) and (pointer: fine), (min-width: 1360px) {
   .toolbar-primary,
   .toolbar-secondary,
   .toolbar-secondary.is-expanded {
@@ -732,7 +742,8 @@ header.app-bar {
   min-width: 0;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.5rem 0.25rem;
+  /* Five tiles share a 320px row: labels get the full tile width. */
+  padding: 0.5rem 0.125rem;
   white-space: normal;
 }
 .tool-tile svg {
@@ -745,6 +756,15 @@ header.app-bar {
   line-height: 1.15;
   text-align: center;
   overflow-wrap: anywhere;
+  hyphens: auto;
+}
+@media (max-width: 359px) {
+  .tool-tile {
+    padding-inline: 0;
+  }
+  .tool-tile-label {
+    font-size: 0.6875rem;
+  }
 }
 
 /* Phone file sheet. */

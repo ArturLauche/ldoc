@@ -12,6 +12,15 @@ describe('recent dates', () => {
     expect(formatRecentDate(new Date(NOW - 2 * 3_600_000), 'de', NOW)).toBe('vor 2 Stunden');
   });
 
+  it('names calendar days, not elapsed 24-hour spans', () => {
+    // Wednesday 00:30 local time.
+    const now = new Date(2026, 9, 14, 0, 30).getTime();
+    expect(formatRecentDate(new Date(2026, 9, 12, 18, 30), 'en', now)).toBe('2 days ago');
+    expect(formatRecentDate(new Date(2026, 9, 12, 18, 30), 'de', now)).toBe('vorgestern');
+    expect(formatRecentDate(new Date(2026, 9, 13, 0, 15), 'en', now)).toBe('yesterday');
+    expect(formatRecentDate(new Date(2026, 9, 13, 20, 0), 'en', now)).toBe('4 hours ago');
+  });
+
   it('shows a date for older entries', () => {
     expect(formatRecentDate(new Date('2026-09-01T12:00:00Z'), 'en', NOW)).toMatch(/Sep 1, 2026/);
   });

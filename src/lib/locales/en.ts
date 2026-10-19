@@ -189,7 +189,7 @@ const en = {
   toolbarBlockquote: 'Quote',
   toolbarCodeBlock: 'Code block',
   toolbarHorizontalRule: 'Horizontal line',
-  insertDividerShort: 'Divider',
+  insertDividerShort: 'Line',
   toolbarInlineCode: 'Inline code',
   toolbarDefaultColor: 'Automatic color',
   keyboardShortcuts: 'Keyboard shortcuts',

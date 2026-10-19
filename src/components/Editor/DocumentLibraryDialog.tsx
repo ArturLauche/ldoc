@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type RefObject } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { AlertTriangle, Copy, Download, FileText, MoreHorizontal, Search, Trash2, Upload, X } from 'lucide-react';
 import {
   Dialog,
@@ -28,6 +28,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   documents: StoredDocument[];
+  /** When `documents` was read; relative dates count from here. */
+  listedAt: number;
   currentId: string;
   error: boolean;
   loading?: boolean;
@@ -105,6 +107,7 @@ export function DocumentLibraryDialog({
   open,
   onOpenChange,
   documents,
+  listedAt,
   currentId,
   error,
   loading = false,
@@ -117,6 +120,18 @@ export function DocumentLibraryDialog({
 }: Props) {
   const { t, locale } = useLocale();
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Both clear buttons disappear with the query: keep focus in the search field.
+  const clearSearch = () => {
+    setQuery('');
+    searchRef.current?.focus();
+  };
+  // A deleted row takes its focused menu button with it: keep focus in the dialog.
+  useEffect(() => {
+    if (open && (!document.activeElement || document.activeElement === document.body)) {
+      searchRef.current?.focus();
+    }
+  }, [documents, open]);
   const normalizedQuery = query.trim().toLocaleLowerCase(locale);
   const deferredQuery = useDeferredValue(normalizedQuery);
   const entries = useMemo(
@@ -130,7 +145,6 @@ export function DocumentLibraryDialog({
   const filtered = deferredQuery
     ? entries.filter((entry) => entry.search.includes(deferredQuery))
     : entries;
-  const [now] = useState(() => Date.now());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -154,18 +168,19 @@ export function DocumentLibraryDialog({
               className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             />
             <input
+              ref={searchRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('searchByTitleOrContent')}
               aria-label={t('searchSavedDocumentsAria')}
               enterKeyHint="search"
               autoComplete="off"
-              className="flex h-9 w-full min-w-0 rounded-md border border-input bg-card ps-9 pe-9 text-base shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm pointer-coarse:h-10"
+              className="flex h-9 w-full min-w-0 rounded-md border border-input bg-card ps-9 pe-9 text-base shadow-xs transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-hidden focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm pointer-coarse:h-10"
             />
             {query ? (
               <button
                 type="button"
-                onClick={() => setQuery('')}
+                onClick={clearSearch}
                 aria-label={t('graphicGalleryClearSearch')}
                 className="absolute end-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
@@ -182,7 +197,9 @@ export function DocumentLibraryDialog({
           className="min-h-48 flex-1 overflow-y-auto overscroll-contain border-t px-3 py-2 sm:max-h-[min(26rem,58dvh)] sm:flex-none"
           aria-busy={loading || normalizedQuery !== deferredQuery}
         >
-          {loading ? (
+          {/* Only the first read shows the skeleton: replacing the rows on
+              every refresh (after a duplicate or import) dropped focus. */}
+          {loading && !documents.length ? (
             <>
               <p role="status" className="sr-only">
                 {t('loadingDocument')}
@@ -228,7 +245,7 @@ export function DocumentLibraryDialog({
                         dateTime={doc.updatedAt}
                         className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block"
                       >
-                        {formatRecentDate(new Date(doc.updatedAt), locale, now)}
+                        {formatRecentDate(new Date(doc.updatedAt), locale, listedAt)}
                       </time>
                     </button>
                     <DocumentActionsMenu
@@ -244,7 +261,7 @@ export function DocumentLibraryDialog({
           ) : documents.length ? (
             <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
               <p className="text-sm text-muted-foreground">{t('noMatchingDocuments')}</p>
-              <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+              <Button variant="outline" size="sm" onClick={clearSearch}>
                 {t('graphicGalleryClearSearch')}
               </Button>
             </div>

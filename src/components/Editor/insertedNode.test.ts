@@ -17,5 +17,8 @@ describe('insert commands that select what they insert', () => {
     expect(editor.can().insertSmartGraphic('list-block')).toBe(true);
     expect(editor.getJSON()).toEqual(before);
     expect(editor.state.selection.from).toBe(5);
+
+    expect(editor.commands.insertImage({ src: PIXEL, alt: 'Pixel', align: 'left', width: '50' })).toBe(true);
+    expect(editor.isActive('image')).toBe(true);
   });
 });

@@ -12,6 +12,8 @@ import {
 import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from '@/hooks/useConfirm';
 import { useLocale } from '@/hooks/useLocale';
 
+const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
 interface PendingConfirm {
   options: ConfirmOptions;
   resolve: (confirmed: boolean) => void;
@@ -54,7 +56,16 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             requestAnimationFrame(() => {
-              if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
+              const target = returnFocusRef.current;
+              if (target?.isConnected) {
+                target.focus();
+                return;
+              }
+              // What opened the confirmation is gone (a deleted row): stay in
+              // the dialog it was opened from instead of falling to <body>.
+              const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+              const dialog = dialogs[dialogs.length - 1];
+              dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
             });
           }}
         >

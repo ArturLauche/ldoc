@@ -74,6 +74,36 @@ export function isSupportedLocale(value: unknown): value is Locale {
 const loadedCatalogs: Partial<Record<Locale, TranslationCatalog>> = { en };
 const pendingCatalogs = new Map<Locale, Promise<TranslationCatalog>>();
 const catalogListeners = new Set<() => void>();
+/** Module URLs of catalogs whose download failed (see loadLocale). */
+const failedCatalogUrls = new Map<Locale, string>();
+let catalogRetries = 0;
+
+/** The module URL that a failed dynamic import names (Chromium, Firefox). */
+export function failedModuleUrl(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const url = /https?:\/\/[^\s'"]+/.exec(message)?.[0];
+  return url ? url.replace(/[?&]retry=\d+$/, '') : null;
+}
+
+function catalogFrom(module: unknown): TranslationCatalog {
+  const messages: unknown =
+    typeof module === 'object' && module !== null && 'default' in module ? module.default : null;
+  if (typeof messages !== 'object' || messages === null) throw new Error('Not a message catalog');
+  return messages as TranslationCatalog;
+}
+
+/**
+ * A retry must not re-run the same import(): browsers keep a failed module
+ * in their module map and reject again without a request. The same chunk
+ * under a fresh query string is a new module and is fetched again.
+ */
+function importCatalog(locale: Exclude<Locale, 'en'>): Promise<TranslationCatalog> {
+  const failedUrl = failedCatalogUrls.get(locale);
+  if (!failedUrl) return catalogLoaders[locale]().then(catalogFrom);
+  const separator = failedUrl.includes('?') ? '&' : '?';
+  catalogRetries += 1;
+  return import(/* @vite-ignore */ `${failedUrl}${separator}retry=${catalogRetries}`).then(catalogFrom);
+}
 
 /** The locale's messages if they have loaded, otherwise undefined. */
 export function loadedCatalog(locale: Locale): TranslationCatalog | undefined {
@@ -87,15 +117,18 @@ export function loadLocale(locale: Locale): Promise<TranslationCatalog> {
   if (locale === 'en') return Promise.resolve(en);
   let pending = pendingCatalogs.get(locale);
   if (!pending) {
-    pending = catalogLoaders[locale]().then(
-      ({ default: messages }) => {
+    pending = importCatalog(locale).then(
+      (messages) => {
         loadedCatalogs[locale] = messages;
         pendingCatalogs.delete(locale);
+        failedCatalogUrls.delete(locale);
         for (const listener of catalogListeners) listener();
         return messages;
       },
       (error: unknown) => {
         pendingCatalogs.delete(locale);
+        const url = failedModuleUrl(error);
+        if (url) failedCatalogUrls.set(locale, url);
         throw error;
       },
     );

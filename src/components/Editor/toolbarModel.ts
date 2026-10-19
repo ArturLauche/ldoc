@@ -1,8 +1,12 @@
 import { useMemo } from 'react';
 import { redoDepth, undoDepth } from '@tiptap/pm/history';
 import { liftListItem, sinkListItem } from '@tiptap/pm/schema-list';
+import type { Transaction } from '@tiptap/pm/state';
+import { liftTarget } from '@tiptap/pm/transform';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { useEditorState, type Editor } from '@tiptap/react';
 import type { TranslationKey } from '@/lib/translations';
+import { DEFAULT_HIGHLIGHT_COLOR } from './editorExtensions';
 import { SHORTCUTS } from './editorShortcuts';
 import { selectionNodes } from './selectionNodes';
 
@@ -26,6 +30,8 @@ export const MAX_FONT_SIZE_PX = Number.parseFloat(FONT_SIZES[FONT_SIZES.length -
 
 /** Swatch value that removes the color (automatic text color, no highlight). */
 export const NO_COLOR = 'transparent';
+/** How browsers paint a <mark> without a color (imported documents). */
+const DEFAULT_MARK_COLOR = '#FFFF00';
 
 export const TEXT_COLORS = [
   NO_COLOR,
@@ -44,7 +50,7 @@ export const TEXT_COLORS = [
 
 export const HIGHLIGHT_COLORS = [
   NO_COLOR,
-  '#FEF08A',
+  DEFAULT_HIGHLIGHT_COLOR,
   '#FDE68A',
   '#FECACA',
   '#D1FAE5',
@@ -74,6 +80,69 @@ export const TEXT_BLOCK_STYLES: {
 
 export type TextAlignment = 'left' | 'center' | 'right' | 'justify';
 
+const TEXT_ALIGNMENTS: readonly TextAlignment[] = ['left', 'center', 'right', 'justify'];
+const LETTER = /\p{L}/u;
+const RTL_LETTER = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}]/u;
+
+/**
+ * The document's direction as the editor's `dir="auto"` resolves it: from
+ * the first letter. Blocks without an alignment start on that side.
+ */
+function documentDirection(doc: ProseMirrorNode): 'ltr' | 'rtl' {
+  let direction: 'ltr' | 'rtl' | null = null;
+  doc.descendants((node) => {
+    if (direction) return false;
+    const letter = node.isText ? LETTER.exec(node.text ?? '')?.[0] : undefined;
+    if (letter) direction = RTL_LETTER.test(letter) ? 'rtl' : 'ltr';
+    return !direction;
+  });
+  return direction ?? 'ltr';
+}
+
+/**
+ * The alignment shared by every selected text block (list and table wrappers
+ * carry none), or undefined when they differ.
+ */
+function selectionAlignment(doc: ProseMirrorNode, blocks: ProseMirrorNode[]): TextAlignment | undefined {
+  const values = new Set(
+    blocks.map((block): TextAlignment | null => {
+      const value: unknown = block.attrs.textAlign;
+      return TEXT_ALIGNMENTS.find((alignment) => alignment === value) ?? null;
+    }),
+  );
+  if (values.size !== 1) return undefined;
+  const [value] = values;
+  return value ?? (documentDirection(doc) === 'rtl' ? 'right' : 'left');
+}
+
+/**
+ * Stored colors come back from HTML as `rgb()`; the palettes are hex. Same
+ * color, same string, so a swatch can show that it is applied.
+ */
+export function normalizeColor(value: string): string {
+  const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*(?:[,/]\s*(?:1|1\.0+|100%)\s*)?\)$/i.exec(value.trim());
+  if (!rgb) return value;
+  return `#${rgb
+    .slice(1, 4)
+    .map((part) => Math.min(255, Number(part)).toString(16).padStart(2, '0'))
+    .join('')}`.toUpperCase();
+}
+
+/**
+ * Lifts the selected blocks out of every quote around them. A plain `lift`
+ * takes the innermost wrapper, which dissolves a list inside a quote.
+ */
+function leaveQuotes({ tr }: { tr: Transaction }): boolean {
+  for (let depth = tr.selection.$from.depth; depth > 0; depth--) {
+    const { $from, $to } = tr.selection;
+    const range = $from.blockRange($to, (node) => node.type.name === 'blockquote');
+    const target = range ? liftTarget(range) : null;
+    if (!range || target === null) break;
+    tr.lift(range, target);
+  }
+  return true;
+}
+
 /**
  * Turns the current blocks into one style. Quotes wrap paragraphs, so other
  * styles first leave any quote; choosing the active quote again lifts it.
@@ -81,11 +150,19 @@ export type TextAlignment = 'left' | 'center' | 'right' | 'justify';
 export function applyTextBlockStyle(editor: Editor, value: TextBlockStyle) {
   const chain = editor.chain().focus();
   if (value === 'blockquote') {
-    if (editor.isActive('codeBlock')) chain.setParagraph();
-    chain.toggleBlockquote().run();
+    // "Quote" is a quoted paragraph: a heading or code block already inside
+    // a quote becomes one too. Only a quoted paragraph toggles back.
+    const quoted = editor.isActive('blockquote');
+    const paragraph = !editor.isActive('heading') && !editor.isActive('codeBlock');
+    if (quoted && paragraph) chain.command(leaveQuotes);
+    else {
+      if (!paragraph) chain.setParagraph();
+      if (!quoted) chain.wrapIn('blockquote');
+    }
+    chain.run();
     return;
   }
-  if (editor.isActive('blockquote')) chain.lift('blockquote');
+  chain.command(leaveQuotes);
   if (value === 'paragraph') chain.setParagraph().run();
   else if (value === 'codeBlock') chain.setCodeBlock().run();
   else chain.setHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 }).run();
@@ -122,7 +199,8 @@ export function useToolbarState(editor: Editor | null) {
     selector: ({ editor: current }) => {
       if (!current) return null;
       // Node questions share one walk over the selection (see selectionNodes).
-      const nodeActive = selectionNodes(current.state).isActive;
+      const nodes = selectionNodes(current.state);
+      const nodeActive = nodes.isActive;
       const listItem = current.schema.nodes.listItem;
       const textStyle = current.getAttributes('textStyle');
       const fontSize: unknown = textStyle.fontSize;
@@ -143,8 +221,14 @@ export function useToolbarState(editor: Editor | null) {
         fontFamily: typeof fontFamily === 'string' ? fontFamily : '',
         lineHeight: typeof lineHeight === 'string' ? lineHeight : '',
         blockStyle,
-        textColor: typeof color === 'string' && color ? color : undefined,
-        highlightColor: typeof highlight === 'string' && highlight ? highlight : undefined,
+        textColor: typeof color === 'string' && color ? normalizeColor(color) : undefined,
+        // A highlight without a color (imported <mark>) is still a highlight.
+        highlightColor:
+          typeof highlight === 'string' && highlight
+            ? normalizeColor(highlight)
+            : current.isActive('highlight')
+              ? DEFAULT_MARK_COLOR
+              : undefined,
         bold: current.isActive('bold'),
         italic: current.isActive('italic'),
         underline: current.isActive('underline'),
@@ -155,10 +239,7 @@ export function useToolbarState(editor: Editor | null) {
         link: current.isActive('link'),
         bulletList: nodeActive('bulletList'),
         orderedList: nodeActive('orderedList'),
-        // Only blocks carry textAlign, so the node answer is the full answer.
-        alignment: (['left', 'center', 'right', 'justify'] as const).find((textAlign) =>
-          nodeActive(null, { textAlign }),
-        ),
+        alignment: selectionAlignment(current.state.doc, nodes.textblocks()),
         inTable: nodeActive('table'),
         inGraphic: nodeActive('smartGraphic'),
         imageSelected: nodeActive('image'),

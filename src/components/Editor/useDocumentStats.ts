@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getText, getTextSerializersFromSchema } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
-import type { Transaction } from '@tiptap/pm/state';
+import { NodeSelection, type Transaction } from '@tiptap/pm/state';
 import { fontFamiliesIn, loadFont } from '@/lib/fonts';
 import { countCharacters, countWords } from '@/lib/textStats';
 
@@ -78,11 +78,56 @@ export function useDocumentStats(editor: Editor | null, locale = 'en'): Document
       return getText(block, { blockSeparator: '\n\n', textSerializers: serializers });
     };
 
+    /** A top-level block's counts: cached while ProseMirror keeps the node. */
+    const statsFor = (doc: ProseMirrorNode, block: ProseMirrorNode, pos: number, index: number) => {
+      let stats = blockStats.get(block);
+      if (!stats) {
+        const text = blockText(doc, block, pos, index);
+        stats = {
+          words: countWords(text, locale),
+          characters: countCharacters(text),
+          fonts: fontFamiliesIn(block),
+        };
+        blockStats.set(block, stats);
+      }
+      return stats;
+    };
+    /** Leaves inside a partly selected block render as in getText() (line breaks). */
+    const leafText = (leaf: ProseMirrorNode) =>
+      serializers[leaf.type.name]?.({
+        node: leaf,
+        pos: 0,
+        parent: leaf,
+        index: 0,
+        range: { from: 0, to: 0 },
+      }) ?? '';
+
+    /**
+     * Words in the selection, counted the way the total is: wholly selected
+     * blocks take their cached count (graphic labels included, the same
+     * script handling), and only the blocks at a range's edges count their
+     * selected text. Every range counts, so a selection of table cells too.
+     */
     const selectionWords = () => {
-      const { from, to, empty } = editor.state.selection;
-      if (empty) return null;
-      // A selected graphic or image has no words of its own: show the total.
-      const words = countWords(editor.state.doc.textBetween(from, to, ' ', ' '), locale);
+      const { doc, selection } = editor.state;
+      // A selected graphic, image or rule: the footer keeps the total.
+      if (selection.empty || selection instanceof NodeSelection) return null;
+      let words = 0;
+      for (const { $from, $to } of selection.ranges) {
+        const from = $from.pos;
+        const to = $to.pos;
+        let pos = $from.depth > 0 ? $from.before(1) : from;
+        for (let index = $from.index(0); index < doc.childCount && pos < to; index++) {
+          const block = doc.child(index);
+          const end = pos + block.nodeSize;
+          if (from <= pos && end <= to) words += statsFor(doc, block, pos, index).words;
+          else if (end > from) {
+            words += countWords(doc.textBetween(Math.max(from, pos), Math.min(to, end), '\n\n', leafText), locale);
+          }
+          pos = end;
+        }
+      }
+      words = Math.min(words, documentCounts.wordCount);
       return words > 0 ? words : null;
     };
     const publish = () => {
@@ -96,16 +141,7 @@ export function useDocumentStats(editor: Editor | null, locale = 'en'): Document
       let characterCount = 0;
       const fonts = new Set<string>();
       doc.forEach((block, pos, index) => {
-        let stats = blockStats.get(block);
-        if (!stats) {
-          const text = blockText(doc, block, pos, index);
-          stats = {
-            words: countWords(text, locale),
-            characters: countCharacters(text),
-            fonts: fontFamiliesIn(block),
-          };
-          blockStats.set(block, stats);
-        }
+        const stats = statsFor(doc, block, pos, index);
         wordCount += stats.words;
         characterCount += stats.characters;
         stats.fonts.forEach((font) => fonts.add(font));

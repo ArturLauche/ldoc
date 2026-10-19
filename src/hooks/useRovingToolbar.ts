@@ -46,12 +46,17 @@ export function useRovingToolbar(ref: RefObject<HTMLElement | null>) {
     // Contextual controls come and go with the selection.
     const observer = new MutationObserver(() => normalize());
     observer.observe(root, { childList: true, subtree: true, attributeFilter: ['disabled', 'class'] });
+    // Breakpoints hide groups without touching the DOM: if the entry point
+    // is among them, the toolbar would drop out of the Tab order.
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => normalize());
+    resizeObserver?.observe(root);
     const onFocusIn = (event: FocusEvent) => {
       if (event.target instanceof HTMLElement && event.target.matches(ITEM_SELECTOR)) normalize(event.target);
     };
     root.addEventListener('focusin', onFocusIn);
     return () => {
       observer.disconnect();
+      resizeObserver?.disconnect();
       root.removeEventListener('focusin', onFocusIn);
     };
   }, [normalize, ref]);

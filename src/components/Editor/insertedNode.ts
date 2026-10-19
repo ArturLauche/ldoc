@@ -1,3 +1,4 @@
+import type { CommandProps } from '@tiptap/core';
 import { NodeSelection, type Transaction } from '@tiptap/pm/state';
 
 /**
@@ -35,7 +36,7 @@ export function selectInsertedNode(
   tr: Transaction,
   firstStep: number,
   typeName: string,
-  dispatch: unknown,
+  dispatch: CommandProps['dispatch'],
 ): boolean {
   // A dry run (`editor.can()`) applies no steps, so there is nothing to
   // select yet; that is not a failure.

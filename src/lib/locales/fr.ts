@@ -195,7 +195,7 @@ const fr: TranslationCatalog = {
   toolbarBlockquote: 'Citation',
   toolbarCodeBlock: 'Bloc de code',
   toolbarHorizontalRule: 'Ligne horizontale',
-  insertDividerShort: 'Séparateur',
+  insertDividerShort: 'Ligne',
   toolbarInlineCode: 'Code en ligne',
   toolbarDefaultColor: 'Couleur automatique',
   keyboardShortcuts: 'Raccourcis clavier',

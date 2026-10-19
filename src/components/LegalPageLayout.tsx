@@ -20,7 +20,9 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
   const { t } = useLocaleMessages(locale);
 
   return (
-    <div className="app-shell flex min-h-dvh flex-col bg-background">
+    // lang and dir here too: the interface language (Arabic, say) still owns
+    // <html> for the first frame, and the page must not paint mirrored.
+    <div lang={locale} dir="ltr" className="app-shell flex min-h-dvh flex-col bg-background">
       <header className="app-bar sticky top-0 z-40">
         <div className="mx-auto flex h-12 w-full max-w-3xl items-center justify-between px-5">
           <Link to="/" className="flex min-w-0 items-center gap-2 rounded-sm">

@@ -102,6 +102,18 @@ const EnhancedImage = Image.extend({
   },
 });
 
+/** First color of the highlight palette (toolbarModel's HIGHLIGHT_COLORS). */
+export const DEFAULT_HIGHLIGHT_COLOR = '#FEF08A';
+
+const EnhancedHighlight = Highlight.extend({
+  addKeyboardShortcuts() {
+    // A colorless <mark> would show browser yellow that no swatch matches.
+    return {
+      'Mod-Shift-h': () => this.editor.commands.toggleHighlight({ color: DEFAULT_HIGHLIGHT_COLOR }),
+    };
+  },
+});
+
 const EnhancedTextStyle = TextStyle.extend({
   addAttributes() {
     return {
@@ -263,7 +275,7 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     }),
     EnhancedTextStyle,
     Color,
-    Highlight.configure({
+    EnhancedHighlight.configure({
       multicolor: true,
     }),
     Link.configure({

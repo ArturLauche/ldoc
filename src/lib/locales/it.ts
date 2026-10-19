@@ -193,7 +193,7 @@ const it: TranslationCatalog = {
   toolbarBlockquote: 'Citazione',
   toolbarCodeBlock: 'Blocco di codice',
   toolbarHorizontalRule: 'Linea orizzontale',
-  insertDividerShort: 'Separatore',
+  insertDividerShort: 'Linea',
   toolbarInlineCode: 'Codice in linea',
   toolbarDefaultColor: 'Colore automatico',
   keyboardShortcuts: 'Scorciatoie da tastiera',

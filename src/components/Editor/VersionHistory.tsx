@@ -62,7 +62,9 @@ export const VersionHistory = ({
   const [loading, setLoading] = useState(true);
   const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(versions[0] ?? null);
   const [restoring, setRestoring] = useState(false);
-  const [now] = useState(() => Date.now());
+  // Relative dates count from the latest read, so a version saved while the
+  // panel is open reads "now" rather than minutes in the future.
+  const [now, setNow] = useState(() => Date.now());
   const dateTimeFormat = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -78,6 +80,7 @@ export const VersionHistory = ({
 
   const applyHistory = useCallback((next: { versions: StoredVersion[]; readError: boolean }) => {
     setHistory(next);
+    setNow(Date.now());
     setLoading(false);
     setSelectedVersion(
       (selected) =>

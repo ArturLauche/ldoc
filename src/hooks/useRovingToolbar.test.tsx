@@ -52,4 +52,29 @@ describe('useRovingToolbar', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Toggle undo' })));
     expect(tabStop()).toEqual(['Bold']);
   });
+
+  it('moves the entry point off a control that a breakpoint hides', () => {
+    let onResize: () => void = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          onResize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    render(<Toolbar />);
+    act(() => screen.getByRole('button', { name: 'Bold' }).focus());
+    expect(tabStop()).toEqual(['Bold']);
+
+    // A wider or narrower window hides Bold through CSS only.
+    vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+      return (this.textContent === 'Bold' ? [] : [new DOMRect()]) as unknown as DOMRectList;
+    });
+    act(() => onResize());
+    expect(tabStop()).toEqual(['Style']);
+    vi.unstubAllGlobals();
+  });
 });

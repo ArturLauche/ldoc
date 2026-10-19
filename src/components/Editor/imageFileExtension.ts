@@ -1,9 +1,10 @@
 import { Extension } from '@tiptap/core';
 import { Fragment, Slice } from '@tiptap/pm/model';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection, type Transaction } from '@tiptap/pm/state';
 import { dropPoint } from '@tiptap/pm/transform';
 import type { EditorView } from '@tiptap/pm/view';
 import { readFileAsDataUrl, validateImageFile, type ImageFileError } from '@/lib/media';
+import { insertedNodePos } from './insertedNode';
 
 /** Bubbles from the editor DOM when a pasted or dropped file cannot become an image. */
 export const IMAGE_FILE_ERROR_EVENT = 'lwrite:image-file-error';
@@ -25,6 +26,21 @@ function dropPosition(view: EditorView, event: DragEvent): number | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Puts the cursor at the start of the text block after `pos` (the end of an
+ * image just inserted), adding an empty paragraph when none follows. A
+ * selection that fell back onto the image would let the next pasted file or
+ * keystroke replace it.
+ */
+function placeCursorAfter(tr: Transaction, pos: number) {
+  if (!tr.doc.resolve(pos).nodeAfter?.isTextblock) {
+    const paragraph = tr.doc.type.schema.nodes.paragraph;
+    if (!paragraph) return;
+    tr.insert(pos, paragraph.create());
+  }
+  tr.setSelection(TextSelection.create(tr.doc, pos + 1));
 }
 
 /** Inserts images read locally from files; nothing leaves the device. */
@@ -56,12 +72,18 @@ async function insertImageFiles(view: EditorView, files: File[], position: numbe
             Math.min(at, tr.doc.content.size),
             new Slice(Fragment.from(node), 0, 0),
           ) ?? null);
+    let start = target;
     if (target === null) {
       tr.replaceSelectionWith(node);
+      start = insertedNodePos(tr, 0, imageType.name);
     } else {
       tr.insert(target, node);
-      // Several dropped files land in order, one after another.
-      at = target + node.nodeSize;
+    }
+    if (start !== null) {
+      // Several files land in order, one after another, and the cursor
+      // follows them (also to a drop point away from the old caret).
+      at = start + node.nodeSize;
+      placeCursorAfter(tr, at);
     }
     view.dispatch(tr.scrollIntoView());
   }

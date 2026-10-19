@@ -84,6 +84,25 @@ describe('findReplaceExtension', () => {
     expect(getSearchState(editor.state)?.matches).toHaveLength(2);
   });
 
+  it('moves on to the next match after a replacement, selecting it', () => {
+    editor.commands.setSearchQuery('alpha');
+    editor.commands.replaceCurrentMatch('omega');
+    const search = getSearchState(editor.state)!;
+    const active = search.matches[search.activeIndex];
+    expect(editor.state.doc.textBetween(active.from, active.to)).toBe('alpha');
+    expect(editor.state.selection.from).toBe(active.from);
+    expect(editor.state.selection.to).toBe(active.to);
+  });
+
+  it('reaches every match when the replacement still matches the query', () => {
+    editor.commands.setSearchQuery('alpha');
+    // Fixing capitalization: "ALPHA" matches the case-insensitive query too.
+    editor.commands.replaceCurrentMatch('ALPHA');
+    editor.commands.replaceCurrentMatch('ALPHA');
+    editor.commands.replaceCurrentMatch('ALPHA');
+    expect(editor.getText({ blockSeparator: '\n' })).toBe('ALPHA beta ALPHA\nALPHA gamma');
+  });
+
   it('replaces all matches at once', () => {
     editor.commands.setSearchQuery('alpha');
     editor.commands.replaceAllMatches('omega');

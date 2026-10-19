@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { EllipsisVertical, Keyboard, Languages, Monitor, Moon, Settings2, Sun } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -42,11 +43,13 @@ export function PreferencesMenu({
   onShowShortcuts,
 }: {
   compact: boolean;
-  onShowShortcuts: () => void;
+  /** Opens the shortcut reference; focus returns to `returnFocusTo` when it closes. */
+  onShowShortcuts: (returnFocusTo: HTMLElement | null) => void;
 }) {
   const { t, locale, setLocale } = useLocale();
   const { theme, setTheme } = useTheme();
   const menu = useTouchSafeMenu();
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const languages = (
     <DropdownMenuRadioGroup
@@ -68,6 +71,7 @@ export function PreferencesMenu({
     <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
       <DropdownMenuTrigger asChild {...menu.triggerProps}>
         <ToolbarButton
+          ref={triggerRef}
           label={t('displayOptions')}
           className="header-icon-button data-[state=open]:bg-accent"
         >
@@ -109,7 +113,7 @@ export function PreferencesMenu({
               <DropdownMenuSubContent className="min-w-44">{languages}</DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem inset onSelect={onShowShortcuts}>
+            <DropdownMenuItem inset onSelect={() => onShowShortcuts(triggerRef.current)}>
               <Keyboard />
               {t('keyboardShortcuts')}
               <DropdownMenuShortcut>

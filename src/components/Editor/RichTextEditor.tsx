@@ -65,6 +65,17 @@ function isModKey(event: KeyboardEvent) {
   return (event.metaKey || event.ctrlKey) && !event.altKey;
 }
 
+/**
+ * Mod+/ by the character it types. The physical Slash key counts only when
+ * it types a non-Latin character: on German layouts it is "-" (zoom out),
+ * on Russian ones "." (superscript).
+ */
+function isShortcutsKey(event: KeyboardEvent) {
+  if (event.key === '/') return true;
+  const latin = event.key.length === 1 && event.key.charCodeAt(0) < 128;
+  return event.code === 'Slash' && event.key.length === 1 && !latin;
+}
+
 export const RichTextEditor = () => {
   const { t } = useLocale();
   const compact = useCompactLayout();
@@ -74,6 +85,13 @@ export const RichTextEditor = () => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  // Where focus was when the shortcut reference opened; it has no trigger of
+  // its own for Radix to return to.
+  const shortcutsReturnRef = useRef<HTMLElement | null>(null);
+  const openShortcuts = useCallback((returnFocusTo: Element | null) => {
+    shortcutsReturnRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null;
+    setShowShortcuts(true);
+  }, []);
   // Phones get the document height back while scrolling down or typing.
   const headerHidden = useAutoHideOnScroll(compact && !showFindReplace, headerRef);
 
@@ -161,15 +179,17 @@ export const RichTextEditor = () => {
         event.preventDefault();
         setShowFindReplace(true);
         document.querySelector<HTMLInputElement>('[data-find-input]')?.focus();
-      } else if (key === '/' || event.code === 'Slash') {
+      } else if (!event.defaultPrevented && isShortcutsKey(event)) {
+        // The editor already ran its own binding for this key (Mod+Shift+7
+        // types "/" on German layouts) when the event comes back prevented.
         event.preventDefault();
-        setShowShortcuts(true);
+        openShortcuts(document.activeElement);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openShortcuts]);
 
   const busy = isLoading || isTransitioning;
 
@@ -253,7 +273,7 @@ export const RichTextEditor = () => {
               >
                 <Search />
               </ToolbarButton>
-              <PreferencesMenu compact={compact} onShowShortcuts={() => setShowShortcuts(true)} />
+              <PreferencesMenu compact={compact} onShowShortcuts={openShortcuts} />
             </div>
           </div>
         </div>
@@ -334,7 +354,15 @@ export const RichTextEditor = () => {
 
       {showShortcuts ? (
         <Suspense fallback={null}>
-          <ShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} />
+          <ShortcutsDialog
+            open={showShortcuts}
+            onOpenChange={setShowShortcuts}
+            onReturnFocus={() => {
+              const target = shortcutsReturnRef.current;
+              if (target?.isConnected && target !== editor?.view.dom) target.focus();
+              else if (editor && !editor.isDestroyed) editor.commands.focus();
+            }}
+          />
         </Suspense>
       ) : null}
     </div>

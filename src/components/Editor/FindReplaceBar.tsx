@@ -32,7 +32,7 @@ function Field({
   return (
     <div
       className={cn(
-        'flex h-9 min-w-0 items-center rounded-md border border-input bg-card shadow-xs transition-[border-color,box-shadow] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/20 pointer-coarse:h-10',
+        'flex h-9 min-w-0 items-center rounded-md border border-input bg-card shadow-xs transition-[border-color,box-shadow] has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/20 has-[input:focus-visible]:outline-hidden pointer-coarse:h-10',
         className,
       )}
     >

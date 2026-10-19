@@ -5,8 +5,10 @@ import { useLocaleMessages } from '@/hooks/useLocaleMessages';
 import { initialLocale, writeStoredLocale } from '@/lib/localePreference';
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(initialLocale);
-  const translator = useLocaleMessages(locale);
+  const [requestedLocale, setLocaleState] = useState<Locale>(initialLocale);
+  // The language on screen: English while the requested catalog is missing
+  // (its download failed), so lang, dir and the menu match the text.
+  const { shownLocale: locale, ...translator } = useLocaleMessages(requestedLocale);
   const latestRequest = useRef<Locale | null>(null);
 
   // The interface switches once the catalog is there, so it never shows a
@@ -24,9 +26,10 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.dir = localeDirection(locale);
   }, [locale]);
 
+  const { t, tCount } = translator;
   const value = useMemo<LocaleContextValue>(
-    () => ({ locale, setLocale, ...translator }),
-    [locale, setLocale, translator],
+    () => ({ locale, setLocale, t, tCount }),
+    [locale, setLocale, t, tCount],
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

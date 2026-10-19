@@ -337,7 +337,8 @@ function ToolbarTrigger({
       <ToolbarButton
         label={label}
         size={labeled ? 'sm' : 'icon'}
-        className={cn(labeled && 'h-9 gap-1.5 px-2', showLabel && 'h-10 px-3')}
+        // The touch height too: the sm size's own would win on coarse pointers.
+        className={cn(labeled && 'h-9 gap-1.5 px-2 pointer-coarse:h-10', showLabel && 'h-10 px-3')}
       >
         {icon}
         {showLabel ? (
@@ -378,7 +379,7 @@ function ToolbarIconButton({
       hint={disabledReason || undefined}
       size={showLabel ? 'sm' : 'icon'}
       className={cn(
-        showLabel && 'h-10 gap-1.5 px-3',
+        showLabel && 'h-10 gap-1.5 px-3 pointer-coarse:h-10',
         disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
         !disabled && className,
       )}

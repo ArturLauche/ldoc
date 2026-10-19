@@ -13,14 +13,23 @@ import { ShortcutLabel } from './toolbarControls';
 export function ShortcutsDialog({
   open,
   onOpenChange,
+  onReturnFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Puts focus back where the reference was opened from (no trigger to return to). */
+  onReturnFocus: () => void;
 }) {
   const { t } = useLocale();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 p-0 sm:max-w-2xl">
+      <DialogContent
+        className="flex max-h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 p-0 sm:max-w-2xl"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onReturnFocus();
+        }}
+      >
         <DialogHeader className="border-b px-5 pb-4 pt-5">
           <DialogTitle>{t('keyboardShortcuts')}</DialogTitle>
           <DialogDescription>{t('keyboardShortcutsDescription')}</DialogDescription>

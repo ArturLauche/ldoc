@@ -49,6 +49,32 @@ describe('pasted and dropped image files', () => {
     expect(editor.getHTML()).toContain('alt="shot.png"');
   });
 
+  it('keeps every pasted image at the end of the document and the cursor after them', async () => {
+    const { editor, element, props } = setup('<p>Hello</p>');
+    cleanup = () => {
+      editor.destroy();
+      element.remove();
+    };
+    editor.commands.setTextSelection(6);
+    const paste = (files: File[]) =>
+      props.handlePaste?.call(
+        undefined as never,
+        editor.view,
+        { clipboardData: { files, getData: () => '' }, preventDefault: vi.fn() } as unknown as ClipboardEvent,
+        undefined as never,
+      );
+    paste([image('one.png'), image('two.png')]);
+    await waitFor(() => expect(editor.getHTML().match(/<img/g)).toHaveLength(2));
+    // A second paste and typing go after the images instead of replacing one.
+    paste([image('three.png')]);
+    await waitFor(() => expect(editor.getHTML().match(/<img/g)).toHaveLength(3));
+    editor.commands.insertContent('Caption');
+    const html = editor.getHTML();
+    expect(html.indexOf('one.png')).toBeLessThan(html.indexOf('two.png'));
+    expect(html.indexOf('two.png')).toBeLessThan(html.indexOf('three.png'));
+    expect(html).toMatch(/three\.png"[^>]*><p>Caption<\/p>$/);
+  });
+
   it('leaves copied text with images to the normal paste', () => {
     const { editor, element, props } = setup();
     cleanup = () => {

@@ -294,7 +294,8 @@ function ownMargins(block: ExportBlock, context: MarginContext): BlockMargins {
         const gap = context.previous?.type === 'paragraph' ? em(DOCUMENT_STYLE.list.itemParagraphGap, context) : 0;
         return { top: gap, bottom: 0 };
       }
-      return { top: top(DOCUMENT_STYLE.paragraph.marginTop), bottom: DOCUMENT_STYLE.paragraph.marginBottom };
+      // 1.25em: inside a cell (a quote's paragraphs, say) it scales with the 14px text.
+      return { top: top(em(DOCUMENT_STYLE.paragraph.marginTop, context)), bottom: DOCUMENT_STYLE.paragraph.marginBottom };
     }
     case 'heading': {
       const heading = DOCUMENT_STYLE.headings[block.level ?? 1];
@@ -308,8 +309,10 @@ function ownMargins(block: ExportBlock, context: MarginContext): BlockMargins {
       const margin = em(DOCUMENT_STYLE.blockquote.margin, context);
       return { top: top(margin), bottom: margin };
     }
-    case 'code-block':
-      return { top: top(DOCUMENT_STYLE.codeBlock.margin), bottom: DOCUMENT_STYLE.codeBlock.margin };
+    case 'code-block': {
+      const margin = em(DOCUMENT_STYLE.codeBlock.margin, context);
+      return { top: top(margin), bottom: margin };
+    }
     case 'table':
       return { top: DOCUMENT_STYLE.table.margin, bottom: DOCUMENT_STYLE.table.margin };
     case 'image':
@@ -318,8 +321,10 @@ function ownMargins(block: ExportBlock, context: MarginContext): BlockMargins {
         : { top: DOCUMENT_STYLE.image.margin, bottom: DOCUMENT_STYLE.image.margin };
     case 'graphic':
       return { top: DOCUMENT_STYLE.graphic.margin, bottom: DOCUMENT_STYLE.graphic.margin };
-    case 'horizontal-rule':
-      return { top: top(DOCUMENT_STYLE.rule.margin), bottom: DOCUMENT_STYLE.rule.margin };
+    case 'horizontal-rule': {
+      const margin = em(DOCUMENT_STYLE.rule.margin, context);
+      return { top: top(margin), bottom: margin };
+    }
   }
 }
 
@@ -388,9 +393,18 @@ interface FlowScope {
  * so their content margins do not collapse with the outside), but their
  * first and last blocks have no outer margins of their own.
  */
-export function flowLeaves(blocks: ExportBlock[], container: MarginContext['container'] = 'root'): Flow {
+/**
+ * `inCell` without the 'cell' container: blocks nested in a cell that are not
+ * its own children (a graphic's text fallback), which keep the cell's text
+ * scale but not its edge trimming.
+ */
+export function flowLeaves(
+  blocks: ExportBlock[],
+  container: MarginContext['container'] = 'root',
+  inCell = container === 'cell',
+): Flow {
   const state: FlowState = { pendingBottom: 0, pendingTop: 0, leaves: [] };
-  walkFlow(blocks, { container, listDepth: 0, quoteDepth: 0, bulletDepth: 0, inCell: container === 'cell' }, state);
+  walkFlow(blocks, { container, listDepth: 0, quoteDepth: 0, bulletDepth: 0, inCell }, state);
   return { leaves: state.leaves, trailing: state.pendingBottom };
 }
 

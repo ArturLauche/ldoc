@@ -50,6 +50,22 @@ describe('flowLeaves', () => {
     ]);
   });
 
+  it('scales the em margins of quotes, code and rules inside a cell like the editor', () => {
+    // The quote's own margin is trimmed; its paragraph keeps 1.25em of 14px.
+    expect(gaps('<blockquote><p>A</p><p>B</p></blockquote>', 'cell')).toEqual([17.5, 17.5]);
+    expect(gaps('<p>A</p><pre><code>x = 1</code></pre>', 'cell')).toEqual([0, 21]);
+    expect(gaps('<p>A</p><hr><p>B</p>', 'cell')).toEqual([0, 42, 42]);
+  });
+
+  it('keeps the space above content nested in a cell that is not the cell edge', () => {
+    // A graphic's text fallback: the cell's text scale, but no edge trimming.
+    const fallback = blocks('<h2>Plan</h2><ul><li><p>Step</p></li></ul>');
+    expect(flowLeaves(fallback, 'blockquote', true).leaves[0].spaceBefore).toBe(
+      DOCUMENT_STYLE.headings[2].marginTop,
+    );
+    expect(flowLeaves(fallback, 'cell').leaves[0].spaceBefore).toBe(0);
+  });
+
   it('does not collapse floats with surrounding margins', () => {
     expect(gaps('<p>A</p><img src="data:image/png;base64,AA==" data-align="left"><p>B</p>')).toEqual([20, 8, 20]);
   });

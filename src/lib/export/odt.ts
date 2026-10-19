@@ -303,7 +303,7 @@ class OdtWriter {
 
   /** Renders the blocks of one flow (the page, or a table cell). */
   flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string {
-    const { leaves, trailing } = flowLeaves(blocks, container);
+    const { leaves, trailing } = flowLeaves(blocks, container, container === 'cell' || Boolean(scope.cell));
     const byBlock = new Map<ExportBlock, { leaf: FlowLeaf; before: number; after: number }>();
     leaves.forEach((leaf, index) => {
       byBlock.set(leaf.block, {
@@ -349,7 +349,8 @@ class OdtWriter {
           case 'graphic':
             if (block.raster && block.svg) return this.graphicParagraph(block, leaf, before, after, scope);
             this.warnings.add('graphic-layout-simplified');
-            return this.flow(graphicToFallbackBlocks(block), scope.cell ? 'cell' : 'blockquote', scope);
+            // Not the cell's own children: no edge trimming (the graphic's space above stays).
+            return this.flow(graphicToFallbackBlocks(block), 'blockquote', scope);
           case 'table':
             return this.table(block, leaf, before, scope);
           default:
@@ -437,15 +438,24 @@ class OdtWriter {
     const runs = styledRuns({ runs: block.runs, context });
     const line = lineBoxPx(base, runs.map(({ style }) => style));
     const parent = this.parentStyle(block, leaf, scope);
-    const name = this.paragraphStyle({
-      parent,
-      before,
-      after,
-      ...(Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? { line } : {}),
-      ...this.margins(leaf, scope),
-      align: block.align ?? scope.cell?.align,
-      ...(block.type === 'heading' ? { keepNext: true } : {}),
-    });
+    // Cell paragraphs use Table Contents: a quote brings its own bar and
+    // padding, which Quotations would otherwise provide.
+    const { borderWidth, paddingLeft } = DOCUMENT_STYLE.blockquote;
+    const cellQuote = Boolean(scope.cell) && leaf.quoteDepth > 0 && block.type !== 'heading';
+    const name = this.paragraphStyle(
+      {
+        parent,
+        before,
+        after,
+        ...(Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? { line } : {}),
+        ...this.margins(leaf, scope),
+        align: block.align ?? scope.cell?.align,
+        ...(block.type === 'heading' ? { keepNext: true } : {}),
+      },
+      cellQuote
+        ? ` fo:border-left="${pt(borderWidth)} solid #${DOCUMENT_STYLE.borderColor}" fo:padding-left="${pt(paddingLeft)}"`
+        : '',
+    );
     const content = `${this.takeFloats()}${this.runs(runs)}`;
     if (block.type === 'heading') {
       return `<text:h text:style-name="${name}" text:outline-level="${block.level ?? 1}">${content}</text:h>`;

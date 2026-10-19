@@ -25,6 +25,7 @@ async function freshProvider() {
 describe('LocaleProvider', () => {
   afterEach(() => {
     vi.doUnmock('@/lib/locales/ja');
+    vi.doUnmock('@/lib/locales/ar');
     vi.resetModules();
     window.localStorage.clear();
     document.documentElement.lang = 'en';
@@ -62,7 +63,24 @@ describe('LocaleProvider', () => {
   it('loads a saved language that the entry point could not preload', async () => {
     window.localStorage.setItem('lwrite-locale', 'ru');
     const { api } = await freshProvider();
-    expect(api().locale).toBe('ru');
     expect(await screen.findByText('Начните писать…')).toBeInTheDocument();
+    expect(api().locale).toBe('ru');
+    expect(document.documentElement).toHaveAttribute('lang', 'ru');
+  });
+
+  it('labels the English fallback as English while a saved language is missing', async () => {
+    vi.doMock('@/lib/locales/ar', () => {
+      throw new Error('offline');
+    });
+    window.localStorage.setItem('lwrite-locale', 'ar');
+    const { api } = await freshProvider();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByText('Start writing…')).toBeInTheDocument();
+    // Not lang="ar" dir="rtl" around English text.
+    expect(api().locale).toBe('en');
+    expect(document.documentElement).toHaveAttribute('lang', 'en');
+    expect(document.documentElement).toHaveAttribute('dir', 'ltr');
   });
 });

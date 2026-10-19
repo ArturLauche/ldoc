@@ -58,6 +58,8 @@ export interface SelectionNodes {
   attributes: (typeName: string) => Record<string, unknown>;
   /** The last node of that type the selection touches (the innermost for a cursor). */
   node: (typeName: string) => ProseMirrorNode | undefined;
+  /** Every text block (paragraph, heading, code block) the selection touches. */
+  textblocks: () => ProseMirrorNode[];
 }
 
 /** Node questions about the selection, answered from one walk over it. */
@@ -80,6 +82,7 @@ export function selectionNodes(state: EditorState): SelectionNodes {
       return node ? { ...node.attrs } : {};
     },
     node: (typeName) => lastOfType(ranges, typeName),
+    textblocks: () => ranges.filter(({ node }) => node.isTextblock).map(({ node }) => node),
   };
 }
 

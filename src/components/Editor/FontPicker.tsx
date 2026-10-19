@@ -86,6 +86,8 @@ export const FontPicker = ({
   const listCallbackRef = useCallback(
     (list: HTMLDivElement | null) => {
       listRef.current = list;
+      // Open on the current font, not at the top of the list.
+      list?.querySelector<HTMLElement>('[data-active]')?.scrollIntoView?.({ block: 'center' });
       if (!list || typeof IntersectionObserver === 'undefined') return;
       const observer = new IntersectionObserver(
         (entries) => {
@@ -150,6 +152,11 @@ export const FontPicker = ({
   const selectedIndex = options.findIndex((option) =>
     option.name ? option.name === currentFontName : !currentFontName,
   );
+  // Where the current font sits once the search is cleared (the list opens
+  // unfiltered; `options` may still hold the last search).
+  const openIndex = currentFontName
+    ? FONT_FAMILIES.findIndex((font) => font.name === currentFontName) + 1
+    : 0;
 
   return (
     <Popover
@@ -159,9 +166,9 @@ export const FontPicker = ({
         // swallow focus restoration the next time.
         if (next) {
           pickedRef.current = false;
-          setSearch('');
-          setActiveIndex(Math.max(0, selectedIndex));
+          setActiveIndex(Math.max(0, openIndex));
         }
+        setSearch('');
         setOpen(next);
       }}
     >
@@ -170,7 +177,7 @@ export const FontPicker = ({
           variant="outline"
           className={cn(
             // Same field look and focus treatment as the Select triggers beside it.
-            'h-9 w-28 justify-between gap-1.5 border-input bg-card px-3 font-normal shadow-xs outline-none hover:border-ring/50 hover:bg-card focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20 data-[state=open]:border-ring',
+            'h-9 w-28 justify-between gap-1.5 border-input bg-card px-3 font-normal shadow-xs hover:border-ring/50 hover:bg-card focus-visible:border-ring focus-visible:outline-hidden focus-visible:ring-3 focus-visible:ring-ring/20 data-[state=open]:border-ring',
             triggerClassName,
           )}
           aria-label={t('toolbarFontFamily')}

@@ -91,6 +91,18 @@ describe('translations', () => {
     await expect(retried.loadLocale('ja')).resolves.toMatchObject({ placeholder: expect.any(String) });
   });
 
+  it('finds the chunk URL in a failed dynamic import, for a fresh retry', async () => {
+    const { failedModuleUrl } = await import('./translations');
+    expect(
+      failedModuleUrl(new TypeError('Failed to fetch dynamically imported module: https://lwrite.app/assets/fr-Ab12.js')),
+    ).toBe('https://lwrite.app/assets/fr-Ab12.js');
+    expect(
+      failedModuleUrl(new TypeError('error loading dynamically imported module: http://127.0.0.1:8080/src/lib/locales/fr.ts?retry=2')),
+    ).toBe('http://127.0.0.1:8080/src/lib/locales/fr.ts');
+    // Safari names no URL: the next attempt re-runs the original import.
+    expect(failedModuleUrl(new TypeError('Importing a module script failed.'))).toBeNull();
+  });
+
   it('picks the plural form the language needs for a count', () => {
     const russian: TranslationCatalog = {
       wordCount: '{count} слова',

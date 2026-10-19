@@ -68,12 +68,16 @@ export function useFileActions({
   const [libraryError, setLibraryError] = useState(false);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryDocuments, setLibraryDocuments] = useState<StoredDocument[]>([]);
+  // "Now" for the relative dates: the moment the list was read, not when the
+  // (always mounted) dialog first rendered.
+  const [libraryListedAt, setLibraryListedAt] = useState(() => Date.now());
   const [renameOpen, setRenameOpen] = useState(false);
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
     try {
       setLibraryDocuments(await getLibraryDocuments({ strict: true }));
+      setLibraryListedAt(Date.now());
       setLibraryError(false);
     } catch {
       setLibraryError(true);
@@ -322,6 +326,7 @@ export function useFileActions({
       open: libraryOpen,
       setOpen: setLibraryVisible,
       documents: libraryDocuments,
+      listedAt: libraryListedAt,
       loading: libraryLoading,
       error: libraryError,
     },

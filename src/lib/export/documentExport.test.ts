@@ -259,6 +259,14 @@ describe('HTML export', () => {
     expect(html).toContain('.lwrite-document :is(th,td)>:first-child{margin-top:0}');
   });
 
+  it('follows the content direction like the editor (dir="auto", start-side quotes and lists)', async () => {
+    const html = await (await exportAs('html', '<p>مرحبا</p><blockquote><p>اقتباس</p></blockquote>')).blob.text();
+    expect(html).toContain('<main class="lwrite-document" dir="auto">');
+    expect(html).toMatch(/blockquote\{[^}]*border-inline-start:/);
+    expect(html).toMatch(/ul,ol\{[^}]*padding-inline-start:/);
+    expect(html).not.toMatch(/(?:padding|border)-left:/);
+  });
+
   it('embeds data images and links remote images it cannot download instead of loading them', async () => {
     const result = await exportAs('html', `<img src="${TINY_PNG}" alt="Dot"><img src="https://images.example/remote.png" alt="Remote">`);
     const html = await result.blob.text();
@@ -421,6 +429,25 @@ describe('DOCX export', () => {
     expect(documentXml).toContain('w:fill="1E40AF"');
     // Text on a filled cell keeps the contrasting color the editor shows.
     expect(documentXml).toMatch(/<w:color w:val="F8FAFC"\/>.*B<\/w:t>/);
+  });
+
+  it('keeps the quote bar and italics of a quote inside a table cell', async () => {
+    const html = '<table><tr><td><p>Intro</p><blockquote><p>Quoted words</p></blockquote></td></tr></table>';
+    const docx = await exportAs('docx', html);
+    const documentXml = (await (await unzip(docx.blob)).file('word/document.xml')?.async('string')) ?? '';
+    expectWellFormedXml(documentXml);
+    const quoted = /<w:p>(?:(?!<w:p>).)*?Quoted words<\/w:t>/.exec(documentXml)?.[0] ?? '';
+    expect(quoted).toContain('<w:pStyle w:val="TableText"/>');
+    expect(quoted).toMatch(/<w:pBdr><w:left w:val="single"/);
+    expect(quoted).toContain('<w:i/>');
+
+    const odt = await exportAs('odt', html);
+    const content = (await (await unzip(odt.blob)).file('content.xml')?.async('string')) ?? '';
+    const styleName = /<text:p text:style-name="([^"]+)">(?:(?!<\/text:p>).)*Quoted words/.exec(content)?.[1];
+    expect(styleName).toBeDefined();
+    const style = new RegExp(`<style:style style:name="${styleName}"[^]*?</style:style>`).exec(content)?.[0] ?? '';
+    expect(style).toContain('fo:border-left=');
+    expect(style).toContain('fo:padding-left=');
   });
 
   it('keeps the body schema-valid around floats and orders run properties', async () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import {
   createTranslator,
+  defaultLocale,
   loadLocale,
   loadedCatalog,
   subscribeCatalogs,
@@ -11,9 +12,10 @@ import { logWarning } from '@/lib/logger';
 
 /**
  * Translators for the locale. They read English until the locale's catalog
- * has loaded (normally before the first render), then re-render with it.
+ * has loaded (normally before the first render), then re-render with it;
+ * `shownLocale` says which language the messages are in.
  */
-export function useLocaleMessages(locale: Locale): Translator {
+export function useLocaleMessages(locale: Locale): Translator & { shownLocale: Locale } {
   const getMessages = useCallback(() => loadedCatalog(locale), [locale]);
   const messages = useSyncExternalStore(subscribeCatalogs, getMessages, getMessages);
 
@@ -24,5 +26,8 @@ export function useLocaleMessages(locale: Locale): Translator {
     });
   }, [locale, messages]);
 
-  return useMemo(() => createTranslator(messages, locale), [locale, messages]);
+  return useMemo(
+    () => ({ ...createTranslator(messages, locale), shownLocale: messages ? locale : defaultLocale }),
+    [locale, messages],
+  );
 }

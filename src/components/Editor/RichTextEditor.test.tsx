@@ -84,6 +84,30 @@ describe('RichTextEditor', () => {
     expect(screen.queryByLabelText('Document editor')).not.toBeInTheDocument();
   });
 
+  it('opens the shortcut reference for Mod+/ and returns focus when it closes', async () => {
+    renderEditor();
+    const editor = await screen.findByLabelText('Document editor');
+    // Keys that only share the physical Slash key, or that the editor
+    // already handled, leave the reference closed.
+    fireEvent.keyDown(window, { key: '-', code: 'Slash', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '.', code: 'Slash', ctrlKey: true });
+    const handled = new KeyboardEvent('keydown', { key: '/', ctrlKey: true, shiftKey: true, cancelable: true });
+    handled.preventDefault();
+    act(() => {
+      window.dispatchEvent(handled);
+    });
+    expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument();
+
+    act(() => editor.focus());
+    fireEvent.keyDown(editor, { key: '/', code: 'Slash', ctrlKey: true });
+    const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' });
+    act(() => {
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(editor).toHaveFocus());
+  });
+
   it('opens toolbar menus on a tap, not when a touch scroll starts on them', async () => {
     renderEditor();
     for (const name of ['Alignment', 'Line spacing']) {

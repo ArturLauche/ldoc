@@ -494,8 +494,9 @@ function AlignmentMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52" onCloseAutoFocus={focus.onCloseAutoFocus}>
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        {/* Blocks with different alignments: nothing is checked. */}
         <DropdownMenuRadioGroup
-          value={value ?? 'left'}
+          value={value ?? ''}
           onValueChange={(next) => {
             focus.markPicked();
             editor.chain().focus().setTextAlign(next).run();

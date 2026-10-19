@@ -253,8 +253,17 @@ export const FindReplace = Extension.create({
 
           if (dispatch) {
             tr.insertText(replacement, match.from, match.to);
-            // Keep the same index: the next match slides into this slot.
-            tr.setMeta(searchPluginKey, { activeIndex: search.activeIndex } satisfies SearchMeta);
+            // Continue with the first match after the replaced text: one that
+            // still matches (fixing capitalization) would otherwise be
+            // replaced again. Selecting it also brings it into view.
+            const start = tr.mapping.map(match.from, -1);
+            const end = tr.mapping.map(match.to);
+            const next = findDocumentMatches(tr.doc, search.query, search.caseSensitive);
+            let nextIndex = next.findIndex((candidate) => candidate.from >= end);
+            if (nextIndex < 0) nextIndex = next.findIndex((candidate) => candidate.to <= start);
+            nextIndex = Math.max(0, nextIndex);
+            tr.setMeta(searchPluginKey, { activeIndex: nextIndex } satisfies SearchMeta);
+            if (next[nextIndex]) selectMatch(tr, next[nextIndex]);
           }
           return true;
         },

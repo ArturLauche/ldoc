@@ -94,7 +94,6 @@ function RenameForm({
           onChange={(event) => setName(event.target.value)}
           onFocus={(event) => event.currentTarget.select()}
           autoComplete="off"
-          autoFocus
         />
       </div>
       <DialogFooter>
@@ -279,6 +278,7 @@ export const FileMenu = ({
         open={actions.library.open}
         onOpenChange={actions.library.setOpen}
         documents={actions.library.documents}
+        listedAt={actions.library.listedAt}
         currentId={documentId}
         error={actions.library.error}
         loading={actions.library.loading}

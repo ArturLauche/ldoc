@@ -50,7 +50,8 @@ export function LayoutPicker({
         ref={categoriesRef}
         role="group"
         aria-label={t('graphicGalleryCategories')}
-        className="scroll-strip -mx-3 flex gap-1 px-3 pb-0.5"
+        // Room for the focus outline, which the scrolling strip would clip.
+        className="scroll-strip -mx-3 -my-1 flex gap-1 px-3 py-1"
       >
         {SMART_GRAPHIC_CATEGORIES.map((item) => (
           <button
