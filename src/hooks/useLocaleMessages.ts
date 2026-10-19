@@ -26,8 +26,9 @@ export function useLocaleMessages(locale: Locale): Translator & { shownLocale: L
     });
   }, [locale, messages]);
 
-  return useMemo(
-    () => ({ ...createTranslator(messages, locale), shownLocale: messages ? locale : defaultLocale }),
-    [locale, messages],
-  );
+  return useMemo(() => {
+    // Numbers in count messages are formatted like the text around them.
+    const shownLocale = messages ? locale : defaultLocale;
+    return { ...createTranslator(messages, shownLocale), shownLocale };
+  }, [locale, messages]);
 }

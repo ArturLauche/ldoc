@@ -60,7 +60,7 @@ export function useFileActions({
   onCreateNewDocument,
   onImportDocument,
 }: FileActionsOptions) {
-  const { t, tCount, locale } = useLocale();
+  const { t, tCount, requestedLocale } = useLocale();
   const confirm = useConfirm();
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -284,7 +284,9 @@ export function useFileActions({
       const { blob, fileName, warnings } = await exportDocument({
         html: editor.getHTML(),
         name: documentName,
-        locale,
+        // Paper size and document language follow the chosen language, also
+        // while its interface messages could not load.
+        locale: requestedLocale,
         format,
       });
       downloadBlob(blob, fileName);

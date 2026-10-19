@@ -74,8 +74,10 @@ async function insertImageFiles(view: EditorView, files: File[], position: numbe
           ) ?? null);
     let start = target;
     if (target === null) {
-      tr.replaceSelectionWith(node);
-      start = insertedNodePos(tr, 0, imageType.name);
+      tr.replaceSelectionWith(node, false);
+      // This node, not the first image in the changed range: pasting over
+      // a selection of table cells also changes cells in between.
+      start = insertedNodePos(tr, 0, (candidate) => candidate === node);
     } else {
       tr.insert(target, node);
     }

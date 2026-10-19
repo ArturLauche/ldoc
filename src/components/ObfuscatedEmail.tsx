@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/hooks/useLocale';
 
 interface ObfuscatedEmailProps {
   email: string;
+  /** Button text and hint in the page's language (legal pages follow their URL). */
+  label: string;
+  hint: string;
   className?: string;
 }
 
@@ -22,8 +24,7 @@ interface ObfuscatedEmailProps {
  * hiding is impossible without a server; this only defeats DOM/HTML scraping,
  * which is what casual spam bots actually do.
  */
-export const ObfuscatedEmail = ({ email, className }: ObfuscatedEmailProps) => {
-  const { t } = useLocale();
+export const ObfuscatedEmail = ({ email, label, hint, className }: ObfuscatedEmailProps) => {
   const [revealed, setRevealed] = useState(false);
 
   // Split so the full address is never built until it is needed.
@@ -44,10 +45,10 @@ export const ObfuscatedEmail = ({ email, className }: ObfuscatedEmailProps) => {
           'inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-2 hover:decoration-solid',
           className,
         )}
-        title={t('revealEmailHint')}
+        title={hint}
       >
         <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('revealEmail')}
+        {label}
       </button>
     );
   }

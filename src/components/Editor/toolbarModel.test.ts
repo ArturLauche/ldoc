@@ -1,4 +1,5 @@
 import { Editor } from '@tiptap/core';
+import { CellSelection } from '@tiptap/pm/tables';
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEditorExtensions, DEFAULT_HIGHLIGHT_COLOR } from './editorExtensions';
@@ -35,6 +36,14 @@ describe('toolbar colors', () => {
     expect(editor.getAttributes('highlight').color).toBe(DEFAULT_HIGHLIGHT_COLOR);
     expect(HIGHLIGHT_COLORS[1]).toBe(DEFAULT_HIGHLIGHT_COLOR);
   });
+
+  it('removes any highlight from the keyboard instead of recoloring it', () => {
+    stateFor('<p><mark data-color="#D1FAE5" style="background-color: #D1FAE5">green</mark> <mark>plain</mark></p>', 1, 6);
+    editor.commands.keyboardShortcut('Mod-Shift-h');
+    editor.commands.setTextSelection({ from: 7, to: 12 });
+    editor.commands.keyboardShortcut('Mod-Shift-h');
+    expect(editor.getHTML()).toBe('<p>green plain</p>');
+  });
 });
 
 describe('toolbar alignment', () => {
@@ -46,6 +55,19 @@ describe('toolbar alignment', () => {
   it('reads the alignment of selected list items, not their wrappers', () => {
     const html = '<ul><li><p style="text-align: center">One</p></li><li><p style="text-align: center">Two</p></li></ul>';
     expect(stateFor(html, 4, 12)?.alignment).toBe('center');
+  });
+
+  it('reads every cell of a cell selection', () => {
+    const html =
+      '<table><tr><td><p style="text-align: center">Alpha</p></td><td><p style="text-align: right">Beta</p></td></tr></table>';
+    editor = new Editor({ extensions: createEditorExtensions(() => ''), content: html });
+    const cells: number[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell') cells.push(pos);
+    });
+    editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0], cells[1])));
+    const { result } = renderHook(() => useToolbarState(editor));
+    expect(result.current?.alignment).toBeUndefined();
   });
 
   it('reports no alignment when the selected blocks differ', () => {
@@ -75,6 +97,34 @@ describe('text block styles', () => {
   it('quotes a paragraph and unquotes it again', () => {
     expect(apply('<p>Words</p>', 2, 'blockquote')).toBe('<blockquote><p>Words</p></blockquote>');
     expect(apply('<blockquote><p>Words</p></blockquote>', 3, 'blockquote')).toBe('<p>Words</p>');
+  });
+
+  it('applies other styles inside quoted lists, nested quotes and quoted tables without errors', () => {
+    expect(apply('<blockquote><ul><li><p>Item one</p></li><li><p>Item two</p></li></ul></blockquote>', 18, 'h2')).toBe(
+      '<ul><li><p>Item one</p></li></ul><h2>Item two</h2>',
+    );
+    expect(() =>
+      apply('<blockquote><blockquote><ul><li><p>deep item</p></li></ul></blockquote></blockquote>', 7, 'h1'),
+    ).not.toThrow();
+    expect(editor.getHTML()).not.toContain('blockquote');
+    // A quote around the table stays: only the cell's text changes.
+    const table = '<blockquote><p>Intro</p><table><tbody><tr><td><p>Cell A</p></td></tr></tbody></table><p>Outro</p></blockquote>';
+    expect(apply(table, 14, 'h1')).toMatch(/^<blockquote><p>Intro<\/p><table/);
+    expect(editor.getHTML()).toContain('<h1>Cell A</h1>');
+    // The second paragraph of a quote leaves it; the first stays quoted.
+    expect(apply('<blockquote><p>One</p><p>Two</p></blockquote>', 8, 'paragraph')).toBe(
+      '<blockquote><p>One</p></blockquote><p>Two</p>',
+    );
+  });
+
+  it('undoes a style change that left a quote in one step', () => {
+    expect(apply('<blockquote><p>Words</p></blockquote>', 3, 'h1')).toBe('<h1>Words</h1>');
+    editor.commands.undo();
+    expect(editor.getHTML().replace(/<p><\/p>$/, '')).toBe('<blockquote><p>Words</p></blockquote>');
+  });
+
+  it('keeps a list when Normal is chosen for its items', () => {
+    expect(apply('<ul><li><p>item</p></li></ul>', 3, 'paragraph')).toBe('<ul><li><p>item</p></li></ul>');
   });
 
   it('leaves the quote, not the list inside it, for other styles', () => {

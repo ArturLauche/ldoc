@@ -107,9 +107,13 @@ export const DEFAULT_HIGHLIGHT_COLOR = '#FEF08A';
 
 const EnhancedHighlight = Highlight.extend({
   addKeyboardShortcuts() {
-    // A colorless <mark> would show browser yellow that no swatch matches.
+    // Removes any highlight; otherwise applies the palette yellow (a colorless
+    // <mark> would show browser yellow that no swatch matches).
     return {
-      'Mod-Shift-h': () => this.editor.commands.toggleHighlight({ color: DEFAULT_HIGHLIGHT_COLOR }),
+      'Mod-Shift-h': () =>
+        this.editor.isActive('highlight')
+          ? this.editor.commands.unsetHighlight()
+          : this.editor.commands.setHighlight({ color: DEFAULT_HIGHLIGHT_COLOR }),
     };
   },
 });

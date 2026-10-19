@@ -1,13 +1,21 @@
 import type { CommandProps } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { NodeSelection, type Transaction } from '@tiptap/pm/state';
 
 /**
  * Position of the first `typeName` node that the transaction's steps from
  * `firstStep` on put into the document. A block inserted at the cursor lands
  * before its text block, after it, or splits it, so this looks where the
- * steps changed the document instead of at the cursor.
+ * steps changed the document instead of at the cursor. `match` is a type
+ * name or a test for the node itself (one insertion over a cell selection
+ * changes several cells, which may already hold such nodes).
  */
-export function insertedNodePos(tr: Transaction, firstStep: number, typeName: string): number | null {
+export function insertedNodePos(
+  tr: Transaction,
+  firstStep: number,
+  match: string | ((node: ProseMirrorNode) => boolean),
+): number | null {
+  const matches = typeof match === 'string' ? (node: ProseMirrorNode) => node.type.name === match : match;
   let from = Number.POSITIVE_INFINITY;
   let to = Number.NEGATIVE_INFINITY;
   for (let index = firstStep; index < tr.steps.length; index++) {
@@ -21,7 +29,7 @@ export function insertedNodePos(tr: Transaction, firstStep: number, typeName: st
   if (from > to) return found;
   tr.doc.nodesBetween(from, to, (node, pos) => {
     if (found !== null) return false;
-    if (node.type.name !== typeName) return true;
+    if (!matches(node)) return true;
     found = pos;
     return false;
   });

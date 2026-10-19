@@ -174,7 +174,7 @@ const de: TranslationCatalog = {
   toolbarStyleH3: 'Überschrift 3',
   toolbarBlockquote: 'Zitat',
   toolbarCodeBlock: 'Codeblock',
-  toolbarHorizontalRule: 'Trennlinie',
+  toolbarHorizontalRule: 'Horizontale Linie',
   insertDividerShort: 'Linie',
   toolbarInlineCode: 'Inline-Code',
   toolbarDefaultColor: 'Automatische Farbe',

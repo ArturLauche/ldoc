@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { redoDepth, undoDepth } from '@tiptap/pm/history';
 import { liftListItem, sinkListItem } from '@tiptap/pm/schema-list';
-import type { Transaction } from '@tiptap/pm/state';
+import type { EditorState, Transaction } from '@tiptap/pm/state';
 import { liftTarget } from '@tiptap/pm/transform';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { Node as ProseMirrorNode, ResolvedPos } from '@tiptap/pm/model';
 import { useEditorState, type Editor } from '@tiptap/react';
 import type { TranslationKey } from '@/lib/translations';
 import { DEFAULT_HIGHLIGHT_COLOR } from './editorExtensions';
@@ -84,19 +84,46 @@ const TEXT_ALIGNMENTS: readonly TextAlignment[] = ['left', 'center', 'right', 'j
 const LETTER = /\p{L}/u;
 const RTL_LETTER = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}]/u;
 
+function firstLetterDirection(node: ProseMirrorNode): 'ltr' | 'rtl' | null {
+  if (node.isText) {
+    const letter = LETTER.exec(node.text ?? '')?.[0];
+    return letter ? (RTL_LETTER.test(letter) ? 'rtl' : 'ltr') : null;
+  }
+  for (let index = 0; index < node.childCount; index++) {
+    const direction = firstLetterDirection(node.child(index));
+    if (direction) return direction;
+  }
+  return null;
+}
+
+const directions = new WeakMap<ProseMirrorNode, 'ltr' | 'rtl'>();
+
 /**
  * The document's direction as the editor's `dir="auto"` resolves it: from
- * the first letter. Blocks without an alignment start on that side.
+ * the first letter. Blocks without an alignment start on that side. Cached
+ * per document, so selection changes cost nothing.
  */
 function documentDirection(doc: ProseMirrorNode): 'ltr' | 'rtl' {
-  let direction: 'ltr' | 'rtl' | null = null;
-  doc.descendants((node) => {
-    if (direction) return false;
-    const letter = node.isText ? LETTER.exec(node.text ?? '')?.[0] : undefined;
-    if (letter) direction = RTL_LETTER.test(letter) ? 'rtl' : 'ltr';
-    return !direction;
-  });
-  return direction ?? 'ltr';
+  let direction = directions.get(doc);
+  if (!direction) {
+    direction = firstLetterDirection(doc) ?? 'ltr';
+    directions.set(doc, direction);
+  }
+  return direction;
+}
+
+/** Text blocks in every range of the selection (a cell selection has one per cell). */
+function selectedTextblocks(state: EditorState, fromMainRange: () => ProseMirrorNode[]): ProseMirrorNode[] {
+  const { ranges } = state.selection;
+  if (ranges.length < 2) return fromMainRange();
+  const blocks: ProseMirrorNode[] = [];
+  for (const { $from, $to } of ranges) {
+    state.doc.nodesBetween($from.pos, $to.pos, (node) => {
+      if (node.isTextblock) blocks.push(node);
+      return !node.isTextblock;
+    });
+  }
+  return blocks;
 }
 
 /**
@@ -128,16 +155,27 @@ export function normalizeColor(value: string): string {
     .join('')}`.toUpperCase();
 }
 
+/** Depth of the innermost isolating ancestor (a table cell), or 0. */
+function isolatingDepth($pos: ResolvedPos): number {
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    if ($pos.node(depth).type.spec.isolating) return depth;
+  }
+  return 0;
+}
+
 /**
  * Lifts the selected blocks out of every quote around them. A plain `lift`
- * takes the innermost wrapper, which dissolves a list inside a quote.
+ * takes the innermost wrapper, which dissolves a list inside a quote. Quotes
+ * outside the table cell holding the selection stay: lifting one would move
+ * the whole table.
  */
 function leaveQuotes({ tr }: { tr: Transaction }): boolean {
   for (let depth = tr.selection.$from.depth; depth > 0; depth--) {
     const { $from, $to } = tr.selection;
     const range = $from.blockRange($to, (node) => node.type.name === 'blockquote');
-    const target = range ? liftTarget(range) : null;
-    if (!range || target === null) break;
+    if (!range || range.depth < isolatingDepth($from)) break;
+    const target = liftTarget(range);
+    if (target === null) break;
     tr.lift(range, target);
   }
   return true;
@@ -148,10 +186,10 @@ function leaveQuotes({ tr }: { tr: Transaction }): boolean {
  * styles first leave any quote; choosing the active quote again lifts it.
  */
 export function applyTextBlockStyle(editor: Editor, value: TextBlockStyle) {
-  const chain = editor.chain().focus();
   if (value === 'blockquote') {
     // "Quote" is a quoted paragraph: a heading or code block already inside
     // a quote becomes one too. Only a quoted paragraph toggles back.
+    const chain = editor.chain().focus();
     const quoted = editor.isActive('blockquote');
     const paragraph = !editor.isActive('heading') && !editor.isActive('codeBlock');
     if (quoted && paragraph) chain.command(leaveQuotes);
@@ -162,9 +200,17 @@ export function applyTextBlockStyle(editor: Editor, value: TextBlockStyle) {
     chain.run();
     return;
   }
-  chain.command(leaveQuotes);
-  if (value === 'paragraph') chain.setParagraph().run();
-  else if (value === 'codeBlock') chain.setCodeBlock().run();
+  // Leaving the quote is a transaction of its own: TipTap's setNode falls
+  // back to clearNodes, which maps the chain's lifted positions a second
+  // time and fails (RangeError) or drops the style. History still groups
+  // the two as one undo step.
+  editor.chain().focus().command(leaveQuotes).run();
+  const chain = editor.chain().focus();
+  if (value === 'paragraph') {
+    // Paragraphs already: setParagraph would fall back to clearNodes and
+    // dissolve the list they are in.
+    if (editor.isActive('heading') || editor.isActive('codeBlock')) chain.setParagraph().run();
+  } else if (value === 'codeBlock') chain.setCodeBlock().run();
   else chain.setHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 }).run();
 }
 
@@ -239,7 +285,7 @@ export function useToolbarState(editor: Editor | null) {
         link: current.isActive('link'),
         bulletList: nodeActive('bulletList'),
         orderedList: nodeActive('orderedList'),
-        alignment: selectionAlignment(current.state.doc, nodes.textblocks()),
+        alignment: selectionAlignment(current.state.doc, selectedTextblocks(current.state, nodes.textblocks)),
         inTable: nodeActive('table'),
         inGraphic: nodeActive('smartGraphic'),
         imageSelected: nodeActive('image'),

@@ -166,9 +166,9 @@ export const FontPicker = ({
         // swallow focus restoration the next time.
         if (next) {
           pickedRef.current = false;
+          setSearch('');
           setActiveIndex(Math.max(0, openIndex));
         }
-        setSearch('');
         setOpen(next);
       }}
     >

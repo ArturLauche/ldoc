@@ -80,6 +80,10 @@ describe('LocaleProvider', () => {
     expect(screen.getByText('Start writing…')).toBeInTheDocument();
     // Not lang="ar" dir="rtl" around English text.
     expect(api().locale).toBe('en');
+    // The choice still counts for the document (export paper size, language),
+    // and numbers read like the English text around them.
+    expect(api().requestedLocale).toBe('ar');
+    expect(api().tCount('wordCount', 1500)).toBe('1,500 words');
     expect(document.documentElement).toHaveAttribute('lang', 'en');
     expect(document.documentElement).toHaveAttribute('dir', 'ltr');
   });

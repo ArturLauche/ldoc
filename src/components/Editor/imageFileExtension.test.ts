@@ -1,4 +1,5 @@
 import { Editor } from '@tiptap/core';
+import { CellSelection } from '@tiptap/pm/tables';
 import { waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
@@ -73,6 +74,38 @@ describe('pasted and dropped image files', () => {
     expect(html.indexOf('one.png')).toBeLessThan(html.indexOf('two.png'));
     expect(html.indexOf('two.png')).toBeLessThan(html.indexOf('three.png'));
     expect(html).toMatch(/three\.png"[^>]*><p>Caption<\/p>$/);
+  });
+
+  it('pastes over a selection of cells into the head cell only', async () => {
+    const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const { editor, element, props } = setup(
+      `<table><tr><td><p>A</p></td><td><p>B1</p><img src="${PIXEL}" alt="old"></td></tr><tr><td><p>C</p></td><td><p>D</p></td></tr></table>`,
+    );
+    cleanup = () => {
+      editor.destroy();
+      element.remove();
+    };
+    const cells: number[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'tableCell') cells.push(pos);
+    });
+    // The first column, from A down to C: B lies between them in the document.
+    editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0], cells[2])));
+    props.handlePaste?.call(
+      undefined as never,
+      editor.view,
+      { clipboardData: { files: [image('new.png')], getData: () => '' }, preventDefault: vi.fn() } as unknown as ClipboardEvent,
+      undefined as never,
+    );
+    await waitFor(() => expect(editor.getHTML()).toContain('alt="new.png"'));
+    const cellTexts: string[] = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'tableCell') cellTexts.push(node.childCount + ':' + node.textContent);
+    });
+    // Cell B is unchanged (its paragraph and old image), and the cursor is not in it.
+    expect(cellTexts[1]).toBe('2:B1');
+    const { $from } = editor.state.selection;
+    expect($from.node($from.depth - 1).textContent).not.toBe('B1');
   });
 
   it('leaves copied text with images to the normal paste', () => {

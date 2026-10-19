@@ -603,6 +603,7 @@ async function mountGraphic(model: SmartGraphicModel, width: number, locale: Loc
           {
             value: {
               locale,
+              requestedLocale: locale,
               setLocale: () => Promise.resolve(),
               ...createTranslator(loadedCatalog(locale), locale),
             },

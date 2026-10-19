@@ -101,6 +101,24 @@ describe('document statistics lifecycle', () => {
     editor.destroy();
   });
 
+  it('counts a selected table like any other range', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content: '<p>one two three</p><table><tr><td><p>alpha beta</p></td><td><p>gamma</p></td></tr></table><p>after text</p>',
+    });
+    const hook = renderHook(() => useDocumentStats(editor));
+    let table = 0;
+    editor.state.doc.forEach((node, pos) => {
+      if (node.type.name === 'table') table = pos;
+    });
+    act(() => {
+      editor.commands.setNodeSelection(table);
+    });
+    expect(hook.result.current.selectedWordCount).toBe(3);
+    hook.unmount();
+    editor.destroy();
+  });
+
   it('counts graphic text and mixed scripts in Select All like the total', () => {
     const editor = new Editor({
       extensions: createEditorExtensions(() => ''),

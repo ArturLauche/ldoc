@@ -2,7 +2,14 @@ import { createContext, useContext } from 'react';
 import { localeDirection, type Locale, type Translator } from '@/lib/translations';
 
 export interface LocaleContextValue extends Translator {
+  /** The language on screen (English while the chosen one's messages are missing). */
   locale: Locale;
+  /**
+   * The language the user chose, also while its messages are missing. For
+   * document choices that follow the user's region, like the export's paper
+   * size and language.
+   */
+  requestedLocale: Locale;
   /** Resolves once the interface uses the locale; rejects if it could not load. */
   setLocale: (locale: Locale) => Promise<void>;
 }

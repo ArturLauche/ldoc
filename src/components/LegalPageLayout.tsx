@@ -68,7 +68,11 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
                 {siteConfig.contactEmail && (
                   <li>
                     <span className="text-muted-foreground">{copy.contactEmailLabel}:</span>{' '}
-                    <ObfuscatedEmail email={siteConfig.contactEmail} />
+                    <ObfuscatedEmail
+                      email={siteConfig.contactEmail}
+                      label={t('revealEmail')}
+                      hint={t('revealEmailHint')}
+                    />
                   </li>
                 )}
                 {siteConfig.contactUrl && (

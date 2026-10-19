@@ -110,8 +110,9 @@ export function useDocumentStats(editor: Editor | null, locale = 'en'): Document
      */
     const selectionWords = () => {
       const { doc, selection } = editor.state;
-      // A selected graphic, image or rule: the footer keeps the total.
-      if (selection.empty || selection instanceof NodeSelection) return null;
+      // A selected graphic, image or rule: the footer keeps the total. A
+      // selected table counts like any other range.
+      if (selection.empty || (selection instanceof NodeSelection && selection.node.isAtom)) return null;
       let words = 0;
       for (const { $from, $to } of selection.ranges) {
         const from = $from.pos;
