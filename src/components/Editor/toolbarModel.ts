@@ -182,6 +182,16 @@ function leaveQuotes({ tr }: { tr: Transaction }): boolean {
 }
 
 /**
+ * Whether a selected text block is a heading or code block. `isActive` only
+ * answers yes when every selected block is one, which misses mixed selections.
+ */
+function selectsHeadingOrCode(state: EditorState): boolean {
+  return selectedTextblocks(state, () => selectionNodes(state).textblocks()).some(
+    (block) => block.type.name === 'heading' || block.type.name === 'codeBlock',
+  );
+}
+
+/**
  * Turns the current blocks into one style. Quotes wrap paragraphs, so other
  * styles first leave any quote; choosing the active quote again lifts it.
  */
@@ -191,7 +201,7 @@ export function applyTextBlockStyle(editor: Editor, value: TextBlockStyle) {
     // a quote becomes one too. Only a quoted paragraph toggles back.
     const chain = editor.chain().focus();
     const quoted = editor.isActive('blockquote');
-    const paragraph = !editor.isActive('heading') && !editor.isActive('codeBlock');
+    const paragraph = !selectsHeadingOrCode(editor.state);
     if (quoted && paragraph) chain.command(leaveQuotes);
     else {
       if (!paragraph) chain.setParagraph();
@@ -208,8 +218,9 @@ export function applyTextBlockStyle(editor: Editor, value: TextBlockStyle) {
   const chain = editor.chain().focus();
   if (value === 'paragraph') {
     // Paragraphs already: setParagraph would fall back to clearNodes and
-    // dissolve the list they are in.
-    if (editor.isActive('heading') || editor.isActive('codeBlock')) chain.setParagraph().run();
+    // dissolve the list they are in. A heading or code block among them
+    // still turns into a paragraph.
+    if (selectsHeadingOrCode(editor.state)) chain.setParagraph().run();
   } else if (value === 'codeBlock') chain.setCodeBlock().run();
   else chain.setHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 }).run();
 }

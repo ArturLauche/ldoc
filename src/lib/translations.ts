@@ -78,11 +78,17 @@ const catalogListeners = new Set<() => void>();
 const failedCatalogUrls = new Map<Locale, string>();
 let catalogRetries = 0;
 
-/** The module URL that a failed dynamic import names (Chromium, Firefox). */
-export function failedModuleUrl(error: unknown): string | null {
+/**
+ * The locale's chunk URL when a failed dynamic import names it (Chromium,
+ * Firefox). A URL of another module (a chunk the catalog imports) is not
+ * retried in the catalog's place.
+ */
+export function failedModuleUrl(error: unknown, locale: Locale): string | null {
   const message = error instanceof Error ? error.message : String(error);
-  const url = /https?:\/\/[^\s'"]+/.exec(message)?.[0];
-  return url ? url.replace(/[?&]retry=\d+$/, '') : null;
+  const url = /https?:\/\/[^\s'"]+/.exec(message)?.[0]?.replace(/[?&]retry=\d+$/, '');
+  if (!url) return null;
+  const file = url.split(/[?#]/)[0].split('/').pop() ?? '';
+  return file.startsWith(`${locale}-`) || file.startsWith(`${locale}.`) ? url : null;
 }
 
 function catalogFrom(module: unknown): TranslationCatalog {
@@ -127,7 +133,7 @@ export function loadLocale(locale: Locale): Promise<TranslationCatalog> {
       },
       (error: unknown) => {
         pendingCatalogs.delete(locale);
-        const url = failedModuleUrl(error);
+        const url = failedModuleUrl(error, locale);
         if (url) failedCatalogUrls.set(locale, url);
         throw error;
       },
@@ -250,7 +256,7 @@ export function translateCount(
     (form && source[`${key}${form}`]) ||
     source[key] ||
     key;
-  return formatMessage(template, { count: formatNumber(count, locale), ...values });
+  return formatMessage(template, { count: formatNumber(count, own ? locale : 'en'), ...values });
 }
 
 /** Replaces `{placeholder}` tokens in a translated message with concrete values. */

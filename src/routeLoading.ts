@@ -41,14 +41,19 @@ export function legalPageLocale(pathname: string): 'en' | 'de' {
   return path === '/datenschutz' || path === '/nutzung' ? 'de' : 'en';
 }
 
+/** How long the first render waits for a catalog; a later one switches the language when it arrives. */
+export const LOCALE_PRELOAD_DEADLINE_MS = 4000;
+
 /**
  * Loads the first page's module and every catalog its first render reads.
  * Settles either way: a failed chunk still mounts so the error boundary can
- * offer a reload, and a missing catalog falls back to English.
+ * offer a reload, and a missing or stalled catalog falls back to English.
  */
 export function preloadPage(pathname: string, interfaceLocale: Locale): Promise<unknown> {
   const key = routeKeyFor(pathname);
   const locales = new Set<Locale>([interfaceLocale]);
   if (key === 'privacy' || key === 'terms') locales.add(legalPageLocale(pathname));
-  return Promise.allSettled([preloadRoute(key), ...Array.from(locales, loadLocale)]);
+  const deadline = new Promise((resolve) => setTimeout(resolve, LOCALE_PRELOAD_DEADLINE_MS));
+  const catalogs = Promise.allSettled(Array.from(locales, loadLocale));
+  return Promise.allSettled([preloadRoute(key), Promise.race([catalogs, deadline])]);
 }

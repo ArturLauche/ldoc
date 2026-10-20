@@ -18,6 +18,9 @@ const escape = (value: string) =>
 /** Static pages are in English or German, so only those catalogs are needed here. */
 const t = (locale: 'en' | 'de', key: TranslationKey) =>
   translateFrom(locale === 'de' ? de : undefined, key);
+/** lucide-react's Mail icon, as ObfuscatedEmail renders it. */
+const MAIL_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail h-3.5 w-3.5" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>';
 const jsonLd = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 const HEAD_START = '<!-- route-head:start -->';
 const HEAD_END = '<!-- route-head:end -->';
@@ -73,7 +76,19 @@ export function staticPages(env: Record<string, string>): Plugin {
   const jurisdiction = env.VITE_LEGAL_JURISDICTION?.trim() || 'Germany / EU';
   const copies = createLegalCopies({ siteName, siteUrl: origin, jurisdiction });
 
-  const contact = (copy: LegalCopy) => {
+  /**
+   * Like ObfuscatedEmail: the address is not in the HTML that harvesters read,
+   * and the button reveals it once the app runs. Without JavaScript the
+   * address is spelled out with "[at]" instead.
+   */
+  const emailMarkup = (email: string, locale: 'en' | 'de') => {
+    const at = email.lastIndexOf('@');
+    if (at <= 0 || at === email.length - 1) return escape(email);
+    return `<button type="button" class="reveal-email inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-2 hover:decoration-solid" title="${escape(t(locale, 'revealEmailHint'))}">${MAIL_ICON}${escape(t(locale, 'revealEmail'))}</button><noscript><style>.reveal-email{display:none!important}</style>${escape(email.slice(0, at))} [at] ${escape(email.slice(at + 1))}</noscript>`;
+  };
+
+  /** The contact card of LegalPageLayout. */
+  const contact = (copy: LegalCopy, locale: 'en' | 'de') => {
     const email = env.VITE_LEGAL_CONTACT_EMAIL?.trim();
     const name = env.VITE_LEGAL_CONTROLLER_NAME?.trim();
     let contactUrl = '';
@@ -83,7 +98,13 @@ export function staticPages(env: Record<string, string>): Plugin {
     } catch {
       /* Optional contact URL. */
     }
-    return `<section class="not-prose my-6 border-y border-border py-5 text-card-foreground"><h2 class="mb-2 text-base font-semibold">${escape(copy.contactHeading)}</h2><div class="space-y-1 text-sm">${name ? `<p>${escape(name)}</p>` : ''}${email ? `<p>${escape(email)}</p>` : ''}${contactUrl ? `<p><a class="underline" href="${escape(contactUrl)}">${escape(copy.contactUrlLabel)}</a></p>` : ''}${!email && !contactUrl ? `<p class="text-muted-foreground">${escape(copy.contactPlaceholder)}</p>` : ''}</div><p class="mt-3 text-sm"><span class="text-muted-foreground">${escape(copy.jurisdictionLabel)}:</span> ${escape(jurisdiction)}</p></section>`;
+    const item = (label: string, value: string) =>
+      `<li><span class="text-muted-foreground">${escape(label)}:</span> ${value}</li>`;
+    const details =
+      email || contactUrl
+        ? `<ul class="space-y-1 text-sm">${name ? item(copy.contactNameLabel, escape(name)) : ''}${email ? item(copy.contactEmailLabel, emailMarkup(email, locale)) : ''}${contactUrl ? item(copy.contactUrlLabel, `<a class="underline" href="${escape(contactUrl)}" target="_blank" rel="noreferrer">${escape(contactUrl)}</a>`) : ''}</ul>`
+        : `<div class="space-y-2"><p class="text-sm text-muted-foreground">${escape(copy.contactPlaceholder)}</p></div>`;
+    return `<section class="not-prose my-6 border-y border-border py-5 text-card-foreground"><h2 class="mb-2 text-base font-semibold">${escape(copy.contactHeading)}</h2>${details}<p class="mt-3 text-sm"><span class="text-muted-foreground">${escape(copy.jurisdictionLabel)}:</span> ${escape(jurisdiction)}</p></section>`;
   };
 
   const headFor = (path: string) => {
@@ -150,7 +171,7 @@ export function staticPages(env: Record<string, string>): Plugin {
     if (!copy)
       return `<div id="root"><main class="flex min-h-dvh items-center justify-center bg-background px-6"><div class="w-full max-w-md"><img src="/favicon.svg" alt="" width="32" height="32" class="mb-6 h-8 w-8" /><p class="text-sm font-medium tabular-nums text-muted-foreground">404</p><h1 class="mt-1 text-2xl font-semibold tracking-tight">${escape(t('en', 'notFoundTitle'))}</h1><p class="mt-2 text-muted-foreground">${escape(t('en', 'notFoundDescription'))}</p><a href="/" class="mt-6 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">${escape(t('en', 'legalBackToEditor'))}</a></div></main></div>`;
     const locale = path === '/datenschutz' || path === '/nutzung' ? 'de' : 'en';
-    return `<div id="root"><div class="app-shell flex min-h-dvh flex-col bg-background">${legalHeader(locale)}<main class="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:py-14"><article class="legal-prose prose max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-3xl"><h1>${escape(copy.title)}</h1><p class="text-sm text-muted-foreground">${escape(copy.lastUpdatedLabel)}: ${escape(lastUpdated)}</p><p>${escape(copy.intro)}</p>${contact(copy)}${copy.blocks.map((block) => `<section><h2>${escape(block.heading)}</h2>${(block.paragraphs ?? []).map((paragraph) => `<p>${escape(paragraph)}</p>`).join('')}${block.bullets ? `<ul>${block.bullets.map((bullet) => `<li>${escape(bullet)}</li>`).join('')}</ul>` : ''}</section>`).join('')}</article></main>${legalFooter(locale)}</div></div>`;
+    return `<div id="root"><div class="app-shell flex min-h-dvh flex-col bg-background">${legalHeader(locale)}<main class="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:py-14"><article class="legal-prose prose max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-3xl"><h1>${escape(copy.title)}</h1><p class="text-sm text-muted-foreground">${escape(copy.lastUpdatedLabel)}: ${escape(lastUpdated)}</p><p>${escape(copy.intro)}</p>${contact(copy, locale)}${copy.blocks.map((block) => `<section><h2>${escape(block.heading)}</h2>${(block.paragraphs ?? []).map((paragraph) => `<p>${escape(paragraph)}</p>`).join('')}${block.bullets ? `<ul>${block.bullets.map((bullet) => `<li>${escape(bullet)}</li>`).join('')}</ul>` : ''}</section>`).join('')}</article></main>${legalFooter(locale)}</div></div>`;
   };
 
   const render = (html: string, path: string, preloads = '') =>

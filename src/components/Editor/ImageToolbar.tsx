@@ -366,7 +366,7 @@ export const ImageToolbar = ({ editor, variant = 'icon', onComplete }: ImageTool
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
                 disabled={isReading}
-                aria-describedby={`${ids}-formats`}
+                aria-describedby={pending ? undefined : `${ids}-formats`}
                 className={cn(
                   'flex min-h-36 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-input bg-muted/40 px-4 py-5 text-center transition-colors hover:border-ring/60 hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-progress',
                   dragging && 'border-ring bg-selected/10',

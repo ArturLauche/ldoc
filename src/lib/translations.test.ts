@@ -94,13 +94,20 @@ describe('translations', () => {
   it('finds the chunk URL in a failed dynamic import, for a fresh retry', async () => {
     const { failedModuleUrl } = await import('./translations');
     expect(
-      failedModuleUrl(new TypeError('Failed to fetch dynamically imported module: https://lwrite.app/assets/fr-Ab12.js')),
+      failedModuleUrl(new TypeError('Failed to fetch dynamically imported module: https://lwrite.app/assets/fr-Ab12.js'), 'fr'),
     ).toBe('https://lwrite.app/assets/fr-Ab12.js');
     expect(
-      failedModuleUrl(new TypeError('error loading dynamically imported module: http://127.0.0.1:8080/src/lib/locales/fr.ts?retry=2')),
+      failedModuleUrl(
+        new TypeError('error loading dynamically imported module: http://127.0.0.1:8080/src/lib/locales/fr.ts?retry=2'),
+        'fr',
+      ),
     ).toBe('http://127.0.0.1:8080/src/lib/locales/fr.ts');
+    // Another module than the catalog: retrying it would not load the catalog.
+    expect(
+      failedModuleUrl(new TypeError('Failed to fetch dynamically imported module: https://lwrite.app/assets/shared-Cd34.js'), 'fr'),
+    ).toBeNull();
     // Safari names no URL: the next attempt re-runs the original import.
-    expect(failedModuleUrl(new TypeError('Importing a module script failed.'))).toBeNull();
+    expect(failedModuleUrl(new TypeError('Importing a module script failed.'), 'fr')).toBeNull();
   });
 
   it('picks the plural form the language needs for a count', () => {
@@ -137,6 +144,8 @@ describe('translations', () => {
     // Russian "few" has no English counterpart: the English "other" form applies.
     expect(translateCount({}, 'ru', 'characterCount', 3)).toBe('3 characters');
     expect(translateCount({}, 'ru', 'characterCount', 1)).toBe('1 character');
+    // The number reads as English too (Russian would write "1 200").
+    expect(translateCount({}, 'ru', 'characterCount', 1200)).toBe('1,200 characters');
   });
 
   it('has no English messages the interface never shows', () => {

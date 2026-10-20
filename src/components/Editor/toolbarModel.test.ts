@@ -77,7 +77,11 @@ describe('toolbar alignment', () => {
 });
 
 describe('text block styles', () => {
-  const apply = (html: string, pos: number, style: Parameters<typeof applyTextBlockStyle>[1]) => {
+  const apply = (
+    html: string,
+    pos: number | { from: number; to: number },
+    style: Parameters<typeof applyTextBlockStyle>[1],
+  ) => {
     editor = new Editor({ extensions: createEditorExtensions(() => ''), content: html });
     editor.commands.setTextSelection(pos);
     applyTextBlockStyle(editor, style);
@@ -121,6 +125,14 @@ describe('text block styles', () => {
     expect(apply('<blockquote><p>Words</p></blockquote>', 3, 'h1')).toBe('<h1>Words</h1>');
     editor.commands.undo();
     expect(editor.getHTML().replace(/<p><\/p>$/, '')).toBe('<blockquote><p>Words</p></blockquote>');
+  });
+
+  it('converts the headings among a mixed selection', () => {
+    // From inside the heading into the paragraph after it.
+    expect(apply('<h2>Title</h2><p>Body</p>', { from: 2, to: 10 }, 'paragraph')).toBe('<p>Title</p><p>Body</p>');
+    expect(apply('<h2>Title</h2><p>Body</p>', { from: 2, to: 10 }, 'blockquote')).toBe(
+      '<blockquote><p>Title</p><p>Body</p></blockquote>',
+    );
   });
 
   it('keeps a list when Normal is chosen for its items', () => {

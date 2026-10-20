@@ -24,6 +24,9 @@ for (const route of routes) {
     assert(html.includes('rel="canonical"'), `${route}: canonical`);
     assert(html.includes('application/ld+json'), `${route}: structured data`);
   }
+  // Legal pages reveal the contact address on request (ObfuscatedEmail), never in the HTML.
+  const contactEmail = process.env.VITE_LEGAL_CONTACT_EMAIL?.trim();
+  if (contactEmail) assert(!html.includes(contactEmail), `${route}: no plain contact address`);
   const german = route === 'datenschutz' || route === 'nutzung';
   assert(html.includes(`lang="${german ? 'de' : 'en'}"`), `${route}: language`);
   for (const [, path] of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) {

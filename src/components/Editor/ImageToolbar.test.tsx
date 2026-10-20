@@ -75,6 +75,8 @@ describe('ImageToolbar uploads', () => {
     // Nothing is inserted until the user confirms the preview.
     expect(editor.getHTML()).not.toContain('<img');
     expect(await screen.findByText('pixel.png')).toBeInTheDocument();
+    // The formats hint is gone with the preview, and so is the reference to it.
+    expect(screen.getByText('pixel.png').closest('button')).not.toHaveAttribute('aria-describedby');
     await user.click(screen.getByRole('button', { name: 'Insert image' }));
     expect(editor.getHTML()).toContain('<img');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

@@ -148,8 +148,9 @@ export const VersionHistory = ({
           : 'versionKindManual',
     );
   // Names repeat the document name or the kind for most versions; show them only when they add something.
+  // An automatic version's name is the kind's label in the language it was saved in.
   const versionNote = (version: StoredVersion) =>
-    version.name === documentName || version.name === t('versionAutomaticLabel') ? null : version.name;
+    version.kind === 'auto' || version.name === documentName ? null : version.name;
 
   const handleDelete = async (version: StoredVersion) => {
     if (

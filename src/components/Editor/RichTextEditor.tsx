@@ -66,14 +66,14 @@ function isModKey(event: KeyboardEvent) {
 }
 
 /**
- * Mod+/ by the character it types. The physical Slash key counts only when
- * it types a non-Latin character: on German layouts it is "-" (zoom out),
- * on Russian ones "." (superscript).
+ * Mod+/ by the character it types. The physical Slash key also counts when
+ * it types a non-ASCII character; an ASCII one belongs to another shortcut
+ * (on German layouts it types "-", zoom out; on Russian ones ".", superscript).
  */
 function isShortcutsKey(event: KeyboardEvent) {
   if (event.key === '/') return true;
-  const latin = event.key.length === 1 && event.key.charCodeAt(0) < 128;
-  return event.code === 'Slash' && event.key.length === 1 && !latin;
+  const ascii = event.key.length === 1 && event.key.charCodeAt(0) < 128;
+  return event.code === 'Slash' && event.key.length === 1 && !ascii;
 }
 
 export const RichTextEditor = () => {

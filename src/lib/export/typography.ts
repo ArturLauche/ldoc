@@ -343,11 +343,6 @@ export function listItemMargins(inCell = false): BlockMargins {
   return { top: em(DOCUMENT_STYLE.list.itemMarginTop, { inCell }), bottom: em(DOCUMENT_STYLE.list.itemMarginBottom, { inCell }) };
 }
 
-/**
- * A leaf block in reading order with the vertical gap before it, after CSS
- * margin collapsing through lists, list items and quotes. Office formats use
- * this for "space before" so their paragraphs are spaced like the editor.
- */
 /** The list item a leaf starts, for formats that number paragraphs. */
 export interface FlowListItem {
   list: ExportListBlock;
@@ -358,6 +353,11 @@ export interface FlowListItem {
   bulletDepth: number;
 }
 
+/**
+ * A leaf block in reading order with the vertical gap before it, after CSS
+ * margin collapsing through lists, list items and quotes. Office formats use
+ * this for "space before" so their paragraphs are spaced like the editor.
+ */
 export interface FlowLeaf {
   block: ExportBlock;
   /** Collapsed gap from the previous leaf (or, for the first, from the flow's top edge), px. */

@@ -1040,7 +1040,8 @@ header.app-bar {
 
 .editor-content .ProseMirror ul,
 .editor-content .ProseMirror ol {
-  padding-left: 1.5rem;
+  /* The start side follows the text direction (the editor is dir="auto"). */
+  padding-inline-start: 1.5rem;
   margin-bottom: 1rem;
 }
 
@@ -1101,104 +1102,107 @@ header.app-bar {
  * (light mode, print and exports use the stored values). Highlights are
  * pastels, so their text uses dark ink unless the text has its own color;
  * text set to black or near-black (palette or pasted, which parseHTML
- * normalizes to these forms) shows in the theme's text color.
+ * normalizes to these forms) shows in the theme's text color. Screen only:
+ * a dark-mode print keeps the stored colors too.
  */
-.dark .editor-content .ProseMirror mark {
-  /* Beats the inline color: inherit that the highlight mark writes. */
-  color: hsl(222 47% 11%) !important;
-}
-.dark .editor-content .ProseMirror span[style*='color' i] mark {
-  color: inherit !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #000000' i],
-    [style*='; color: #000000' i],
-    [style^='color: rgb(0, 0, 0)'],
-    [style*='; color: rgb(0, 0, 0)'],
-    [style^='color: black' i],
-    [style*='; color: black' i],
-    [style^='color: windowtext' i],
-    [style*='; color: windowtext' i],
-    [style^='color: #374151' i],
-    [style*='; color: #374151' i],
-    [style^='color: rgb(55, 65, 81)'],
-    [style*='; color: rgb(55, 65, 81)']
-  ) {
-  color: hsl(var(--foreground)) !important;
-}
-/* Palette colors too dark for the dark page show lighter (on highlights, as stored). */
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #2563EB' i],
-    [style*='; color: #2563EB' i],
-    [style^='color: rgb(37, 99, 235)'],
-    [style*='; color: rgb(37, 99, 235)']
-  ) {
-  color: #60A5FA !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #2563EB' i],
-    [style*='; color: #2563EB' i],
-    [style^='color: rgb(37, 99, 235)'],
-    [style*='; color: rgb(37, 99, 235)']
-  )
-  mark {
-  color: #2563EB !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #7C3AED' i],
-    [style*='; color: #7C3AED' i],
-    [style^='color: rgb(124, 58, 237)'],
-    [style*='; color: rgb(124, 58, 237)']
-  ) {
-  color: #A78BFA !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #7C3AED' i],
-    [style*='; color: #7C3AED' i],
-    [style^='color: rgb(124, 58, 237)'],
-    [style*='; color: rgb(124, 58, 237)']
-  )
-  mark {
-  color: #7C3AED !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #6B7280' i],
-    [style*='; color: #6B7280' i],
-    [style^='color: rgb(107, 114, 128)'],
-    [style*='; color: rgb(107, 114, 128)']
-  ) {
-  color: #9CA3AF !important;
-}
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #6B7280' i],
-    [style*='; color: #6B7280' i],
-    [style^='color: rgb(107, 114, 128)'],
-    [style*='; color: rgb(107, 114, 128)']
-  )
-  mark {
-  color: #6B7280 !important;
-}
-/*
- * Highlighted dark-ink text stays dark: the highlight behind it is a pastel.
- * (Text style spans always wrap highlight marks: ProseMirror orders marks by
- * schema rank.)
- */
-.dark .editor-content .ProseMirror span:is(
-    [style^='color: #000000' i],
-    [style*='; color: #000000' i],
-    [style^='color: rgb(0, 0, 0)'],
-    [style*='; color: rgb(0, 0, 0)'],
-    [style^='color: black' i],
-    [style*='; color: black' i],
-    [style^='color: windowtext' i],
-    [style*='; color: windowtext' i],
-    [style^='color: #374151' i],
-    [style*='; color: #374151' i],
-    [style^='color: rgb(55, 65, 81)'],
-    [style*='; color: rgb(55, 65, 81)']
-  )
-  mark {
-  color: hsl(222 47% 11%) !important;
+@media screen {
+  .dark .editor-content .ProseMirror mark {
+    /* Beats the inline color: inherit that the highlight mark writes. */
+    color: hsl(222 47% 11%) !important;
+  }
+  .dark .editor-content .ProseMirror span[style*='color' i] mark {
+    color: inherit !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #000000' i],
+      [style*='; color: #000000' i],
+      [style^='color: rgb(0, 0, 0)'],
+      [style*='; color: rgb(0, 0, 0)'],
+      [style^='color: black' i],
+      [style*='; color: black' i],
+      [style^='color: windowtext' i],
+      [style*='; color: windowtext' i],
+      [style^='color: #374151' i],
+      [style*='; color: #374151' i],
+      [style^='color: rgb(55, 65, 81)'],
+      [style*='; color: rgb(55, 65, 81)']
+    ) {
+    color: hsl(var(--foreground)) !important;
+  }
+  /* Palette colors too dark for the dark page show lighter (on highlights, as stored). */
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #2563EB' i],
+      [style*='; color: #2563EB' i],
+      [style^='color: rgb(37, 99, 235)'],
+      [style*='; color: rgb(37, 99, 235)']
+    ) {
+    color: #60A5FA !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #2563EB' i],
+      [style*='; color: #2563EB' i],
+      [style^='color: rgb(37, 99, 235)'],
+      [style*='; color: rgb(37, 99, 235)']
+    )
+    mark {
+    color: #2563EB !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #7C3AED' i],
+      [style*='; color: #7C3AED' i],
+      [style^='color: rgb(124, 58, 237)'],
+      [style*='; color: rgb(124, 58, 237)']
+    ) {
+    color: #A78BFA !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #7C3AED' i],
+      [style*='; color: #7C3AED' i],
+      [style^='color: rgb(124, 58, 237)'],
+      [style*='; color: rgb(124, 58, 237)']
+    )
+    mark {
+    color: #7C3AED !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #6B7280' i],
+      [style*='; color: #6B7280' i],
+      [style^='color: rgb(107, 114, 128)'],
+      [style*='; color: rgb(107, 114, 128)']
+    ) {
+    color: #9CA3AF !important;
+  }
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #6B7280' i],
+      [style*='; color: #6B7280' i],
+      [style^='color: rgb(107, 114, 128)'],
+      [style*='; color: rgb(107, 114, 128)']
+    )
+    mark {
+    color: #6B7280 !important;
+  }
+  /*
+   * Highlighted dark-ink text stays dark: the highlight behind it is a pastel.
+   * (Text style spans always wrap highlight marks: ProseMirror orders marks by
+   * schema rank.)
+   */
+  .dark .editor-content .ProseMirror span:is(
+      [style^='color: #000000' i],
+      [style*='; color: #000000' i],
+      [style^='color: rgb(0, 0, 0)'],
+      [style*='; color: rgb(0, 0, 0)'],
+      [style^='color: black' i],
+      [style*='; color: black' i],
+      [style^='color: windowtext' i],
+      [style*='; color: windowtext' i],
+      [style^='color: #374151' i],
+      [style*='; color: #374151' i],
+      [style^='color: rgb(55, 65, 81)'],
+      [style*='; color: rgb(55, 65, 81)']
+    )
+    mark {
+    color: hsl(222 47% 11%) !important;
+  }
 }
 
 .editor-content .ProseMirror a {

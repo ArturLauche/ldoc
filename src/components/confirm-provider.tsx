@@ -15,6 +15,21 @@ import { isTouchInteraction } from '@/lib/inputModality';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
+/**
+ * A menu item disappears with its menu: confirmations asked from a menu
+ * return focus to the button that opened it (through any submenus).
+ */
+function returnTarget(element: Element | null): HTMLElement | null {
+  let target = element;
+  for (let menu = target?.closest('[role="menu"]'); menu?.id; menu = target?.closest('[role="menu"]')) {
+    const id = menu.id;
+    target = Array.from(document.querySelectorAll('[aria-controls]')).find(
+      (candidate) => candidate.getAttribute('aria-controls') === id,
+    ) ?? null;
+  }
+  return target instanceof HTMLElement ? target : null;
+}
+
 interface PendingConfirm {
   options: ConfirmOptions;
   resolve: (confirmed: boolean) => void;
@@ -34,9 +49,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     return new Promise<boolean>((resolve) => {
       // A second request while one is open cancels the first one.
       pendingRef.current?.resolve(false);
-      if (!pendingRef.current)
-        returnFocusRef.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!pendingRef.current) returnFocusRef.current = returnTarget(document.activeElement);
       const next = { options, resolve };
       pendingRef.current = next;
       setPending(next);

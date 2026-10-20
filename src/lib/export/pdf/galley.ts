@@ -289,9 +289,7 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
         layoutTable(builder, block, frame, margins);
         break;
       case 'image':
-        // An image that could not be embedded is drawn as the text that names
-        // it, in the same place: paragraph margins in the image's position.
-        layoutImage(builder, block, frame, margins, blockMargins({ type: 'paragraph', runs: [] }, context));
+        layoutImage(builder, block, frame, margins);
         break;
       case 'graphic':
         layoutGraphic(builder, block, frame, margins);
@@ -486,10 +484,11 @@ function layoutImage(
   image: ExportImageBlock,
   frame: Frame,
   margins: { top: number; bottom: number },
-  placeholderMargins: { top: number; bottom: number },
 ): void {
   if (!image.prepared) {
-    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, placeholderMargins);
+    // An image that could not be embedded is drawn as the text that names
+    // it, in its place and with its margins, like the other formats.
+    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, margins);
     return;
   }
   const { width, height } = imageDisplaySize(image, frame.width, builder.env.pageHeight - DOCUMENT_STYLE.image.margin * 2);

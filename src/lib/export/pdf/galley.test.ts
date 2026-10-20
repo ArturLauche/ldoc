@@ -52,15 +52,19 @@ const rowHeight = (env: GalleyEnvironment, blocks: ExportBlock[]) => {
 };
 
 describe('layoutGalley', () => {
-  it('trims a failed image placeholder to the cell edges like the text it stands for', async () => {
+  it("lays out a failed image's placeholder with the image's margins, trimmed at the cell edges", async () => {
     const image: ExportImageBlock = { type: 'image', src: 'https://example.com/missing.png', alt: 'Chart' };
     const placeholderText: ExportBlock = { type: 'paragraph', runs: imagePlaceholderRuns(image), align: 'center' };
     const env = await environment([placeholderText]);
-    // Alone in the cell, then first and last of two blocks.
+    // Alone in the cell, the placeholder is as tall as its text.
     expect(rowHeight(env, [image])).toBeCloseTo(rowHeight(env, [placeholderText]), 3);
-    const follow: ExportBlock = { type: 'paragraph', runs: [{ text: 'After', marks: {} }] };
-    expect(rowHeight(env, [image, follow])).toBeCloseTo(rowHeight(env, [placeholderText, follow]), 3);
-    expect(rowHeight(env, [follow, image])).toBeCloseTo(rowHeight(env, [follow, placeholderText]), 3);
+    // After text, the image's 16px margin applies, as in DOCX, ODT and RTF,
+    // not the 17.5px of a cell paragraph.
+    const other: ExportBlock = { type: 'paragraph', runs: [{ text: 'Text', marks: {} }] };
+    expect(rowHeight(env, [other, image]) - rowHeight(env, [other, placeholderText])).toBeCloseTo(
+      DOCUMENT_STYLE.image.margin - DOCUMENT_STYLE.table.paragraphMarginTop,
+      3,
+    );
   });
 
   it("sets a graphic's text fallback in the graphic's place, trimmed at the cell edges", async () => {

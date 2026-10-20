@@ -5,6 +5,7 @@ import { LocaleProvider } from '@/components/locale-provider';
 import { ConfirmProvider } from '@/components/confirm-provider';
 import { VersionHistory } from './VersionHistory';
 import { storedItem } from '@/test/documentStorage';
+import { saveDocumentVersion } from '@/lib/versionHistory';
 
 afterEach(() => {
   cleanup();
@@ -65,4 +66,24 @@ it('migrates legacy history after mounting even without a current document', asy
   );
   expect(await storedItem('lwrite-document-versions-migrated')).toBe('true');
   expect(localStorage.getItem('lwrite-versions')).toContain('Legacy draft');
+});
+
+it('does not repeat the name of an automatic version saved in another language', async () => {
+  await saveDocumentVersion({ documentId: 'draft', name: 'Automatische Version', content: '<p>Auto text</p>', kind: 'auto' });
+  render(
+    <LocaleProvider>
+      <ConfirmProvider>
+        <VersionHistory
+          isOpen
+          documentId="draft"
+          documentName="Draft"
+          currentContent="<p></p>"
+          onClose={() => {}}
+          onRestore={async () => true}
+        />
+      </ConfirmProvider>
+    </LocaleProvider>,
+  );
+  expect(await screen.findByText('Auto text')).toBeVisible();
+  expect(screen.queryByText('Automatische Version')).not.toBeInTheDocument();
 });
