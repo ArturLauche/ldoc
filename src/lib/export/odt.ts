@@ -302,8 +302,8 @@ class OdtWriter {
   }
 
   /** Renders the blocks of one flow (the page, or a table cell). */
-  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string {
-    const { leaves, trailing } = flowLeaves(blocks, container, container === 'cell' || Boolean(scope.cell));
+  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string {
+    const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const byBlock = new Map<ExportBlock, { leaf: FlowLeaf; before: number; after: number }>();
     leaves.forEach((leaf, index) => {
       byBlock.set(leaf.block, {
@@ -349,8 +349,8 @@ class OdtWriter {
           case 'graphic':
             if (block.raster && block.svg) return this.graphicParagraph(block, leaf, before, after, scope);
             this.warnings.add('graphic-layout-simplified');
-            // Not the cell's own children: no edge trimming (the graphic's space above stays).
-            return this.flow(graphicToFallbackBlocks(block), 'blockquote', scope);
+            // The text takes the drawing's place and its space above.
+            return this.flow(graphicToFallbackBlocks(block), 'graphic', scope, before);
           case 'table':
             return this.table(block, leaf, before, scope);
           default:

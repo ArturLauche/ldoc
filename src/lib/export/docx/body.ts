@@ -105,8 +105,8 @@ export class DocxBodyWriter {
   }
 
   /** Renders blocks of one flow (the page, or a table cell). */
-  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string {
-    const { leaves, trailing } = flowLeaves(blocks, container, container === 'cell' || Boolean(scope.cell));
+  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string {
+    const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const parts: Array<{ xml: (after: number) => string; table?: boolean }> = [];
     let pendingFloats: string[] = [];
     leaves.forEach((leaf, index) => {
@@ -142,8 +142,8 @@ export class DocxBodyWriter {
             this.warnings.add('graphic-layout-simplified');
             const fallback = graphicToFallbackBlocks(block);
             if (floats.length) parts.push({ xml: () => hairlineParagraph(floats) });
-            // Not the cell's own children: no edge trimming (the graphic's space above stays).
-            parts.push({ xml: () => this.flow(fallback, 'blockquote', scope) });
+            // The text takes the drawing's place and its space above.
+            parts.push({ xml: () => this.flow(fallback, 'graphic', scope, before) });
           }
           break;
         case 'table': {

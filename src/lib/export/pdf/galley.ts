@@ -530,8 +530,10 @@ const FRAME = DOCUMENT_STYLE.graphic;
 function layoutGraphic(builder: GalleyBuilder, graphic: ExportGraphicBlock, frame: Frame, margins: { top: number; bottom: number }): void {
   if (!graphic.scene) {
     builder.env.warnings.add('graphic-layout-simplified');
-    // Not the cell's own children: no edge trimming (the cell scale stays with frame.cell).
-    layoutBlocks(builder, graphicToFallbackBlocks(graphic), frame.container === 'cell' ? { ...frame, container: 'blockquote' } : frame);
+    // The text takes the drawing's place and margins (the cell scale stays with frame.cell).
+    builder.pendingTop = Math.max(builder.pendingTop, margins.top);
+    layoutBlocks(builder, graphicToFallbackBlocks(graphic), { ...frame, container: 'graphic', rootList: undefined });
+    builder.pendingBottom = Math.max(builder.pendingBottom, margins.bottom);
     return;
   }
   const gap = builder.advance(margins.top);

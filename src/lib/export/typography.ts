@@ -252,7 +252,12 @@ export function resolveRunStyle(marks: ExportInlineMarks, link: ExportLink | und
  * tables keep theirs).
  */
 export interface MarginContext {
-  container: 'root' | 'list-item' | 'blockquote' | 'cell';
+  /**
+   * 'graphic' holds the text that stands in for a Smart Graphic that could
+   * not be drawn: it takes the drawing's place, so the graphic's margins
+   * apply outside and its edges are trimmed like a cell's.
+   */
+  container: 'root' | 'list-item' | 'blockquote' | 'cell' | 'graphic';
   /** Index among siblings. */
   index: number;
   /** Last among its siblings (cells trim the bottom margin of their last block). */
@@ -275,7 +280,7 @@ export function blockMargins(block: ExportBlock, context: MarginContext): BlockM
   const margins = ownMargins(block, context);
   // Cell content sits on the cell padding: the first block has no top
   // margin and the last no bottom margin (`:is(td, th) > :first-child`).
-  if (context.container !== 'cell') return margins;
+  if (context.container !== 'cell' && context.container !== 'graphic') return margins;
   return { top: context.index === 0 ? 0 : margins.top, bottom: context.last ? 0 : margins.bottom };
 }
 
@@ -387,23 +392,25 @@ interface FlowScope {
   inCell: boolean;
 }
 
+export interface FlowOptions {
+  /** Cell text scale; defaults to the 'cell' container, and also covers a graphic's text in a cell. */
+  inCell?: boolean;
+  /** Gap before the first leaf from outside the flow: a graphic's collapsed space above. */
+  leading?: number;
+}
+
 /**
  * Walks blocks like the editor's CSS block formatting context. Page flows
  * drop the first leaf's gap; table cells keep both edges (cells have padding,
  * so their content margins do not collapse with the outside), but their
  * first and last blocks have no outer margins of their own.
  */
-/**
- * `inCell` without the 'cell' container: blocks nested in a cell that are not
- * its own children (a graphic's text fallback), which keep the cell's text
- * scale but not its edge trimming.
- */
 export function flowLeaves(
   blocks: ExportBlock[],
   container: MarginContext['container'] = 'root',
-  inCell = container === 'cell',
+  { inCell = container === 'cell', leading = 0 }: FlowOptions = {},
 ): Flow {
-  const state: FlowState = { pendingBottom: 0, pendingTop: 0, leaves: [] };
+  const state: FlowState = { pendingBottom: 0, pendingTop: leading, leaves: [] };
   walkFlow(blocks, { container, listDepth: 0, quoteDepth: 0, bulletDepth: 0, inCell }, state);
   return { leaves: state.leaves, trailing: state.pendingBottom };
 }

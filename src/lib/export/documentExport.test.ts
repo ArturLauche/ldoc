@@ -265,6 +265,9 @@ describe('HTML export', () => {
     expect(html).toMatch(/blockquote\{[^}]*border-inline-start:/);
     expect(html).toMatch(/ul,ol\{[^}]*padding-inline-start:/);
     expect(html).not.toMatch(/(?:padding|border)-left:/);
+    // Graphic scenes are captured left to right; an RTL document must not
+    // mirror their text anchors.
+    expect(html).toMatch(/svg\.lwrite-graphic-drawing\{[^}]*direction:ltr/);
   });
 
   it('embeds data images and links remote images it cannot download instead of loading them', async () => {
@@ -481,6 +484,27 @@ describe('DOCX export', () => {
     const documentXml = await (await unzip(result.blob)).file('word/document.xml')?.async('string');
     expect(documentXml).toContain('Roadmap');
     expect(documentXml).toContain('Milestone 1');
+  });
+
+  it('spaces a Smart Graphic fallback like the graphic, trimmed at a cell edge', async () => {
+    const timeline = updateGraphicTitle(createStarterGraphic('timeline-vertical'), 'Roadmap');
+    const graphic = `<div data-lwrite-graphic='${serializeSmartGraphic(timeline)}'></div>`;
+    // First in one cell, after a paragraph in the next: no space, then the graphic's 24px.
+    const html = `<table><tr><td>${graphic}</td><td><p>Before</p>${graphic}</td></tr></table>`;
+
+    const docx = (await (await unzip((await exportAs('docx', html)).blob)).file('word/document.xml')?.async('string')) ?? '';
+    const docxTitles = docx.match(/<w:p>(?:(?!<w:p>).)*?Roadmap<\/w:t>/g) ?? [];
+    expect(docxTitles.map((title) => /w:before="(\d+)"/.exec(title)?.[1])).toEqual(['0', '360']);
+
+    const rtf = await (await exportAs('rtf', html)).blob.text();
+    const rtfTitles = rtf.match(/\\pard[^\n]*?Roadmap/g) ?? [];
+    expect(rtfTitles.map((title) => /\\sb(\d+)/.exec(title)?.[1])).toEqual(['0', '360']);
+
+    const odt = (await (await unzip((await exportAs('odt', html)).blob)).file('content.xml')?.async('string')) ?? '';
+    const odtTitles = [...odt.matchAll(/<text:h text:style-name="(P\d+)"[^>]*><text:span[^>]*>Roadmap/g)];
+    const marginTop = (style: string) =>
+      new RegExp(`style:name="${style}"[^>]*><style:paragraph-properties fo:margin-top="([\\d.]+pt)"`).exec(odt)?.[1];
+    expect(odtTitles.map((title) => marginTop(title[1]))).toEqual(['0pt', '18pt']);
   });
 });
 

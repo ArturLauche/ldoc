@@ -19,7 +19,7 @@ import { useLocale } from '@/hooks/useLocale';
 import { useTouchSafeMenu } from '@/hooks/useTouchSafeMenu';
 import type { StoredDocument } from '@/lib/documentLibrary';
 import { documentPlainText } from '@/lib/documentText';
-import { focusContainerOnTouch } from '@/lib/inputModality';
+import { focusContainerOnTouch, isTouchInteraction } from '@/lib/inputModality';
 import { formatRecentDate } from '@/lib/relativeTime';
 import { formatMessage } from '@/lib/translations';
 
@@ -128,9 +128,11 @@ export function DocumentLibraryDialog({
   };
   // A deleted row takes its focused menu button with it: keep focus in the dialog.
   useEffect(() => {
-    if (open && (!document.activeElement || document.activeElement === document.body)) {
-      searchRef.current?.focus();
-    }
+    if (!open || (document.activeElement && document.activeElement !== document.body)) return;
+    const search = searchRef.current;
+    // After a tap, focusing the field would open the software keyboard.
+    if (isTouchInteraction()) search?.closest<HTMLElement>('[role="dialog"]')?.focus();
+    else search?.focus();
   }, [documents, open]);
   const normalizedQuery = query.trim().toLocaleLowerCase(locale);
   const deferredQuery = useDeferredValue(normalizedQuery);

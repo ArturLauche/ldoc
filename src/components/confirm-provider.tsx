@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from '@/hooks/useConfirm';
 import { useLocale } from '@/hooks/useLocale';
+import { isTouchInteraction } from '@/lib/inputModality';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
@@ -65,7 +66,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               // the dialog it was opened from instead of falling to <body>.
               const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]');
               const dialog = dialogs[dialogs.length - 1];
-              dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+              // After a tap, a text field would open the software keyboard.
+              if (isTouchInteraction()) dialog?.focus();
+              else dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
             });
           }}
         >

@@ -323,7 +323,7 @@ th{background-color:#${s.table.headerBackground};font-weight:${s.table.headerWei
 table[data-borders=hidden] :is(th,td){border-color:transparent}
 div.lwrite-graphic{margin:${s.graphic.margin}px 0;padding:${s.graphic.padding}px;border:${s.graphic.borderWidth}px solid #${s.graphic.borderColor};border-radius:${s.graphic.radius}px;background:#${s.graphic.background};overflow-x:auto}
 .lwrite-graphic-title{font-weight:600;margin:0 0 8px}
-svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre}
+svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre;direction:ltr}
 @media (max-width:639px){
 .lwrite-document{padding:20px 16px 32px}
 h1{font-size:28px;margin-top:24px}

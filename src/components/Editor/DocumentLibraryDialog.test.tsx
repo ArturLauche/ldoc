@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/components/locale-provider';
+import { trackInputModality } from '@/lib/inputModality';
 import { DocumentLibraryDialog } from './DocumentLibraryDialog';
 
 const DRAFT = {
@@ -95,6 +96,19 @@ describe('document library states', () => {
     expect(document.activeElement).toBe(document.body);
     rerender({ documents: [] });
     expect(screen.getByRole('textbox', { name: 'Search saved documents' })).toHaveFocus();
+  });
+
+  it('keeps focus on the dialog, not the search field, after a tap', () => {
+    const stop = trackInputModality();
+    try {
+      const { rerender } = renderLibrary();
+      fireEvent.pointerDown(document.body, { pointerType: 'touch' });
+      (document.activeElement as HTMLElement | null)?.blur();
+      rerender({ documents: [] });
+      expect(screen.getByRole('dialog')).toHaveFocus();
+    } finally {
+      stop();
+    }
   });
 
   it('shows the skeleton only before the first list arrives', () => {

@@ -29,9 +29,12 @@ export function SessionNotice({
   return (
     <div role="alert" className="session-notice" data-editor-chrome>
       <div className="session-notice-inner">
-        <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 self-start text-warning-foreground" />
-        {/* A real basis: on phones the buttons wrap below instead of squeezing the text. */}
-        <p className="min-w-0 flex-[1_1_16rem]">{message}</p>
+        {/* A real basis: on phones the buttons wrap below instead of squeezing the
+            text, and the icon stays beside the text it belongs to. */}
+        <div className="flex min-w-0 flex-[1_1_17.75rem] items-start gap-3">
+          <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground" />
+          <p className="min-w-0 flex-1">{message}</p>
+        </div>
         {hasExternalChanges ? (
           <div className="ms-auto flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={onReloadSaved}>

@@ -57,13 +57,14 @@ describe('flowLeaves', () => {
     expect(gaps('<p>A</p><hr><p>B</p>', 'cell')).toEqual([0, 42, 42]);
   });
 
-  it('keeps the space above content nested in a cell that is not the cell edge', () => {
-    // A graphic's text fallback: the cell's text scale, but no edge trimming.
+  it("puts a graphic's text fallback in the graphic's place", () => {
+    // Its edges are trimmed; the graphic's own collapsed gap comes from outside.
     const fallback = blocks('<h2>Plan</h2><ul><li><p>Step</p></li></ul>');
-    expect(flowLeaves(fallback, 'blockquote', true).leaves[0].spaceBefore).toBe(
-      DOCUMENT_STYLE.headings[2].marginTop,
-    );
-    expect(flowLeaves(fallback, 'cell').leaves[0].spaceBefore).toBe(0);
+    const first = flowLeaves(fallback, 'graphic', { inCell: true });
+    expect(first.leaves[0].spaceBefore).toBe(0);
+    expect(first.trailing).toBe(0);
+    const later = flowLeaves(fallback, 'graphic', { inCell: true, leading: DOCUMENT_STYLE.graphic.margin });
+    expect(later.leaves[0].spaceBefore).toBe(DOCUMENT_STYLE.graphic.margin);
   });
 
   it('does not collapse floats with surrounding margins', () => {
