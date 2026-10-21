@@ -7,9 +7,9 @@ LWrite is a browser-only, local-first rich-text editor (React + TipTap); there i
 - Package manager: `npm@10.9.2` (`package-lock.json` is authoritative; ignore `bun.lock`).
 - Node.js `24.21.0` is pinned in `.node-version` for development and Cloudflare.
   Supported engines: `^22.22.2 || ^24.15.0 || >=26.0.0` (jsdom 30's requirement).
-- Stack (locked in `package-lock.json`): Vite `8.3.0`, React `19.3.0`,
+- Stack (locked in `package-lock.json`): Vite `8.3.5`, React `19.3.0`,
   TypeScript `6.0.3`, TipTap React/StarterKit `3.31.3`, Tailwind `4.3.3`,
-  react-router-dom `7.18.3`, Vitest `5.0.0`, ESLint `10.10.0`.
+  react-router-dom `7.18.3`, Vitest `5.0.5`, ESLint `10.10.0`.
 - The authorized major-version migration replaces the former Vite 5 / Vitest 2
   restriction. TypeScript stays on `~6.0.3` until typescript-eslint supports 7;
   never bypass incompatible peers with `--force` or `--legacy-peer-deps`.
