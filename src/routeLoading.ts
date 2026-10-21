@@ -53,7 +53,11 @@ export function preloadPage(pathname: string, interfaceLocale: Locale): Promise<
   const key = routeKeyFor(pathname);
   const locales = new Set<Locale>([interfaceLocale]);
   if (key === 'privacy' || key === 'terms') locales.add(legalPageLocale(pathname));
-  const deadline = new Promise((resolve) => setTimeout(resolve, LOCALE_PRELOAD_DEADLINE_MS));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(resolve, LOCALE_PRELOAD_DEADLINE_MS);
+  });
   const catalogs = Promise.allSettled(Array.from(locales, loadLocale));
-  return Promise.allSettled([preloadRoute(key), Promise.race([catalogs, deadline])]);
+  const ready = Promise.race([catalogs, deadline]).finally(() => clearTimeout(timer));
+  return Promise.allSettled([preloadRoute(key), ready]);
 }

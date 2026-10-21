@@ -5,9 +5,10 @@ export interface LocaleContextValue extends Translator {
   /** The language on screen (English while the chosen one's messages are missing). */
   locale: Locale;
   /**
-   * The language the user chose, also while its messages are missing. For
-   * document choices that follow the user's region, like the export's paper
-   * size and language.
+   * The language the user chose (the stored preference, or the last switch,
+   * which only happens once its messages load), also while its messages are
+   * missing. For document choices that follow the user's region, like the
+   * export's paper size and language.
    */
   requestedLocale: Locale;
   /** Resolves once the interface uses the locale; rejects if it could not load. */

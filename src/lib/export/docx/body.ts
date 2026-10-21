@@ -104,7 +104,10 @@ export class DocxBodyWriter {
     return id;
   }
 
-  /** Renders blocks of one flow (the page, or a table cell). */
+  /**
+   * Renders blocks of one flow (the page, a table cell, or a graphic's text).
+   * `leading` is the gap before its first leaf, px (see FlowOptions).
+   */
   flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string {
     const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const parts: Array<{ xml: (after: number) => string; table?: boolean }> = [];

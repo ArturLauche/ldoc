@@ -393,17 +393,23 @@ interface FlowScope {
 }
 
 export interface FlowOptions {
-  /** Cell text scale; defaults to the 'cell' container, and also covers a graphic's text in a cell. */
+  /**
+   * Cell text scale (14px text and em margins). Defaults to the 'cell'
+   * container; pass it for blocks in a cell that are not the cell's own
+   * children, such as a graphic's text.
+   */
   inCell?: boolean;
   /** Gap before the first leaf from outside the flow: a graphic's collapsed space above. */
   leading?: number;
 }
 
 /**
- * Walks blocks like the editor's CSS block formatting context. Page flows
- * drop the first leaf's gap; table cells keep both edges (cells have padding,
- * so their content margins do not collapse with the outside), but their
- * first and last blocks have no outer margins of their own.
+ * Walks blocks like the editor's CSS block formatting context. Writers drop
+ * the first leaf's gap on the page; table cells keep both edges (cells have
+ * padding, so their content margins do not collapse with the outside), but
+ * their first and last blocks have no outer margins of their own. A
+ * graphic's text ('graphic' container) is trimmed like a cell, and `leading`
+ * gives its first leaf the graphic's collapsed space above.
  */
 export function flowLeaves(
   blocks: ExportBlock[],

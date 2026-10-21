@@ -214,7 +214,11 @@ ${body}
 }`;
   }
 
-  /** Renders the blocks of one flow (the page, or a table cell) as paragraphs and rows. */
+  /**
+   * Renders the blocks of one flow (the page, a table cell, or a graphic's
+   * text) as paragraphs and rows. `leading` is the gap before its first
+   * leaf, px (see FlowOptions).
+   */
   flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string[] {
     const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const parts: Array<{ render: (after: number) => string; table?: boolean }> = [];

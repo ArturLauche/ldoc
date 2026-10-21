@@ -148,7 +148,7 @@ export const VersionHistory = ({
           : 'versionKindManual',
     );
   // Names repeat the document name or the kind for most versions; show them only when they add something.
-  // An automatic version's name is the kind's label in the language it was saved in.
+  // An automatic version is named "Automatic version" (versionAutomaticLabel) in the language it was saved in.
   const versionNote = (version: StoredVersion) =>
     version.kind === 'auto' || version.name === documentName ? null : version.name;
 

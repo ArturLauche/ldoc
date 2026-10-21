@@ -77,9 +77,11 @@ export function staticPages(env: Record<string, string>): Plugin {
   const copies = createLegalCopies({ siteName, siteUrl: origin, jurisdiction });
 
   /**
-   * Like ObfuscatedEmail: the address is not in the HTML that harvesters read,
-   * and the button reveals it once the app runs. Without JavaScript the
-   * address is spelled out with "[at]" instead.
+   * Like ObfuscatedEmail: the button reveals the address once the app runs,
+   * so it is never in the HTML as a plain address. Visitors without
+   * JavaScript, who only ever get this page, still need a way to write: for
+   * them it is spelled out with "[at]", a light obfuscation like the bundle's.
+   * An implausible address is shown verbatim, as ObfuscatedEmail does.
    */
   const emailMarkup = (email: string, locale: 'en' | 'de') => {
     const at = email.lastIndexOf('@');

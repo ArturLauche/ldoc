@@ -51,7 +51,32 @@ function FileMenu() {
   );
 }
 
+function SelfControlledMenu() {
+  const confirm = useConfirm();
+  // Broken markup: the item names its own menu as the one it controls.
+  return (
+    <div role="menu" id="loop-menu">
+      <button type="button" aria-controls="loop-menu" onClick={() => void confirm({ title: 'Sure?' })}>
+        Ask
+      </button>
+    </div>
+  );
+}
+
 describe('ConfirmProvider', () => {
+  it('does not loop when a menu item controls its own menu', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider>
+        <ConfirmProvider>
+          <SelfControlledMenu />
+        </ConfirmProvider>
+      </LocaleProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+  });
+
   it('returns focus to the menu button when a menu item asked', async () => {
     const user = userEvent.setup();
     render(

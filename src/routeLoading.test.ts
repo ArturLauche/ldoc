@@ -23,3 +23,15 @@ it('mounts without a catalog whose download stalls', async () => {
   await vi.advanceTimersByTimeAsync(1);
   await vi.waitFor(() => expect(settled).toBe(true));
 });
+
+it('leaves no deadline timer behind once the catalogs have loaded', async () => {
+  vi.useFakeTimers();
+  vi.resetModules();
+  vi.doMock('@/lib/translations', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/lib/translations')>()),
+    loadLocale: () => Promise.resolve({}),
+  }));
+  const { preloadPage } = await import('./routeLoading');
+  await preloadPage('/terms', 'en');
+  expect(vi.getTimerCount()).toBe(0);
+});

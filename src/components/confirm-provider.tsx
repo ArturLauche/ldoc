@@ -23,9 +23,11 @@ function returnTarget(element: Element | null): HTMLElement | null {
   let target = element;
   for (let menu = target?.closest('[role="menu"]'); menu?.id; menu = target?.closest('[role="menu"]')) {
     const id = menu.id;
-    target = Array.from(document.querySelectorAll('[aria-controls]')).find(
+    const trigger = Array.from(document.querySelectorAll('[aria-controls]')).find(
       (candidate) => candidate.getAttribute('aria-controls') === id,
-    ) ?? null;
+    );
+    // A trigger inside the menu it controls would be found again and again.
+    target = trigger && !menu.contains(trigger) ? trigger : null;
   }
   return target instanceof HTMLElement ? target : null;
 }
