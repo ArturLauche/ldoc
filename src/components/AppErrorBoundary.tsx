@@ -8,13 +8,13 @@ import { logError } from '@/lib/logger';
 export function LoadError() {
   const { t } = useLocale();
   return (
-    <main className="flex min-h-dvh items-center justify-center px-6">
+    <main className="flex min-h-dvh items-center justify-center bg-background px-6">
       <div className="w-full max-w-md" role="alert">
-        <BrandLogo className="mb-8 h-8 w-8" />
+        <BrandLogo className="mb-6 h-8 w-8" />
         <h1 className="text-2xl font-semibold tracking-tight">{t('appLoadFailed')}</h1>
-        <p className="mt-3 text-muted-foreground">{t('appLoadFailedHint')}</p>
+        <p className="mt-2 text-muted-foreground">{t('appLoadFailedHint')}</p>
         <Button className="mt-6" onClick={() => window.location.reload()}>
-          <RefreshCw className="mr-2 h-4 w-4" />
+          <RefreshCw />
           {t('reloadApp')}
         </Button>
       </div>

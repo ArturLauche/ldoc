@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type RefObject } from 'react';
-import { History, RotateCcw, Trash2 } from 'lucide-react';
+import { BookmarkPlus, History, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,6 +21,7 @@ import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { useConfirm } from '@/hooks/useConfirm';
 import { focusContainerOnTouch } from '@/lib/inputModality';
+import { formatRecentDate } from '@/lib/relativeTime';
 
 async function readVersions(documentId: string) {
   try {
@@ -61,6 +62,9 @@ export const VersionHistory = ({
   const [loading, setLoading] = useState(true);
   const [selectedVersion, setSelectedVersion] = useState<StoredVersion | null>(versions[0] ?? null);
   const [restoring, setRestoring] = useState(false);
+  // Relative dates count from the latest read, so a version saved while the
+  // panel is open reads "now" rather than minutes in the future.
+  const [now, setNow] = useState(() => Date.now());
   const dateTimeFormat = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -76,6 +80,7 @@ export const VersionHistory = ({
 
   const applyHistory = useCallback((next: { versions: StoredVersion[]; readError: boolean }) => {
     setHistory(next);
+    setNow(Date.now());
     setLoading(false);
     setSelectedVersion(
       (selected) =>
@@ -142,6 +147,10 @@ export const VersionHistory = ({
           ? 'versionKindSafety'
           : 'versionKindManual',
     );
+  // Names repeat the document name or the kind for most versions; show them only when they add something.
+  // An automatic version is named "Automatic version" (versionAutomaticLabel) in the language it was saved in.
+  const versionNote = (version: StoredVersion) =>
+    version.kind === 'auto' || version.name === documentName ? null : version.name;
 
   const handleDelete = async (version: StoredVersion) => {
     if (
@@ -172,11 +181,11 @@ export const VersionHistory = ({
           event.preventDefault();
           returnFocusRef?.current?.focus();
         }}
-        className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 [--sheet-padding-bottom:0px] max-sm:h-[calc(var(--app-viewport-height,100dvh)-0.75rem)] sm:max-w-4xl"
+        className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 [--sheet-padding-bottom:0px] max-sm:h-[calc(var(--app-viewport-height,100dvh)-0.75rem)] sm:max-w-5xl"
       >
-        <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left">
+        <DialogHeader className="border-b px-5 pb-3 pt-5">
           <DialogTitle>{t('versionHistoryTitle')}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="truncate">
             {documentName} ·{' '}
             {formatMessage(t('versionHistorySavedCount'), {
               count: versions.length,
@@ -184,77 +193,90 @@ export const VersionHistory = ({
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="flex max-h-[32%] shrink-0 flex-col border-b border-border sm:max-h-none sm:w-60 sm:border-b-0 sm:border-r">
+          <aside className="flex max-h-[34%] shrink-0 flex-col border-b sm:max-h-none sm:w-64 sm:border-b-0 sm:border-e">
             <div className="p-3">
               <Button
                 onClick={saveVersion}
-                size="sm"
                 variant="outline"
                 className="w-full"
                 disabled={readError || loading}
               >
+                <BookmarkPlus />
                 {t('versionHistorySaveCurrent')}
               </Button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
               {loading ? (
-                <p role="status" className="p-3 text-sm text-muted-foreground">
+                <p role="status" className="px-2 py-3 text-sm text-muted-foreground">
                   {t('loadingDocument')}
                 </p>
               ) : readError ? (
-                <p role="alert" className="p-3 text-sm text-destructive">
+                <p role="alert" className="px-2 py-3 text-sm text-destructive">
                   {t('versionReadFailed')}
                 </p>
               ) : versions.length ? (
-                <ul>
-                  {versions.map((version) => (
-                    <li key={version.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedVersion(version)}
-                        aria-pressed={selectedVersion?.id === version.id}
-                        className="w-full rounded-sm px-3 py-2.5 text-left hover:bg-accent aria-pressed:bg-accent pointer-coarse:py-3"
-                      >
-                        <span className="block truncate text-sm font-medium">{version.name}</span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {versionKindLabel(version)}
-                        </span>
-                        <time
-                          dateTime={version.timestamp}
-                          className="block text-xs text-muted-foreground"
+                <ul className="space-y-0.5">
+                  {versions.map((version) => {
+                    const note = versionNote(version);
+                    return (
+                      <li key={version.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVersion(version)}
+                          aria-pressed={selectedVersion?.id === version.id}
+                          className="w-full rounded-md px-2.5 py-2 text-start transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring aria-pressed:bg-selected/12 pointer-coarse:py-2.5"
                         >
-                          {dateTimeFormat.format(new Date(version.timestamp))}
-                        </time>
-                      </button>
-                    </li>
-                  ))}
+                          <time
+                            dateTime={version.timestamp}
+                            className="block text-sm font-medium tabular-nums"
+                          >
+                            {formatRecentDate(new Date(version.timestamp), locale, now)}
+                          </time>
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="shrink-0">{versionKindLabel(version)}</span>
+                            {note ? (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span className="truncate">{note}</span>
+                              </>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
-                <p className="px-3 py-2 text-sm text-muted-foreground">
+                <p className="px-2 py-3 text-sm text-muted-foreground">
                   {t('versionHistoryEmptyTitle')}
                 </p>
               )}
             </div>
           </aside>
           <section
-            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            className="flex min-h-0 min-w-0 flex-1 flex-col bg-background"
             aria-label={t('versionHistorySelectPrompt')}
           >
             {selectedVersion && !readError ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-                  <span className="min-w-0 truncate text-sm font-medium">
-                    {versionKindLabel(selectedVersion)}
-                  </span>
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {dateTimeFormat.format(new Date(selectedVersion.timestamp))}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {versionKindLabel(selectedVersion)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
                       disabled={restoring}
                       onClick={() => void handleDelete(selectedVersion)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
-                      <Trash2 className="mr-1.5 h-4 w-4" />
+                      <Trash2 />
                       {t('delete')}
                     </Button>
                     <Button
@@ -262,21 +284,24 @@ export const VersionHistory = ({
                       disabled={restoring}
                       onClick={() => void handleRestore(selectedVersion)}
                     >
-                      <RotateCcw className="mr-1.5 h-4 w-4" />
+                      <RotateCcw />
                       {t('restore')}
                     </Button>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto overscroll-contain bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8">
-                  <div
-                    className="document-preview prose prose-sm dark:prose-invert max-w-none break-words text-foreground"
-                    dangerouslySetInnerHTML={{ __html: preview }}
-                  />
+                <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6">
+                  {/* The editor's own document styles, so the preview shows what a restore brings back. */}
+                  <div className="editor-content document-preview mx-auto max-w-3xl rounded-sm border bg-card">
+                    <div
+                      className="ProseMirror prose max-w-none"
+                      dangerouslySetInnerHTML={{ __html: preview }}
+                    />
+                  </div>
                 </div>
               </>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-                <History aria-hidden="true" className="mb-4 h-7 w-7 text-muted-foreground" />
+                <History aria-hidden="true" className="mb-3 h-6 w-6 text-muted-foreground" />
                 <p className="max-w-xs text-sm text-muted-foreground">
                   {t(versions.length ? 'versionHistorySelectPrompt' : 'versionHistoryEmptyHint')}
                 </p>

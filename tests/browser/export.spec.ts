@@ -20,18 +20,18 @@ async function setContent(page: Page, html: string) {
 }
 
 const FORMAT_LABELS = {
-  txt: 'Plain Text (.txt)',
-  html: 'HTML Document (.html)',
+  txt: 'Plain text (.txt)',
+  html: 'Web page (.html)',
   rtf: 'Rich Text Format (.rtf)',
-  docx: 'Word Document (.docx)',
-  odt: 'OpenDocument Text (.odt)',
-  pdf: 'PDF Document (.pdf)',
+  docx: 'Word document (.docx)',
+  odt: 'OpenDocument text (.odt)',
+  pdf: 'PDF document (.pdf)',
 } as const;
 
 async function exportAs(page: Page, format: keyof typeof FORMAT_LABELS): Promise<{ name: string; bytes: Buffer }> {
   await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button', { name: 'File', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Export As' }).click();
+  await page.getByRole('menuitem', { name: 'Export as' }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('menuitem', { name: FORMAT_LABELS[format] }).click();
   const file = await download;

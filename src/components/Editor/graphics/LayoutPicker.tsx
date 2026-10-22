@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocale } from '@/hooks/useLocale';
+import { useScrollFade } from '@/hooks/useScrollFade';
 import {
   SMART_GRAPHIC_CATEGORIES,
   getSmartGraphicLayout,
@@ -25,6 +26,8 @@ export function LayoutPicker({
   onChange: (layoutId: SmartGraphicLayoutId) => void;
 }) {
   const { t, locale } = useLocale();
+  // Fades the clipped edge so the category strip reads as scrollable.
+  const categoriesRef = useScrollFade<HTMLDivElement>();
   const [category, setCategory] = useState<SmartGraphicCategory>(
     () => getSmartGraphicLayout(graphic.layoutId).category,
   );
@@ -44,9 +47,11 @@ export function LayoutPicker({
         <p className="text-xs text-muted-foreground">{t('graphicLayoutKeepsText')}</p>
       </div>
       <div
+        ref={categoriesRef}
         role="group"
         aria-label={t('graphicGalleryCategories')}
-        className="scroll-strip -mx-3 flex gap-1 px-3 pb-0.5"
+        // Room for the focus outline, which the scrolling strip would clip.
+        className="scroll-strip -mx-3 -my-1 flex gap-1 px-3 py-1"
       >
         {SMART_GRAPHIC_CATEGORIES.map((item) => (
           <button
@@ -55,9 +60,9 @@ export function LayoutPicker({
             aria-pressed={item === category}
             onClick={() => setCategory(item)}
             className={cn(
-              'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-9',
+              'shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-9',
               item === category
-                ? 'border-primary bg-primary text-primary-foreground'
+                ? 'border-selected/50 bg-selected/12 text-selected-foreground'
                 : 'border-border text-muted-foreground hover:text-foreground',
             )}
           >

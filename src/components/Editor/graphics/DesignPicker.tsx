@@ -29,8 +29,10 @@ const STYLE_KEYS: Record<SmartGraphicStyle, TranslationKey> = {
 
 const optionClass = (selected: boolean) =>
   cn(
-    'relative flex min-w-0 flex-col items-center gap-1.5 rounded-lg border p-1.5 text-xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
-    selected ? 'border-primary bg-accent font-medium text-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+    'relative flex min-w-0 flex-col items-center gap-1.5 rounded-md border p-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+    selected
+      ? 'border-selected bg-selected/10 font-medium text-foreground'
+      : 'border-border text-muted-foreground hover:border-ring/50 hover:text-foreground',
   );
 
 /** Color set and shape style, each shown with a real sample. */
@@ -47,7 +49,7 @@ export function DesignPicker({
   return (
     <div className="space-y-3">
       <fieldset className="space-y-1.5">
-        <legend className="mb-1.5 text-xs font-semibold text-foreground">{t('graphicColorSet')}</legend>
+        <legend className="mb-1.5 text-xs font-medium text-muted-foreground">{t('graphicColorSet')}</legend>
         <div className="grid grid-cols-3 gap-1.5">
           {SMART_GRAPHIC_COLOR_SETS.map((item) => (
             <button
@@ -70,7 +72,7 @@ export function DesignPicker({
         </div>
       </fieldset>
       <fieldset className="space-y-1.5">
-        <legend className="mb-1.5 text-xs font-semibold text-foreground">{t('graphicStyle')}</legend>
+        <legend className="mb-1.5 text-xs font-medium text-muted-foreground">{t('graphicStyle')}</legend>
         <div className="grid grid-cols-4 gap-1.5">
           {SMART_GRAPHIC_STYLES.map((item) => (
             <button
@@ -95,7 +97,7 @@ export function DesignPicker({
 
 function SelectedMark() {
   return (
-    <span className="absolute -end-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+    <span className="absolute -end-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-selected text-primary-foreground">
       <Check className="h-2.5 w-2.5" aria-hidden="true" />
     </span>
   );

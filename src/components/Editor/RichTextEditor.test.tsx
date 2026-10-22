@@ -1,5 +1,5 @@
 import { storedItem } from '@/test/documentStorage';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -14,15 +14,26 @@ import {
   getLibraryDocuments,
 } from '@/lib/documentLibrary';
 import { COMPACT_LAYOUT_QUERY } from '@/hooks/useMediaQuery';
+import { useLocale } from '@/hooks/useLocale';
 import { RichTextEditor } from './RichTextEditor';
+
+function SwitchToGerman() {
+  const { setLocale } = useLocale();
+  return (
+    <button type="button" onClick={() => void setLocale('de')}>
+      Switch to German
+    </button>
+  );
+}
 
 function renderEditor() {
   return render(
     <MemoryRouter>
-      <ThemeProvider attribute="class" defaultTheme="light">
+      <ThemeProvider>
         <LocaleProvider>
           <ConfirmProvider>
             <TooltipProvider>
+              <SwitchToGerman />
               <RichTextEditor />
             </TooltipProvider>
           </ConfirmProvider>
@@ -60,6 +71,56 @@ describe('RichTextEditor', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the document accessible name in the current language after later renders', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    expect(await screen.findByLabelText('Document editor')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Switch to German' }));
+    // Typing a new title re-renders the shell, which re-applies the editor options.
+    await user.type(await screen.findByLabelText('Dokumentname'), ' neu');
+    expect(screen.getByLabelText('Dokumenteditor')).toHaveAttribute('contenteditable', 'true');
+    expect(screen.queryByLabelText('Document editor')).not.toBeInTheDocument();
+  });
+
+  it('opens the shortcut reference for Mod+/ and returns focus when it closes', async () => {
+    renderEditor();
+    const editor = await screen.findByLabelText('Document editor');
+    // Keys that only share the physical Slash key, or that the editor
+    // already handled, leave the reference closed.
+    fireEvent.keyDown(window, { key: '-', code: 'Slash', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '.', code: 'Slash', ctrlKey: true });
+    const handled = new KeyboardEvent('keydown', { key: '/', ctrlKey: true, shiftKey: true, cancelable: true });
+    handled.preventDefault();
+    act(() => {
+      window.dispatchEvent(handled);
+    });
+    expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument();
+
+    act(() => editor.focus());
+    fireEvent.keyDown(editor, { key: '/', code: 'Slash', ctrlKey: true });
+    const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' });
+    act(() => {
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(editor).toHaveFocus());
+  });
+
+  it('opens toolbar menus on a tap, not when a touch scroll starts on them', async () => {
+    renderEditor();
+    for (const name of ['Alignment', 'Line spacing']) {
+      const trigger = await screen.findByRole('button', { name }, { timeout: 3000 });
+      fireEvent.pointerDown(trigger, { pointerType: 'touch', button: 0 });
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      fireEvent.click(trigger);
+      expect(await screen.findByRole('menu')).toBeInTheDocument();
+      act(() => {
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    }
   });
 
   it('does not seed the full document library for current-format startup records', async () => {
@@ -188,8 +249,9 @@ describe('RichTextEditor on phones', () => {
 
     // Language and theme fold into one menu so the title keeps its room.
     expect(screen.queryByRole('button', { name: 'Change language' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Display and language' }));
-    expect(await screen.findByRole('menuitem', { name: 'Dark mode' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Preferences' }));
+    expect(await screen.findByRole('menuitemradio', { name: 'Dark' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'System' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'Deutsch' })).toBeInTheDocument();
 
     // Save state stays in the phone header as an icon, with its label kept

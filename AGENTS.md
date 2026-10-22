@@ -7,9 +7,9 @@ LWrite is a browser-only, local-first rich-text editor (React + TipTap); there i
 - Package manager: `npm@10.9.2` (`package-lock.json` is authoritative; ignore `bun.lock`).
 - Node.js `24.21.0` is pinned in `.node-version` for development and Cloudflare.
   Supported engines: `^22.22.2 || ^24.15.0 || >=26.0.0` (jsdom 30's requirement).
-- Stack (locked in `package-lock.json`): Vite `8.3.0`, React `19.3.0`,
+- Stack (locked in `package-lock.json`): Vite `8.3.5`, React `19.3.0`,
   TypeScript `6.0.3`, TipTap React/StarterKit `3.31.3`, Tailwind `4.3.3`,
-  react-router-dom `7.18.3`, Vitest `5.0.0`, ESLint `10.10.0`.
+  react-router-dom `7.18.3`, Vitest `5.0.5`, ESLint `10.10.0`.
 - The authorized major-version migration replaces the former Vite 5 / Vitest 2
   restriction. TypeScript stays on `~6.0.3` until typescript-eslint supports 7;
   never bypass incompatible peers with `--force` or `--legacy-peer-deps`.
@@ -70,11 +70,25 @@ export type DocumentStorageResult<T> =
 
 - `src/App.tsx`: routes only (`/`, `/privacy`+`/datenschutz`, `/terms`+`/nutzung`, `*`).
 - `src/pages/Index.tsx`: mounts the editor.
+- `src/main.tsx` preloads the first route and the active locale (`preloadPage` in
+  `src/routeLoading.ts`) before mounting, so the static shell is replaced exactly once.
 - `src/components/Editor/`: `RichTextEditor.tsx` (shell), `useDocumentSession.ts`
-  (load/save/autosave/rename/counts/shortcuts/snapshots), `editorExtensions.ts`
-  (TipTap setup), `EditorToolbar.tsx`, `FileMenu.tsx`, `DocumentImporter.ts`,
-  `VersionHistory.tsx`. Phones (`useCompactLayout` in `src/hooks/useMediaQuery.ts`)
-  dock `MobileToolbar.tsx` above the keyboard; both toolbars share `toolbarModel.ts`.
+  (load/save/autosave/rename/shortcuts/snapshots), `editorExtensions.ts` (TipTap setup;
+  `imageFileExtension.ts` handles pasted/dropped images), `EditorToolbar.tsx`,
+  `FileMenu.tsx` (desktop) and `FileSheet.tsx` (phones) over `useFileActions.ts`,
+  `PreferencesMenu.tsx`, `ShortcutsDialog.tsx` (shortcuts live in `editorShortcuts.ts`),
+  `EditorFooter.tsx` (counts via `useDocumentStats.ts`), `SessionNotice.tsx`,
+  `DocumentImporter.ts`, `VersionHistory.tsx`. Phones (`useCompactLayout` in
+  `src/hooks/useMediaQuery.ts`) dock `MobileToolbar.tsx` above the keyboard; both toolbars
+  share `toolbarModel.ts` (state/commands) and `toolbarControls.tsx` (buttons, popovers).
+- Interface text: `src/lib/translations.ts` (registry, `t`, `loadLocale`) with one catalog
+  per language in `src/lib/locales/`. `en.ts` is complete and ships in the entry chunk; the
+  others are lazy chunks and may omit keys (English fallback). Components use
+  `useLocale()` (`t`, `tCount` for counts); count messages add plural forms as
+  `<key>One`/`Few`/`Many`/`Two`/`Zero` per `Intl.PluralRules`. Keep `{placeholders}` intact.
+- Theme: `src/lib/theme.ts` + `src/components/theme-provider.tsx`; the inline script in
+  `index.html` applies the stored theme before first paint (the one deliberate direct
+  `localStorage` read).
 - Smart graphics: model, layout registry (limits, starters) and edits in `src/lib/smartGraphic.ts`;
   `SmartGraphicCanvas.tsx` renders via `graphics/registry.ts` (one renderer per stored layout id in
   `graphics/layouts/*`, shared primitives/geometry, container queries for narrow editors).

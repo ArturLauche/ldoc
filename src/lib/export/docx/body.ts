@@ -104,9 +104,12 @@ export class DocxBodyWriter {
     return id;
   }
 
-  /** Renders blocks of one flow (the page, or a table cell). */
-  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string {
-    const { leaves, trailing } = flowLeaves(blocks, container);
+  /**
+   * Renders blocks of one flow (the page, a table cell, or a graphic's text).
+   * `leading` is the gap before its first leaf, px (see FlowOptions).
+   */
+  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string {
+    const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const parts: Array<{ xml: (after: number) => string; table?: boolean }> = [];
     let pendingFloats: string[] = [];
     leaves.forEach((leaf, index) => {
@@ -142,7 +145,8 @@ export class DocxBodyWriter {
             this.warnings.add('graphic-layout-simplified');
             const fallback = graphicToFallbackBlocks(block);
             if (floats.length) parts.push({ xml: () => hairlineParagraph(floats) });
-            parts.push({ xml: () => this.flow(fallback, container === 'cell' ? 'cell' : 'blockquote', scope) });
+            // The text takes the drawing's place and its space above.
+            parts.push({ xml: () => this.flow(fallback, 'graphic', scope, before) });
           }
           break;
         case 'table': {
@@ -190,19 +194,27 @@ export class DocxBodyWriter {
   ): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const line = lineBoxPx(base, runs.map(({ style }) => style));
     const pStyle = this.paragraphStyle(block, leaf, scope);
     const align = block.align ?? scope.cell?.align;
+    // In a cell the style is Table Text, so a quote's bar and italics are
+    // written here rather than coming from the Quote style.
+    const cellQuote = Boolean(scope.cell) && leaf.quoteDepth > 0 && block.type !== 'heading';
     const properties = [
       pStyle ? `<w:pStyle w:val="${pStyle}"/>` : '',
       this.numberingXml(leaf),
+      cellQuote ? quoteBorderXml() : '',
       spacing(before, after, Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? line : null),
       indentXml(leaf, scope.indent, Boolean(leaf.listItem)),
       align ? `<w:jc w:val="${align === 'justify' ? 'both' : align}"/>` : '',
     ].join('');
-    // Run properties are relative to the paragraph style, which has no cell text color.
-    const styleBase = context.color === undefined ? base : textBaseStyle({ ...context, color: undefined });
+    // Run properties are relative to the paragraph style, which has no cell
+    // text color (and, for a quote in a cell, no italics).
+    const styleBase =
+      context.color === undefined && !cellQuote
+        ? base
+        : textBaseStyle({ ...context, color: undefined, ...(cellQuote ? { quote: false } : {}) });
     const content = this.runs(runs, styleBase);
     return `<w:p><w:pPr>${properties}</w:pPr>${floats.join('')}${content}</w:p>`;
   }
@@ -313,7 +325,7 @@ export class DocxBodyWriter {
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
       const base = textBaseStyle(context);
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       return `<w:p><w:pPr>${spacing(before, after, null)}${indentXml(leaf, scope.indent)}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.runs(runs, base)}</w:p>`;
     }
     return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.drawing(image, leaf, false, scope)}</w:p>`;
@@ -445,6 +457,12 @@ function spacing(before: number, after: number, line: number | 'single' | null):
   const rule =
     line === 'single' ? ' w:line="240" w:lineRule="auto"' : line !== null ? ` w:line="${twips(line)}" w:lineRule="atLeast"` : '';
   return `<w:spacing w:before="${twips(before)}" w:after="${twips(after)}"${rule}/>`;
+}
+
+/** The quote bar of the Quote style, for quote paragraphs that cannot use it. */
+function quoteBorderXml(): string {
+  const { borderWidth, paddingLeft } = DOCUMENT_STYLE.blockquote;
+  return `<w:pBdr><w:left w:val="single" w:sz="${eighths(borderWidth)}" w:space="${Math.round(paddingLeft * 0.75)}" w:color="${DOCUMENT_STYLE.borderColor}"/></w:pBdr>`;
 }
 
 /** Indentation for content inside lists and quotes (list paragraphs get a hanging marker). */

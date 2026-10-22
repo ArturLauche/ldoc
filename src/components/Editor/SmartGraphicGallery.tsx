@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useScrollFade } from '@/hooks/useScrollFade';
 import { focusContainerOnTouch } from '@/lib/inputModality';
 import {
   SMART_GRAPHIC_CATEGORIES,
@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { LayoutCard } from './graphics/LayoutCard';
 import { layoutMatchesQuery } from './graphics/layoutSearch';
 import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
-import { ToolTile } from './toolbarControls';
+import { ToolbarButton, ToolTile } from './toolbarControls';
 
 type GalleryTab = 'all' | SmartGraphicCategory;
 
@@ -67,21 +67,11 @@ export function SmartGraphicGallery({
           />
         </DialogTrigger>
       ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 p-0"
-                aria-label={t('toolbarInsertGraphic')}
-              >
-                <Shapes className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('toolbarInsertGraphic')}</TooltipContent>
-        </Tooltip>
+        <DialogTrigger asChild>
+          <ToolbarButton label={t('toolbarInsertGraphic')}>
+            <Shapes />
+          </ToolbarButton>
+        </DialogTrigger>
       )}
 
       <DialogContent
@@ -115,6 +105,8 @@ function GalleryBody({
   const { t, locale } = useLocale();
   const wide = useMediaQuery('(min-width: 640px)');
   const [query, setQuery] = useState('');
+  // On phones the categories form a strip; a faded edge shows it scrolls.
+  const categoriesRef = useScrollFade<HTMLDivElement>();
 
   const previews = useMemo(
     () => new Map(SMART_GRAPHIC_LAYOUTS.map((layout) => [layout.id, createStarterGraphic(layout.id, locale)])),
@@ -135,7 +127,7 @@ function GalleryBody({
     return (
       <section key={category} aria-label={t(GRAPHIC_CATEGORY_KEYS[category])} className="space-y-2.5">
         {tab === 'all' ? (
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-xs font-medium text-muted-foreground">
             {t(GRAPHIC_CATEGORY_KEYS[category])}
           </h3>
         ) : null}
@@ -165,7 +157,7 @@ function GalleryBody({
       className="flex min-h-0 flex-1 flex-col sm:flex-row"
     >
       {/* Scrolls on short screens (landscape phones) so every category stays reachable. */}
-      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-card/60 sm:px-3 sm:py-5">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pb-3 pt-4 sm:min-h-0 sm:w-56 sm:overflow-y-auto sm:overscroll-contain sm:border-b-0 sm:border-e sm:bg-muted/40 sm:px-3 sm:py-5">
         <DialogHeader className="space-y-1 pe-8 sm:px-2 sm:pe-2">
           <DialogTitle>{t('graphicGalleryTitle')}</DialogTitle>
           <DialogDescription className="text-xs sm:text-[0.8125rem]">{t('graphicGalleryDescription')}</DialogDescription>
@@ -174,14 +166,15 @@ function GalleryBody({
           <SearchField query={query} onQueryChange={setQuery} />
         </div>
         <TabsList
+          ref={categoriesRef}
           aria-label={t('graphicGalleryCategories')}
-          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
+          className="scroll-strip -mx-4 flex h-auto justify-start gap-1 rounded-none bg-transparent p-0 px-4 text-foreground max-sm:-my-1 max-sm:py-1 sm:mx-0 sm:shrink-0 sm:flex-col sm:items-stretch sm:overflow-visible sm:px-0"
         >
           {tabs.map((item) => (
             <TabsTrigger
               key={item}
               value={item}
-              className="shrink-0 justify-between gap-3 rounded-full border border-border px-3 py-1.5 text-[0.8125rem] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground max-sm:min-h-9 data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:rounded-md sm:border-transparent sm:px-2.5 sm:py-2 sm:data-[state=active]:border-transparent sm:data-[state=active]:bg-accent sm:data-[state=active]:text-foreground"
+              className="h-auto shrink-0 justify-between gap-3 rounded-md border border-border px-3 py-1.5 text-[0.8125rem] font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground max-sm:min-h-9 data-[state=active]:border-selected/50 data-[state=active]:bg-selected/12 data-[state=active]:text-selected-foreground data-[state=active]:shadow-none sm:border-transparent sm:px-2.5 sm:py-2 sm:data-[state=active]:border-transparent"
             >
               {tabLabel(item)}
               <span aria-hidden="true" className="text-xs tabular-nums opacity-70">
@@ -203,7 +196,7 @@ function GalleryBody({
           <TabsContent
             key={item}
             value={item}
-            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 focus-visible:ring-inset focus-visible:ring-offset-0 sm:px-5"
+            className="mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
           >
             {empty ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">

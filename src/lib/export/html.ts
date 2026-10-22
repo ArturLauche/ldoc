@@ -49,7 +49,7 @@ export async function renderHtml(documentModel: ExportDocumentModel, warnings: W
 ${css}</style>
 </head>
 <body>
-<main class="lwrite-document">${body}</main>
+<main class="lwrite-document" dir="auto">${body}</main>
 </body>
 </html>
 `;
@@ -293,39 +293,37 @@ sub,sup{font-size:${s.script.scale * 100}%;line-height:0;position:relative;verti
 sub{bottom:-${s.script.subShift}em}
 sup{top:-${s.script.superShift}em}
 code{font-family:${MONO_STACK};font-size:${s.inlineCode.scale}em;font-weight:${s.inlineCode.weight};color:${text}}
-code::before,code::after{content:"${s.inlineCode.before}"}
 :is(a,h1,h2,h3,blockquote) code{color:inherit}
 pre{font-family:${MONO_STACK};font-size:${em(s.codeBlock.sizePx)};line-height:${s.codeBlock.lineHeightPx / s.codeBlock.sizePx};margin:${s.codeBlock.margin / s.codeBlock.sizePx}em 0;padding:${s.codeBlock.paddingY / s.codeBlock.sizePx}em ${s.codeBlock.paddingX / s.codeBlock.sizePx}em;border-radius:${s.codeBlock.radius}px;background:#${s.codeBlock.background};color:${text};font-weight:400;overflow-x:auto;white-space:pre}
 pre code{font:inherit;color:inherit;background:none;padding:0}
-pre code::before,pre code::after{content:none}
-blockquote{margin:${em(s.blockquote.margin)} 0;padding-left:${s.blockquote.paddingLeft}px;border-left:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text};quotes:"\\201C""\\201D""\\2018""\\2019"}
+blockquote{margin:${em(s.blockquote.margin)} 0;padding-inline-start:${s.blockquote.paddingLeft}px;border-inline-start:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text}}
 blockquote strong{color:inherit}
-blockquote p:first-of-type::before{content:open-quote}
-blockquote p:last-of-type::after{content:close-quote}
 hr{height:0;margin:${em(s.rule.margin)} 0;border:0;border-top:${s.rule.width}px solid ${border}}
-ul,ol{margin:${em(s.list.marginTop)} 0 ${s.list.marginBottom}px;padding-left:${s.list.indent}px}
+ul,ol{margin:${em(s.list.marginTop)} 0 ${s.list.marginBottom}px;padding-inline-start:${s.list.indent}px}
 ul{list-style-type:disc}
 ol{list-style-type:decimal}
 ul ul{list-style-type:circle}
 ul ul ul{list-style-type:square}
-:is(ul,ol) :is(ul,ol){margin-top:${em(s.list.nestedMarginTop)}}
-li{margin:${em(s.list.itemMarginTop)} 0 ${s.list.itemMarginBottom}px;padding-left:${s.list.itemPadding}px}
+:is(ul,ol) :is(ul,ol){margin-top:${em(s.list.nestedMarginTop)};margin-bottom:${s.list.nestedMarginBottom}px}
+li{margin:${em(s.list.itemMarginTop)} 0 ${em(s.list.itemMarginBottom)};padding-inline-start:${s.list.itemPadding}px}
 li::marker{color:${muted};font-weight:400}
-.lwrite-document>ul>li p{margin-top:${em(s.list.paragraphMarginTop)}}
-.lwrite-document>:is(ul,ol)>li>p:first-child{margin-top:${em(s.list.firstParagraphMarginTop)}}
+.lwrite-document li>p{margin:0}
+.lwrite-document li>p+p{margin-top:${em(s.list.itemParagraphGap)}}
 img{display:block;max-width:100%;height:auto;border-radius:${s.image.radius}px}
 img[data-align=center]{margin:${s.image.margin}px auto}
 img[data-align=left]{float:left;margin:${s.image.floatMargin}px ${s.image.floatGap}px ${s.image.floatMargin}px 0}
 img[data-align=right]{float:right;margin:${s.image.floatMargin}px 0 ${s.image.floatMargin}px ${s.image.floatGap}px}
 .lwrite-table{margin:${s.table.margin}px 0;overflow-x:auto;max-width:100%}
 table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0;font-size:${em(s.table.sizePx)};line-height:${s.table.lineHeight};background:#${s.table.cellBackground}}
-th,td{min-width:${s.table.minColumnWidth}px;border:${s.table.borderWidth}px solid ${border};padding:${s.table.cellPaddingY}px ${s.table.cellPaddingX}px;vertical-align:top;text-align:left;background-color:#${s.table.cellBackground}}
+th,td{min-width:${s.table.minColumnWidth}px;border:${s.table.borderWidth}px solid ${border};padding:${s.table.cellPaddingY}px ${s.table.cellPaddingX}px;vertical-align:top;text-align:start;background-color:#${s.table.cellBackground}}
 th{background-color:#${s.table.headerBackground};font-weight:${s.table.headerWeight}}
 :is(th,td) p{margin:${em(s.paragraph.marginTop)} 0 ${s.table.paragraphMarginBottom}px}
+.lwrite-document :is(th,td)>:first-child{margin-top:0}
+.lwrite-document :is(th,td)>:last-child{margin-bottom:0}
 table[data-borders=hidden] :is(th,td){border-color:transparent}
 div.lwrite-graphic{margin:${s.graphic.margin}px 0;padding:${s.graphic.padding}px;border:${s.graphic.borderWidth}px solid #${s.graphic.borderColor};border-radius:${s.graphic.radius}px;background:#${s.graphic.background};overflow-x:auto}
 .lwrite-graphic-title{font-weight:600;margin:0 0 8px}
-svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre}
+svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre;direction:ltr}
 @media (max-width:639px){
 .lwrite-document{padding:20px 16px 32px}
 h1{font-size:28px;margin-top:24px}

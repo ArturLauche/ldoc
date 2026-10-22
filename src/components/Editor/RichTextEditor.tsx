@@ -1,18 +1,24 @@
 import { useEditor, EditorContent } from '@tiptap/react';
-import { lazy, Suspense, useEffect, useRef, useState, useCallback } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { BrandLogo } from '@/components/BrandLogo';
-import { Button } from '@/components/ui/button';
 import { useLocale } from '@/hooks/useLocale';
 import { useAutoHideOnScroll } from '@/hooks/useAutoHideOnScroll';
 import { useCompactLayout } from '@/hooks/useMediaQuery';
 import { useVisualViewportVars } from '@/hooks/useVisualViewport';
 import { trackInputModality } from '@/lib/inputModality';
+import { MAX_IMAGE_SIZE_MB } from '@/lib/media';
+import { formatMessage } from '@/lib/translations';
 import { cn } from '@/lib/utils';
-import { createEditorExtensions } from './editorExtensions';
-import { HeaderPreferences } from './HeaderPreferences';
+import { SHORTCUTS } from './editorShortcuts';
+import { EditorFooter } from './EditorFooter';
+import { IMAGE_FILE_ERROR_EVENT, type ImageFileErrorCode } from './imageFileExtension';
+import { createEditorExtensions, editorAttributes } from './editorExtensions';
+import { PreferencesMenu } from './PreferencesMenu';
 import { SaveStatus } from './SaveStatus';
+import { SessionNotice } from './SessionNotice';
+import { ToolbarButton } from './toolbarControls';
 import { useDocumentSession } from './useDocumentSession';
 
 const FileMenu = lazy(() => import('./FileMenu').then((module) => ({ default: module.FileMenu })));
@@ -41,23 +47,51 @@ const FindReplaceBar = lazy(() =>
   })),
 );
 
-const FileMenuFallback = ({ compact }: { compact: boolean }) => (
-  <div
-    aria-hidden="true"
-    className={cn('h-9 shrink-0 rounded-md bg-transparent', compact ? 'w-11' : 'w-[5.25rem]')}
-  />
+const ShortcutsDialog = lazy(() =>
+  import('./ShortcutsDialog').then((module) => ({
+    default: module.ShortcutsDialog,
+  })),
 );
 
-const ToolbarFallback = () => <div aria-hidden="true" className="h-10" />;
+/** Same footprint as the File trigger, so the title does not shift when it loads. */
+const FileMenuFallback = ({ compact }: { compact: boolean }) => (
+  <div aria-hidden="true" className={cn('h-9 shrink-0', compact ? 'w-11' : 'w-[4.75rem]')} />
+);
+
+/** Reserves the toolbar row while its chunk loads. */
+const ToolbarFallback = () => <div aria-hidden="true" className="h-9" />;
+
+function isModKey(event: KeyboardEvent) {
+  return (event.metaKey || event.ctrlKey) && !event.altKey;
+}
+
+/**
+ * Mod+/ by the character it types. The physical Slash key also counts when
+ * it types a non-ASCII character; an ASCII one belongs to another shortcut
+ * (on German layouts it types "-", zoom out; on Russian ones ".", superscript).
+ */
+function isShortcutsKey(event: KeyboardEvent) {
+  if (event.key === '/') return true;
+  const ascii = event.key.length === 1 && event.key.charCodeAt(0) < 128;
+  return event.code === 'Slash' && event.key.length === 1 && !ascii;
+}
 
 export const RichTextEditor = () => {
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const compact = useCompactLayout();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const [contextSlot, setContextSlot] = useState<HTMLDivElement | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  // Where focus was when the shortcut reference opened; it has no trigger of
+  // its own for Radix to return to.
+  const shortcutsReturnRef = useRef<HTMLElement | null>(null);
+  const openShortcuts = useCallback((returnFocusTo: Element | null) => {
+    shortcutsReturnRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null;
+    setShowShortcuts(true);
+  }, []);
   // Phones get the document height back while scrolling down or typing.
   const headerHidden = useAutoHideOnScroll(compact && !showFindReplace, headerRef);
 
@@ -75,15 +109,9 @@ export const RichTextEditor = () => {
     // expose an instance that TipTap has already disposed.
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
-    editorProps: {
-      attributes: {
-        class: 'prose max-w-none focus:outline-hidden',
-        role: 'textbox',
-        dir: 'auto',
-        'aria-multiline': 'true',
-        'aria-label': 'Document editor',
-      },
-    },
+    // TipTap re-applies these options after every render, so the accessible
+    // name follows the current language here rather than in an effect.
+    editorProps: { attributes: editorAttributes(t('documentEditor')) },
   });
   const {
     isLoading,
@@ -92,8 +120,6 @@ export const RichTextEditor = () => {
     documentName,
     lastSaved,
     hasUnsavedChanges,
-    wordCount,
-    characterCount,
     saveDocument,
     loadDocument,
     createNewDocument,
@@ -111,6 +137,7 @@ export const RichTextEditor = () => {
     editor?.commands.focus();
   }, [editor]);
   const handleSave = useCallback(() => saveDocument({ showToast: true }), [saveDocument]);
+  const showHistory = useCallback(() => setShowVersionHistory(true), []);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -118,49 +145,72 @@ export const RichTextEditor = () => {
   }, [editor, t]);
 
   useEffect(() => {
+    const onImageFileError = (event: Event) => {
+      const code = (event as CustomEvent<ImageFileErrorCode>).detail;
+      toast.error(
+        code === 'too-large'
+          ? formatMessage(t('imageErrorTooLarge'), { maxSize: MAX_IMAGE_SIZE_MB })
+          : code === 'read-failed'
+            ? t('imageUploadFailed')
+            : t(code === 'not-image-drop' ? 'imageDropNotImage' : 'imageErrorNotImage'),
+      );
+    };
+    // A file dropped beside the document must not replace the app with that file.
+    const keepFilesInApp = (event: DragEvent) => {
+      if (!event.defaultPrevented && event.dataTransfer?.types.includes('Files')) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener(IMAGE_FILE_ERROR_EVENT, onImageFileError);
+    window.addEventListener('dragover', keepFilesInApp);
+    window.addEventListener('drop', keepFilesInApp);
+    return () => {
+      document.removeEventListener(IMAGE_FILE_ERROR_EVENT, onImageFileError);
+      window.removeEventListener('dragover', keepFilesInApp);
+      window.removeEventListener('drop', keepFilesInApp);
+    };
+  }, [t]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !document.querySelector('[role=dialog], [role=alertdialog]') &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === 'f'
-      ) {
+      if (!isModKey(event) || document.querySelector('[role=dialog], [role=alertdialog]')) return;
+      const key = event.key.toLowerCase();
+      if (key === 'f' && !event.shiftKey) {
         event.preventDefault();
         setShowFindReplace(true);
         document.querySelector<HTMLInputElement>('[data-find-input]')?.focus();
+      } else if (!event.defaultPrevented && isShortcutsKey(event)) {
+        // The editor already ran its own binding for this key (Mod+Shift+7
+        // types "/" on German layouts) when the event comes back prevented.
+        event.preventDefault();
+        openShortcuts(document.activeElement);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openShortcuts]);
 
-  const chromeInert = isLoading || isTransitioning;
+  const busy = isLoading || isTransitioning;
 
   return (
-    <div className={cn('min-h-dvh bg-background flex flex-col app-shell', compact && 'is-compact')}>
-      {/* Keyboard/assistive-tech skip link: visually hidden until focused,
-          so the interface stays uncluttered while remaining navigable. */}
-      <a
-        href="#lwrite-editor"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground focus:shadow-lg"
-      >
+    <div className={cn('app-shell flex min-h-dvh flex-col bg-background', compact && 'is-compact')}>
+      {/* Keyboard/assistive-tech skip link: visually hidden until focused. */}
+      <a href="#lwrite-editor" className="skip-link">
         {t('skipToEditor')}
       </a>
       <header
         ref={headerRef}
-        inert={chromeInert}
+        inert={busy}
         className={cn('editor-header sticky top-0 z-40', headerHidden && 'is-hidden')}
         data-editor-chrome
         data-scroll-inset="top"
       >
-        {/* Header */}
         <div className="app-bar">
           <div className="app-bar-row">
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex shrink-0 items-center gap-2 pe-1">
               <BrandLogo />
-              <span className="hidden sm:inline font-semibold text-sm tracking-tight">LWrite</span>
+              <span className="hidden text-sm font-semibold tracking-tight sm:inline">LWrite</span>
             </div>
 
             <Suspense fallback={<FileMenuFallback compact={compact} />}>
@@ -174,13 +224,12 @@ export const RichTextEditor = () => {
                 onSaveDocument={handleSave}
                 onLoadDocument={loadDocument}
                 onCreateNewDocument={createNewDocument}
-                onShowVersionHistory={() => setShowVersionHistory(true)}
+                onShowVersionHistory={showHistory}
                 onImportDocument={importDocument}
               />
             </Suspense>
 
-            {/* The title sits directly next to the file controls so the
-                header stays a single compact row. */}
+            {/* The title sits next to the file controls so the header stays one row. */}
             <input
               type="text"
               value={documentName}
@@ -197,38 +246,41 @@ export const RichTextEditor = () => {
               }}
               enterKeyHint="done"
               autoComplete="off"
-              className="document-title h-9 rounded-sm px-2 text-sm font-medium bg-transparent border border-transparent outline-hidden hover:border-border/50 focus:border-border focus:bg-card placeholder:text-muted-foreground truncate transition-colors"
+              spellCheck={false}
+              className="document-title"
               placeholder={t('untitledDocument')}
               aria-label={t('documentName')}
             />
 
+            {/* The status comes before the contextual tools, so its changing
+                width moves into the free space instead of shifting them. */}
+            <SaveStatus
+              saveError={Boolean(saveError)}
+              hasExternalChanges={hasExternalChanges}
+              hasUnsavedChanges={hasUnsavedChanges}
+              lastSaved={lastSaved}
+            />
+
             {compact ? null : <div ref={setContextSlot} className="header-context-slot" />}
 
-            <div className="flex items-center gap-0.5 shrink-0 sm:gap-1">
-              <SaveStatus
-                saveError={Boolean(saveError)}
-                hasExternalChanges={hasExternalChanges}
-                hasUnsavedChanges={hasUnsavedChanges}
-                lastSaved={lastSaved}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('header-icon-button', showFindReplace && 'bg-accent')}
+            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+              <ToolbarButton
+                label={t('findReplaceTitle')}
+                shortcut={SHORTCUTS.find}
+                className="header-icon-button"
+                pressed={showFindReplace}
                 onClick={() => setShowFindReplace((value) => !value)}
-                aria-label={t('findReplaceTitle')}
-                aria-pressed={showFindReplace}
               >
-                <Search className="h-4 w-4" />
-              </Button>
-              <HeaderPreferences compact={compact} />
+                <Search />
+              </ToolbarButton>
+              <PreferencesMenu compact={compact} onShowShortcuts={openShortcuts} />
             </div>
           </div>
         </div>
 
         {/* Toolbar: phones dock theirs at the bottom instead. */}
         {compact ? null : (
-          <div className="toolbar-bar px-3 py-2 sm:px-5">
+          <div className="toolbar-bar">
             <Suspense fallback={<ToolbarFallback />}>
               <EditorToolbar editor={editor} contextSlot={contextSlot} />
             </Suspense>
@@ -247,91 +299,43 @@ export const RichTextEditor = () => {
         ) : null}
       </header>
 
-      {hasExternalChanges ? (
-        <div role="alert" className="session-notice" data-editor-chrome>
-          <p>{t('externalChanges')}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={isLoading || isTransitioning} onClick={saveConflictCopy}>
-              {t('saveAsCopy')}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void reloadExternalDocument()}>
-              {t('reloadSaved')}
-            </Button>
-          </div>
-        </div>
-      ) : saveError ? (
-        <div role="alert" className="session-notice" data-editor-chrome>
-          <p>{t(saveError === 'load' ? 'loadFailed' : 'saveFailed')}</p>
-          {saveError === 'save' && (
-            <Button variant="outline" size="sm" onClick={handleSave}>
-              {t('retrySave')}
-            </Button>
-          )}
-        </div>
-      ) : null}
+      <SessionNotice
+        hasExternalChanges={hasExternalChanges}
+        saveError={saveError}
+        busy={busy}
+        onSaveCopy={() => void saveConflictCopy()}
+        onReloadSaved={() => void reloadExternalDocument()}
+        onRetrySave={() => void handleSave()}
+      />
 
-      {/* Editor */}
       <main
         id="lwrite-editor"
         tabIndex={-1}
-        aria-busy={isLoading || isTransitioning}
-        className="editor-main flex-1 max-w-4xl mx-auto w-full min-w-0"
+        aria-busy={busy}
+        className="editor-main mx-auto w-full min-w-0 max-w-4xl flex-1"
       >
         <h1 className="sr-only" lang="en">
           LWrite – Private rich text editor
         </h1>
         <div className="editor-container">
-          {(isLoading || isTransitioning) && (
-            <p role="status" className="px-6 pt-4 text-sm text-muted-foreground">
+          {busy ? (
+            <p role="status" className="editor-loading">
               {t('loadingDocument')}
             </p>
-          )}
+          ) : null}
           <EditorContent editor={editor} className="editor-content" />
         </div>
       </main>
 
       {compact ? (
-        <div inert={chromeInert} className="contents">
+        <div inert={busy} className="contents">
           <Suspense fallback={null}>
             <MobileToolbar editor={editor} />
           </Suspense>
         </div>
       ) : null}
 
-      {/* Footer */}
-      <footer className="app-footer px-4 py-3" data-editor-chrome>
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="tabular-nums">
-              {wordCount.toLocaleString(locale)} {t('words')}
-            </span>
-            <span className="tabular-nums">
-              {characterCount.toLocaleString(locale)} {t('characters')}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            {lastSaved && (
-              <span>
-                {t('lastSaved')}: {lastSaved.toLocaleTimeString(locale)}
-              </span>
-            )}
-            <nav className="flex items-center gap-3">
-              <Link
-                to={locale === 'de' ? '/datenschutz' : '/privacy'}
-                className="hover:text-foreground transition-colors"
-              >
-                {t('privacyPolicy')}
-              </Link>
-              <Link
-                to={locale === 'de' ? '/nutzung' : '/terms'}
-                className="hover:text-foreground transition-colors"
-              >
-                {t('termsOfUse')}
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      <EditorFooter editor={editor} lastSaved={lastSaved} />
 
       {showVersionHistory ? (
         <Suspense fallback={null}>
@@ -344,6 +348,20 @@ export const RichTextEditor = () => {
             currentContent={editor?.getHTML() || ''}
             documentName={documentName}
             documentId={documentId}
+          />
+        </Suspense>
+      ) : null}
+
+      {showShortcuts ? (
+        <Suspense fallback={null}>
+          <ShortcutsDialog
+            open={showShortcuts}
+            onOpenChange={setShowShortcuts}
+            onReturnFocus={() => {
+              const target = shortcutsReturnRef.current;
+              if (target?.isConnected && target !== editor?.view.dom) target.focus();
+              else if (editor && !editor.isDestroyed) editor.commands.focus();
+            }}
           />
         </Suspense>
       ) : null}

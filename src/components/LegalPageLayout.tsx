@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import { t as translate, type TranslationKey } from '@/lib/translations';
+import { useLocaleMessages } from '@/hooks/useLocaleMessages';
 import { ObfuscatedEmail } from '@/components/ObfuscatedEmail';
 import { siteConfig, hasControllerContact } from '@/lib/siteConfig';
 import type { LegalCopy } from '@/lib/legalContent';
@@ -16,22 +16,25 @@ interface LegalPageLayoutProps {
  * both pages share the same header, contact card, typography and footer links.
  */
 export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
-  const t = (key: TranslationKey) => translate(locale, key);
+  // The page's language follows its URL, not the interface language.
+  const { t } = useLocaleMessages(locale);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col app-shell">
+    // lang and dir here too: the interface language (Arabic, say) still owns
+    // <html> for the first frame, and the page must not paint mirrored.
+    <div lang={locale} dir="ltr" className="app-shell flex min-h-dvh flex-col bg-background">
       <header className="app-bar sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 h-12 max-w-3xl mx-auto w-full">
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+        <div className="mx-auto flex h-12 w-full max-w-3xl items-center justify-between px-5">
+          <Link to="/" className="flex min-w-0 items-center gap-2 rounded-sm">
             <BrandLogo title={siteConfig.siteName} />
-            <span className="font-semibold text-sm tracking-tight truncate">
+            <span className="truncate text-sm font-semibold tracking-tight">
               {siteConfig.siteName}
             </span>
           </Link>
           <Link
             to="/"
             aria-label={t('legalBackToEditor')}
-            className="flex min-h-9 min-w-9 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="-me-2 flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t('legalBackToEditor')}</span>
@@ -39,8 +42,8 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-3xl mx-auto px-5 py-10 sm:py-14">
-        <article className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h1:tracking-tight">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 sm:py-14">
+        <article className="legal-prose prose max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h1:text-3xl">
           <h1>{copy.title}</h1>
           <p className="text-sm text-muted-foreground">
             {copy.lastUpdatedLabel}: {siteConfig.lastUpdated}
@@ -65,7 +68,11 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
                 {siteConfig.contactEmail && (
                   <li>
                     <span className="text-muted-foreground">{copy.contactEmailLabel}:</span>{' '}
-                    <ObfuscatedEmail email={siteConfig.contactEmail} />
+                    <ObfuscatedEmail
+                      email={siteConfig.contactEmail}
+                      label={t('revealEmail')}
+                      hint={t('revealEmailHint')}
+                    />
                   </li>
                 )}
                 {siteConfig.contactUrl && (
@@ -119,21 +126,18 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
         </article>
       </main>
 
-      <footer className="px-4 py-4 app-footer">
-        <nav className="max-w-3xl mx-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          <Link to="/" className="hover:text-foreground transition-colors">
+      <footer className="legal-footer">
+        <nav
+          aria-label={t('legalLinks')}
+          className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-1 px-5 text-sm text-muted-foreground"
+        >
+          <Link to="/" className="app-footer-link">
             {siteConfig.siteName}
           </Link>
-          <Link
-            to={locale === 'de' ? '/datenschutz' : '/privacy'}
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to={locale === 'de' ? '/datenschutz' : '/privacy'} className="app-footer-link">
             {t('privacyPolicy')}
           </Link>
-          <Link
-            to={locale === 'de' ? '/nutzung' : '/terms'}
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to={locale === 'de' ? '/nutzung' : '/terms'} className="app-footer-link">
             {t('termsOfUse')}
           </Link>
         </nav>

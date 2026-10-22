@@ -242,28 +242,22 @@ function textContext(frame: Frame, block?: ExportTextBlock): TextContext {
 }
 
 function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Frame): void {
-  const paragraphIndexes = blocks.map((block, index) => (block.type === 'paragraph' ? index : -1)).filter((index) => index >= 0);
-  const firstParagraph = paragraphIndexes[0];
-  const lastParagraph = paragraphIndexes[paragraphIndexes.length - 1];
   blocks.forEach((block, index) => {
-    const margins = blockMargins(block, {
+    const context: MarginContext = {
       container: frame.container,
       index,
+      last: index === blocks.length - 1,
       previous: blocks[index - 1],
       listDepth: frame.listDepth,
       ...(frame.rootList ? { rootList: frame.rootList } : {}),
       inCell: Boolean(frame.cell),
-    });
+    };
+    const margins = blockMargins(block, context);
     switch (block.type) {
       case 'paragraph':
-      case 'heading': {
-        // The editor quotes the first and last paragraph of each quote level (prose `p:first-of-type::before`).
-        const quotes = frame.quote && block.type === 'paragraph'
-          ? { open: index === firstParagraph, close: index === lastParagraph }
-          : undefined;
-        layoutText(builder, block, frame, margins, quotes);
+      case 'heading':
+        layoutText(builder, block, frame, margins);
         break;
-      }
       case 'blockquote': {
         builder.pendingTop = Math.max(builder.pendingTop, margins.top);
         const first = builder.atoms.length;
@@ -316,7 +310,6 @@ function layoutText(
   block: ExportTextBlock,
   frame: Frame,
   margins: { top: number; bottom: number },
-  quotes?: { open: boolean; close: boolean },
 ): void {
   const context = textContext(frame, block);
   const base = textBaseStyle(context);
@@ -324,11 +317,6 @@ function layoutText(
     const href = run.link?.href ? followableHref(run.link.href, builder.env.warnings) : undefined;
     return { text, style, ...(href ? { href } : {}) };
   });
-  if (quotes?.open || quotes?.close) {
-    const quoteStyle = styledRuns({ runs: [{ text: '', marks: {} }], context })[0].style;
-    if (quotes.open) runs.unshift({ text: DOCUMENT_STYLE.blockquote.open, style: quoteStyle });
-    if (quotes.close) runs.push({ text: DOCUMENT_STYLE.blockquote.close, style: quoteStyle });
-  }
   const gap = builder.advance(margins.top);
   const align = block.align ?? frame.cell?.align;
   const top = builder.y;
@@ -491,9 +479,16 @@ export function imageDisplaySize(image: ExportImageBlock, available: number, pag
   return { width, height };
 }
 
-function layoutImage(builder: GalleyBuilder, image: ExportImageBlock, frame: Frame, margins: { top: number; bottom: number }): void {
+function layoutImage(
+  builder: GalleyBuilder,
+  image: ExportImageBlock,
+  frame: Frame,
+  margins: { top: number; bottom: number },
+): void {
   if (!image.prepared) {
-    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, blockMargins({ type: 'paragraph', runs: [] }, { container: frame.container, index: 1, listDepth: frame.listDepth, ...(frame.rootList ? { rootList: frame.rootList } : {}), inCell: Boolean(frame.cell) }));
+    // An image that could not be embedded is drawn as the text that names
+    // it, in its place and with its margins, like the other formats.
+    layoutText(builder, { type: 'paragraph', runs: imagePlaceholderRuns(image), align: image.float ? image.float : 'center' }, frame, margins);
     return;
   }
   const { width, height } = imageDisplaySize(image, frame.width, builder.env.pageHeight - DOCUMENT_STYLE.image.margin * 2);
@@ -534,7 +529,10 @@ const FRAME = DOCUMENT_STYLE.graphic;
 function layoutGraphic(builder: GalleyBuilder, graphic: ExportGraphicBlock, frame: Frame, margins: { top: number; bottom: number }): void {
   if (!graphic.scene) {
     builder.env.warnings.add('graphic-layout-simplified');
-    layoutBlocks(builder, graphicToFallbackBlocks(graphic), frame);
+    // The text takes the drawing's place and margins (the cell scale stays with frame.cell).
+    builder.pendingTop = Math.max(builder.pendingTop, margins.top);
+    layoutBlocks(builder, graphicToFallbackBlocks(graphic), { ...frame, container: 'graphic', rootList: undefined });
+    builder.pendingBottom = Math.max(builder.pendingBottom, margins.bottom);
     return;
   }
   const gap = builder.advance(margins.top);

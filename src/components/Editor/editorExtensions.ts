@@ -12,7 +12,10 @@ import Placeholder, { type PlaceholderOptions } from '@tiptap/extension-placehol
 import Image from '@tiptap/extension-image';
 import { Extension, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { ImageAlignment, ImageWidth } from '@/lib/media';
 import { FindReplace } from './findReplaceExtension';
+import { ImageFiles } from './imageFileExtension';
+import { selectInsertedNode } from './insertedNode';
 import { SmartGraphic } from './smartGraphicExtension';
 import { EditorTable, EditorTableCell, EditorTableHeader, EditorTableRow } from './tableExtensions';
 
@@ -20,6 +23,15 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     editorPlaceholder: {
       setEditorPlaceholder: (text: string) => ReturnType;
+    };
+    enhancedImage: {
+      /** Inserts an image with its layout at the cursor and selects it. */
+      insertImage: (attributes: {
+        src: string;
+        alt: string;
+        align: ImageAlignment;
+        width: ImageWidth;
+      }) => ReturnType;
     };
   }
   interface Storage {
@@ -72,6 +84,39 @@ const EnhancedImage = Image.extend({
   renderHTML({ HTMLAttributes }) {
     return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
   },
+  addCommands() {
+    return {
+      ...this.parent?.(),
+      // One step with every attribute: a follow-up `updateAttributes` only
+      // reached the image when the cursor happened to end up on it.
+      insertImage:
+        (attributes) =>
+        ({ chain, tr }) => {
+          const firstStep = tr.steps.length;
+          return chain()
+            .insertContent({ type: this.name, attrs: attributes })
+            .command(({ tr, dispatch }) => selectInsertedNode(tr, firstStep, this.name, dispatch))
+            .run();
+        },
+    };
+  },
+});
+
+/** First color of the highlight palette (toolbarModel's HIGHLIGHT_COLORS). */
+export const DEFAULT_HIGHLIGHT_COLOR = '#FEF08A';
+
+const EnhancedHighlight = Highlight.extend({
+  addKeyboardShortcuts() {
+    // A toggle like Bold: removes any highlight (at a cursor, from the text
+    // typed next), otherwise applies the palette yellow (a colorless <mark>
+    // would show browser yellow that no swatch matches).
+    return {
+      'Mod-Shift-h': () =>
+        this.editor.isActive('highlight')
+          ? this.editor.commands.unsetHighlight()
+          : this.editor.commands.setHighlight({ color: DEFAULT_HIGHLIGHT_COLOR }),
+    };
+  },
 });
 
 const EnhancedTextStyle = TextStyle.extend({
@@ -108,6 +153,37 @@ const SCROLL_GAP_PX = 16;
 
 type ChromeInsets = Record<'top' | 'bottom', number>;
 
+/** How long the list of chrome elements is reused before it is looked up again. */
+const INSET_ELEMENTS_TTL_MS = 1000;
+let insetElements: HTMLElement[] | null = null;
+let insetElementsAt = 0;
+
+if (typeof window !== 'undefined') {
+  // A resize can swap the layout (and with it the docked phone toolbar).
+  window.addEventListener('resize', () => {
+    insetElements = null;
+  });
+}
+
+/**
+ * Elements marked `data-scroll-inset`. Every caret scroll asks for them, and
+ * matching an attribute selector visits every node of a long document, so the
+ * list is reused until an element leaves the page, the window resizes, or it
+ * is a second old (an empty list is never reused).
+ */
+function scrollInsetElements(): HTMLElement[] {
+  const now = performance.now();
+  if (
+    !insetElements?.length ||
+    now - insetElementsAt > INSET_ELEMENTS_TTL_MS ||
+    insetElements.some((element) => !element.isConnected)
+  ) {
+    insetElements = Array.from(document.querySelectorAll<HTMLElement>('[data-scroll-inset]'));
+    insetElementsAt = now;
+  }
+  return insetElements;
+}
+
 /**
  * Height of sticky or fixed chrome (`data-scroll-inset="top|bottom"`) that
  * covers, or can slide over, an edge of the visual viewport, so caret
@@ -118,7 +194,7 @@ function measureChromeInsets(): ChromeInsets {
   const offsetTop = viewport?.offsetTop ?? 0;
   const height = viewport?.height ?? window.innerHeight;
   const insets: ChromeInsets = { top: 0, bottom: 0 };
-  document.querySelectorAll<HTMLElement>('[data-scroll-inset]').forEach((element) => {
+  scrollInsetElements().forEach((element) => {
     const side = element.dataset.scrollInset;
     if (side !== 'top' && side !== 'bottom') return;
     const rect = element.getBoundingClientRect();
@@ -174,6 +250,17 @@ const ChromeAwareScrolling = Extension.create({
   },
 });
 
+/** DOM attributes of the editable document; the label follows the interface language. */
+export function editorAttributes(label: string): Record<string, string> {
+  return {
+    class: 'prose max-w-none focus:outline-hidden',
+    role: 'textbox',
+    dir: 'auto',
+    'aria-multiline': 'true',
+    'aria-label': label,
+  };
+}
+
 /**
  * Builds the TipTap extension set with an initial placeholder. Later locale
  * changes use setEditorPlaceholder without rebuilding the editor or its history.
@@ -193,7 +280,7 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     }),
     EnhancedTextStyle,
     Color,
-    Highlight.configure({
+    EnhancedHighlight.configure({
       multicolor: true,
     }),
     Link.configure({
@@ -227,5 +314,6 @@ export function createEditorExtensions(getPlaceholder: () => string): Extensions
     SmartGraphic,
     FindReplace,
     ChromeAwareScrolling,
+    ImageFiles,
   ];
 }

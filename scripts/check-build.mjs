@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { loadEnv } from 'vite';
 
+// The values the build used: the shell environment and .env files.
+const contactEmail = loadEnv('production', process.cwd(), '').VITE_LEGAL_CONTACT_EMAIL?.trim() ?? '';
 const routes = ['index', 'privacy', 'terms', 'datenschutz', 'nutzung', '404'];
 const titles = new Set();
 for (const route of routes) {
@@ -23,6 +26,11 @@ for (const route of routes) {
   } else {
     assert(html.includes('rel="canonical"'), `${route}: canonical`);
     assert(html.includes('application/ld+json'), `${route}: structured data`);
+  }
+  // Legal pages reveal the contact address on request (ObfuscatedEmail), never
+  // as a plain address in the HTML. Implausible addresses are shown verbatim.
+  if (/^[^@\s]+@[^@\s]+$/.test(contactEmail)) {
+    assert(!html.includes(contactEmail), `${route}: no plain contact address`);
   }
   const german = route === 'datenschutz' || route === 'nutzung';
   assert(html.includes(`lang="${german ? 'de' : 'en'}"`), `${route}: language`);

@@ -31,7 +31,11 @@ export const GraphicPreview = memo(function GraphicPreview({
     const update = () => {
       const height = content.offsetHeight;
       if (!frame.clientWidth || !frame.clientHeight || !height) return;
-      setScale(Math.min(frame.clientWidth / PREVIEW_WIDTH, frame.clientHeight / height));
+      // A small inset keeps shape edges and corners clear of the frame.
+      const inset = Math.min(12, frame.clientWidth * 0.05);
+      setScale(
+        Math.min((frame.clientWidth - inset * 2) / PREVIEW_WIDTH, (frame.clientHeight - inset * 2) / height),
+      );
     };
     update();
     const observer = new ResizeObserver(update);

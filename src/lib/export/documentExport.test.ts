@@ -255,7 +255,19 @@ describe('HTML export', () => {
     expect(html).toContain('white-space:break-spaces');
     expect(html).toContain('font-variant-ligatures:none');
     expect(html).toMatch(/h2\{font-size:28px;font-weight:600;line-height:1\.3/);
-    expect(html).toContain('.lwrite-document>ul>li p{margin-top:0.75em}');
+    expect(html).toContain('.lwrite-document li>p{margin:0}');
+    expect(html).toContain('.lwrite-document :is(th,td)>:first-child{margin-top:0}');
+  });
+
+  it('follows the content direction like the editor (dir="auto", start-side quotes and lists)', async () => {
+    const html = await (await exportAs('html', '<p>مرحبا</p><blockquote><p>اقتباس</p></blockquote>')).blob.text();
+    expect(html).toContain('<main class="lwrite-document" dir="auto">');
+    expect(html).toMatch(/blockquote\{[^}]*border-inline-start:/);
+    expect(html).toMatch(/ul,ol\{[^}]*padding-inline-start:/);
+    expect(html).not.toMatch(/(?:padding|border)-left:/);
+    // Graphic scenes are captured left to right; an RTL document must not
+    // mirror their text anchors.
+    expect(html).toMatch(/svg\.lwrite-graphic-drawing\{[^}]*direction:ltr/);
   });
 
   it('embeds data images and links remote images it cannot download instead of loading them', async () => {
@@ -422,6 +434,25 @@ describe('DOCX export', () => {
     expect(documentXml).toMatch(/<w:color w:val="F8FAFC"\/>.*B<\/w:t>/);
   });
 
+  it('keeps the quote bar and italics of a quote inside a table cell', async () => {
+    const html = '<table><tr><td><p>Intro</p><blockquote><p>Quoted words</p></blockquote></td></tr></table>';
+    const docx = await exportAs('docx', html);
+    const documentXml = (await (await unzip(docx.blob)).file('word/document.xml')?.async('string')) ?? '';
+    expectWellFormedXml(documentXml);
+    const quoted = /<w:p>(?:(?!<w:p>).)*?Quoted words<\/w:t>/.exec(documentXml)?.[0] ?? '';
+    expect(quoted).toContain('<w:pStyle w:val="TableText"/>');
+    expect(quoted).toMatch(/<w:pBdr><w:left w:val="single"/);
+    expect(quoted).toContain('<w:i/>');
+
+    const odt = await exportAs('odt', html);
+    const content = (await (await unzip(odt.blob)).file('content.xml')?.async('string')) ?? '';
+    const styleName = /<text:p text:style-name="([^"]+)">(?:(?!<\/text:p>).)*Quoted words/.exec(content)?.[1];
+    expect(styleName).toBeDefined();
+    const style = new RegExp(`<style:style style:name="${styleName}"[^]*?</style:style>`).exec(content)?.[0] ?? '';
+    expect(style).toContain('fo:border-left=');
+    expect(style).toContain('fo:padding-left=');
+  });
+
   it('keeps the body schema-valid around floats and orders run properties', async () => {
     const result = await exportAs(
       'docx',
@@ -453,6 +484,27 @@ describe('DOCX export', () => {
     const documentXml = await (await unzip(result.blob)).file('word/document.xml')?.async('string');
     expect(documentXml).toContain('Roadmap');
     expect(documentXml).toContain('Milestone 1');
+  });
+
+  it('spaces a Smart Graphic fallback like the graphic, trimmed at a cell edge', async () => {
+    const timeline = updateGraphicTitle(createStarterGraphic('timeline-vertical'), 'Roadmap');
+    const graphic = `<div data-lwrite-graphic='${serializeSmartGraphic(timeline)}'></div>`;
+    // First in one cell, after a paragraph in the next: no space, then the graphic's 24px.
+    const html = `<table><tr><td>${graphic}</td><td><p>Before</p>${graphic}</td></tr></table>`;
+
+    const docx = (await (await unzip((await exportAs('docx', html)).blob)).file('word/document.xml')?.async('string')) ?? '';
+    const docxTitles = docx.match(/<w:p>(?:(?!<w:p>).)*?Roadmap<\/w:t>/g) ?? [];
+    expect(docxTitles.map((title) => /w:before="(\d+)"/.exec(title)?.[1])).toEqual(['0', '360']);
+
+    const rtf = await (await exportAs('rtf', html)).blob.text();
+    const rtfTitles = rtf.match(/\\pard[^\n]*?Roadmap/g) ?? [];
+    expect(rtfTitles.map((title) => /\\sb(\d+)/.exec(title)?.[1])).toEqual(['0', '360']);
+
+    const odt = (await (await unzip((await exportAs('odt', html)).blob)).file('content.xml')?.async('string')) ?? '';
+    const odtTitles = [...odt.matchAll(/<text:h text:style-name="(P\d+)"[^>]*><text:span[^>]*>Roadmap/g)];
+    const marginTop = (style: string) =>
+      new RegExp(`style:name="${style}"[^>]*><style:paragraph-properties fo:margin-top="([\\d.]+pt)"`).exec(odt)?.[1];
+    expect(odtTitles.map((title) => marginTop(title[1]))).toEqual(['0pt', '18pt']);
   });
 });
 

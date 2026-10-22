@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEditorExtensions } from './editorExtensions';
 import { getSearchState } from './findReplaceExtension';
 
@@ -35,6 +35,27 @@ describe('findReplaceExtension', () => {
     expect(editor.state.selection.to).toBe(firstMatch?.to);
   });
 
+  it('scrolls the active match into view while focus stays in the find field', () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    try {
+      editor.commands.setSearchQuery('alpha');
+      editor.commands.findNextMatch();
+      editor.commands.findPreviousMatch();
+      // One reveal per navigation, always the match marked active.
+      expect(scrolled).toHaveLength(3);
+      expect(scrolled.map((element) => element.classList.contains('search-match--active'))).toEqual([true, true, true]);
+      // Edits that are not navigation do not scroll.
+      editor.commands.insertContentAt(1, 'x');
+      expect(scrolled).toHaveLength(3);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it('respects case sensitivity', () => {
     editor.commands.setSearchQuery('alpha', true);
 
@@ -61,6 +82,25 @@ describe('findReplaceExtension', () => {
 
     expect(editor.getText()).toContain('omega beta alpha');
     expect(getSearchState(editor.state)?.matches).toHaveLength(2);
+  });
+
+  it('moves on to the next match after a replacement, selecting it', () => {
+    editor.commands.setSearchQuery('alpha');
+    editor.commands.replaceCurrentMatch('omega');
+    const search = getSearchState(editor.state)!;
+    const active = search.matches[search.activeIndex];
+    expect(editor.state.doc.textBetween(active.from, active.to)).toBe('alpha');
+    expect(editor.state.selection.from).toBe(active.from);
+    expect(editor.state.selection.to).toBe(active.to);
+  });
+
+  it('reaches every match when the replacement still matches the query', () => {
+    editor.commands.setSearchQuery('alpha');
+    // Fixing capitalization: "ALPHA" matches the case-insensitive query too.
+    editor.commands.replaceCurrentMatch('ALPHA');
+    editor.commands.replaceCurrentMatch('ALPHA');
+    editor.commands.replaceCurrentMatch('ALPHA');
+    expect(editor.getText({ blockSeparator: '\n' })).toBe('ALPHA beta ALPHA\nALPHA gamma');
   });
 
   it('replaces all matches at once', () => {

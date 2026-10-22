@@ -34,22 +34,24 @@ export function LayoutCard({
       aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
       className={cn(
-        'group relative flex min-w-0 flex-col rounded-xl border bg-card text-start transition-[border-color,box-shadow] duration-150 hover:border-primary/40 hover:shadow-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'group relative flex min-w-0 flex-col rounded-lg border bg-card text-start transition-[border-color,box-shadow] duration-150 hover:border-ring/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         size === 'small' ? 'gap-1.5 p-1.5' : 'gap-2 p-2',
-        selected ? 'border-primary ring-1 ring-primary' : 'border-border',
+        selected ? 'border-selected ring-1 ring-selected' : 'border-border',
       )}
     >
       <GraphicPreview
         graphic={preview}
         className={cn(
-          'w-full rounded-lg bg-background transition-colors group-hover:bg-muted/40',
+          'w-full rounded-md bg-muted/50 transition-colors group-hover:bg-muted',
           size === 'small' ? 'aspect-[4/3]' : 'aspect-[16/11]',
         )}
       />
       <span className={cn('flex min-w-0 flex-col', size === 'small' ? 'px-0.5' : 'px-1 pb-0.5')}>
+        {/* Names wrap: on a phone, two cards share a row and many languages
+            need more than one line for "Horizontal timeline". */}
         <span
           className={cn(
-            'truncate font-medium text-foreground',
+            'line-clamp-2 font-medium leading-snug text-foreground wrap-break-word',
             size === 'small' ? 'text-xs' : 'text-[0.8125rem] sm:text-sm',
           )}
         >
@@ -62,7 +64,7 @@ export function LayoutCard({
         ) : null}
       </span>
       {selected ? (
-        <span className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+        <span className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-selected text-primary-foreground">
           <Check className="h-3 w-3" aria-hidden="true" />
           {selectedLabel ? <span className="sr-only">{selectedLabel}</span> : null}
         </span>

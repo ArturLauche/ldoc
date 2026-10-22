@@ -214,9 +214,13 @@ ${body}
 }`;
   }
 
-  /** Renders the blocks of one flow (the page, or a table cell) as paragraphs and rows. */
-  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string[] {
-    const { leaves, trailing } = flowLeaves(blocks, container);
+  /**
+   * Renders the blocks of one flow (the page, a table cell, or a graphic's
+   * text) as paragraphs and rows. `leading` is the gap before its first
+   * leaf, px (see FlowOptions).
+   */
+  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string[] {
+    const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const parts: Array<{ render: (after: number) => string; table?: boolean }> = [];
     leaves.forEach((leaf, index) => {
       const before = container === 'root' && index === 0 ? 0 : leaf.spaceBefore;
@@ -259,7 +263,8 @@ ${body}
           } else {
             this.warnings.add('graphic-layout-simplified');
             // Rendered in turn, like every part, so paragraphs are written in document order.
-            parts.push({ render: () => this.flow(graphicToFallbackBlocks(block), container === 'cell' ? 'cell' : 'blockquote', scope).join('\n') });
+            // The text takes the drawing's place and its space above.
+            parts.push({ render: () => this.flow(graphicToFallbackBlocks(block), 'graphic', scope, before).join('\n') });
           }
           break;
         case 'table': {
@@ -350,7 +355,7 @@ ${body}
   private paragraph(block: ExportTextBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const left = this.indent(leaf, scope);
     const quote = leaf.quoteDepth > 0 && block.type !== 'heading';
     return this.paragraphGroup(
@@ -501,7 +506,7 @@ ${body}
     const left = this.indent(leaf, scope);
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       return this.paragraphGroup({ before, after, left, align: 'center', inTable: scope.inTable }, `${this.runs(runs)}`);
     }
     const { width, height } = this.imageSize(image, image.prepared, this.available(leaf, scope));

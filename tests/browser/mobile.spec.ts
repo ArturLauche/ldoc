@@ -142,7 +142,7 @@ test.describe('phone layout', () => {
     await selectText(page, { from: 1, to: 6 });
     await page.getByRole('button', { name: 'Insert', exact: true }).tap();
     await panel.getByRole('button', { name: 'Insert link' }).tap();
-    await page.getByRole('textbox', { name: 'Enter URL...' }).fill('example.com');
+    await page.getByRole('textbox', { name: 'Insert link' }).fill('example.com');
     await page.getByRole('button', { name: 'Apply' }).tap();
     await expect(editor(page).locator('a[href="https://example.com/"]')).toHaveText('Hello');
     await expect(panel).toBeHidden();
@@ -168,8 +168,8 @@ test.describe('phone layout', () => {
       .toBe(440);
 
     await page.getByRole('button', { name: 'File', exact: true }).tap();
-    await page.getByRole('button', { name: 'Rename...' }).tap();
-    const rename = page.getByRole('dialog', { name: 'Rename Document' });
+    await page.getByRole('button', { name: 'Rename…' }).tap();
+    const rename = page.getByRole('dialog', { name: 'Rename document' });
     await expect(rename).toBeVisible();
     await expect
       .poll(async () => {
@@ -188,13 +188,13 @@ test.describe('phone layout', () => {
     await expect(page.getByRole('menuitem')).toHaveCount(0);
 
     const download = page.waitForEvent('download');
-    await sheet.getByRole('button', { name: 'Word Document (.docx)' }).tap();
+    await sheet.getByRole('button', { name: 'Word document (.docx)' }).tap();
     expect((await download).suggestedFilename()).toMatch(/\.docx$/);
     await expect(sheet).toBeHidden();
 
     await page.getByRole('button', { name: 'File', exact: true }).tap();
-    await page.getByRole('button', { name: 'Search Documents' }).tap();
-    const library = page.getByRole('dialog', { name: 'Document Library' });
+    await page.getByRole('button', { name: 'Open from library…' }).tap();
+    const library = page.getByRole('dialog', { name: 'Document library' });
     await expect(library).toBeVisible();
     // A tap focuses the sheet itself, so no keyboard rises over the list.
     await expect(library).toBeFocused();
@@ -222,8 +222,8 @@ test.describe('narrow phone layout', () => {
     await page.goto('/');
     await ready(page);
     await setContent(page, '<p>alpha beta alpha</p>');
-    await page.getByRole('button', { name: 'Find & Replace' }).tap();
-    const find = page.getByRole('textbox', { name: 'Find...' });
+    await page.getByRole('button', { name: 'Find and replace' }).tap();
+    const find = page.getByRole('textbox', { name: 'Find', exact: true });
     const textWidth = () =>
       find.evaluate((input) => {
         const style = getComputedStyle(input);
@@ -244,7 +244,7 @@ test.describe('narrow phone layout', () => {
 
     await page.getByRole('button', { name: 'Replace and match case' }).tap();
     await expect(page.getByRole('button', { name: 'Match case', exact: true })).toBeVisible();
-    const replace = await page.getByRole('textbox', { name: 'Replace with...' }).boundingBox();
+    const replace = await page.getByRole('textbox', { name: 'Replace with' }).boundingBox();
     expect(replace!.width).toBeGreaterThanOrEqual(100);
     await expectNoHorizontalOverflow(page);
   });
@@ -285,7 +285,7 @@ test.describe('landscape phone and desktop layouts', () => {
     expect((await page.locator('header').boundingBox())!.height).toBeLessThanOrEqual(110);
 
     await page.getByRole('button', { name: 'File', exact: true }).click();
-    await expect(page.getByRole('menuitem', { name: 'Export As' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export as' })).toBeVisible();
     await context.close();
   });
 });

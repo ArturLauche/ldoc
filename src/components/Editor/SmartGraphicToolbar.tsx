@@ -15,9 +15,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/useLocale';
 import { cn } from '@/lib/utils';
 import {
@@ -46,7 +44,9 @@ import { DesignPicker } from './graphics/DesignPicker';
 import { LayoutPicker } from './graphics/LayoutPicker';
 import { TextPane } from './graphics/TextPane';
 import { GRAPHIC_LAYOUT_KEYS } from './smartGraphicLabels';
+import { selectionNodes } from './selectionNodes';
 import { SmartGraphicGallery } from './SmartGraphicGallery';
+import { ToolbarButton, ToolbarSeparator } from './toolbarControls';
 
 interface SmartGraphicToolbarProps {
   editor: Editor;
@@ -79,19 +79,24 @@ export function SmartGraphicToolbar({
   showInsert = true,
   showLabels = false,
 }: SmartGraphicToolbarProps) {
-  const { t, locale } = useLocale();
+  const { t, tCount, locale } = useLocale();
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
   const [textPaneOpen, setTextPaneOpen] = useState(false);
 
   const graphicState = useEditorState({
     editor,
-    selector: ({ editor: current }) => ({
-      graphic: current.isActive('smartGraphic')
-        ? coerceGraphic(current.getAttributes('smartGraphic').graphic)
-        : null,
-      activeItemId: (current.storage.smartGraphic?.activeItemId as string | null) ?? null,
-    }),
+    selector: ({ editor: current }) => {
+      // Runs on every transaction while the insert button is shown: one walk
+      // over the selection instead of two from the top of the document.
+      const nodes = selectionNodes(current.state);
+      return {
+        graphic: nodes.isActive('smartGraphic')
+          ? coerceGraphic(nodes.attributes('smartGraphic').graphic)
+          : null,
+        activeItemId: (current.storage.smartGraphic?.activeItemId as string | null) ?? null,
+      };
+    },
   });
 
   const apply = (next: SmartGraphicModel, options?: { focus?: boolean }) => {
@@ -139,7 +144,7 @@ export function SmartGraphicToolbar({
     selectItem(next);
   };
 
-  const separator = <span aria-hidden="true" className="mx-0.5 h-5 w-px shrink-0 bg-border" />;
+  const separator = <ToolbarSeparator />;
 
   return (
     <div className={cn('flex max-w-full items-center gap-0.5', !showLabels && 'flex-wrap')}>
@@ -154,7 +159,7 @@ export function SmartGraphicToolbar({
         />
         <PopoverContent
           align="start"
-          className="w-[min(30rem,calc(100vw-1.5rem))] border border-border bg-popover p-3 shadow-lg"
+          className="w-[min(30rem,calc(100vw-1.5rem))] p-3"
         >
           <LayoutPicker
             graphic={graphic}
@@ -171,7 +176,7 @@ export function SmartGraphicToolbar({
         />
         <PopoverContent
           align="start"
-          className="w-[min(19rem,calc(100vw-1.5rem))] border border-border bg-popover p-3 shadow-lg"
+          className="w-[min(19rem,calc(100vw-1.5rem))] p-3"
         >
           <DesignPicker
             colorSet={graphic.colorSet}
@@ -221,7 +226,7 @@ export function SmartGraphicToolbar({
             ? needsSelection
             : canRemoveGraphicItem(graphic, selectedId)
               ? undefined
-              : formatMessage(t('graphicMinItemsReason'), { count: layout.minItems })
+              : tCount('graphicMinItemsReason', layout.minItems)
         }
         onClick={removeItem}
       >
@@ -279,7 +284,17 @@ export function SmartGraphicToolbar({
         <PopoverContent
           aria-label={t('graphicTextPane')}
           align="end"
-          className="w-[min(21rem,calc(100vw-1.5rem))] border border-border bg-popover p-3 shadow-lg"
+          className="w-[min(21rem,calc(100vw-1.5rem))] p-3"
+          onOpenAutoFocus={(event) => {
+            // Typing goes to the item selected in the graphic, not to the title.
+            if (!selectedId || !(event.currentTarget instanceof HTMLElement)) return;
+            const input = Array.from(
+              event.currentTarget.querySelectorAll<HTMLInputElement>('[data-text-pane-item]'),
+            ).find((element) => element.dataset.textPaneItem === selectedId);
+            if (!input) return;
+            event.preventDefault();
+            input.focus();
+          }}
         >
           <TextPane
             graphic={graphic}
@@ -293,7 +308,7 @@ export function SmartGraphicToolbar({
         showLabel={showLabels}
         label={t('graphicDelete')}
         onClick={() => editor.chain().focus().deleteSmartGraphic().run()}
-        className="hover:text-destructive"
+        className="hover:bg-destructive/10 hover:text-destructive"
       >
         <Trash2 className="h-4 w-4" />
       </ToolbarIconButton>
@@ -301,7 +316,7 @@ export function SmartGraphicToolbar({
   );
 }
 
-/** Popover trigger with a tooltip; shows text on touch layouts (and the layout name on wide screens). */
+/** Popover trigger; shows text on touch layouts (and the layout name on wide screens). */
 function ToolbarTrigger({
   label,
   showLabel,
@@ -316,32 +331,24 @@ function ToolbarTrigger({
   text?: string;
   chevron?: boolean;
 }) {
+  const labeled = showLabel || Boolean(text);
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-9 shrink-0 gap-1 px-2 text-xs',
-              !showLabel && !text && 'w-9 p-0',
-              showLabel && 'h-10 px-3 text-sm',
-            )}
-            aria-label={label}
-          >
-            {icon}
-            {showLabel ? (
-              <span className="max-w-[9rem] truncate whitespace-nowrap">{text ?? label}</span>
-            ) : text ? (
-              <span className="hidden max-w-[8rem] truncate lg:inline">{text}</span>
-            ) : null}
-            {chevron && (showLabel || text) ? <ChevronDown className="h-3.5 w-3.5 opacity-60" /> : null}
-          </Button>
-        </PopoverTrigger>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
+    <PopoverTrigger asChild>
+      <ToolbarButton
+        label={label}
+        size={labeled ? 'sm' : 'icon'}
+        // The touch height too: the sm size's own would win on coarse pointers.
+        className={cn(labeled && 'h-9 gap-1.5 px-2 pointer-coarse:h-10', showLabel && 'h-10 px-3')}
+      >
+        {icon}
+        {showLabel ? (
+          <span className="max-w-[9rem] truncate whitespace-nowrap">{text ?? label}</span>
+        ) : text ? (
+          <span className="hidden max-w-[8rem] truncate lg:inline">{text}</span>
+        ) : null}
+        {chevron && labeled ? <ChevronDown className="size-3.5! text-muted-foreground" /> : null}
+      </ToolbarButton>
+    </PopoverTrigger>
   );
 }
 
@@ -367,31 +374,22 @@ function ToolbarIconButton({
 }) {
   const disabled = disabledReason !== undefined;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-9 w-9 shrink-0 p-0',
-            showLabel && 'h-10 w-auto gap-1 px-3 text-sm',
-            disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
-            !disabled && className,
-          )}
-          aria-label={label}
-          aria-disabled={disabled || undefined}
-          onClick={() => {
-            if (!disabled) onClick();
-          }}
-        >
-          {children}
-          {showLabel ? <span className="whitespace-nowrap">{label}</span> : null}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="max-w-[16rem]">
-        <span className="block">{label}</span>
-        {disabledReason ? <span className="block text-xs opacity-75">{disabledReason}</span> : null}
-      </TooltipContent>
-    </Tooltip>
+    <ToolbarButton
+      label={label}
+      hint={disabledReason || undefined}
+      size={showLabel ? 'sm' : 'icon'}
+      className={cn(
+        showLabel && 'h-10 gap-1.5 px-3 pointer-coarse:h-10',
+        disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
+        !disabled && className,
+      )}
+      aria-disabled={disabled || undefined}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+    >
+      {children}
+      {showLabel ? <span className="whitespace-nowrap">{label}</span> : null}
+    </ToolbarButton>
   );
 }

@@ -34,7 +34,7 @@ import { GRAPHIC_CATEGORY_KEYS, GRAPHIC_LAYOUT_HINT_KEYS, GRAPHIC_LAYOUT_KEYS } 
 
 function GermanLanguageSwitch() {
   const { setLocale } = useLocale();
-  return <button onClick={() => setLocale('de')}>Deutsch</button>;
+  return <button onClick={() => void setLocale('de')}>Deutsch</button>;
 }
 
 async function typeMultiwordText(
@@ -101,7 +101,7 @@ describe('smart graphic insert and editing', () => {
     renderWithProviders(<SmartGraphicGallery editor={editor} />);
 
     await user.click(screen.getByRole('button', { name: 'Insert graphic' }));
-    const dialog = screen.getByRole('dialog', { name: 'Insert Graphic' });
+    const dialog = screen.getByRole('dialog', { name: 'Insert graphic' });
     const tabs = within(dialog).getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual([
       'All',
@@ -219,6 +219,19 @@ describe('smart graphic insert and editing', () => {
     editor.commands.insertContentAt(0, { type: 'paragraph' });
     editor.commands.setTextSelection(1);
     editor.commands.insertSmartGraphic('process-chevron');
+    expect(editor.isActive('smartGraphic')).toBe(true);
+    expect(coerceGraphic(editor.getAttributes('smartGraphic').graphic).layoutId).toBe('process-chevron');
+  });
+
+  it.each([
+    ['at the start of a paragraph', 1, ['smartGraphic', 'paragraph']],
+    ['inside a paragraph', 3, ['paragraph', 'smartGraphic', 'paragraph']],
+    ['at the end of a paragraph', 5, ['paragraph', 'smartGraphic', 'paragraph']],
+  ])('selects a graphic inserted %s', (_where, pos, blocks) => {
+    editor = createTestEditor('<p>Text</p>');
+    editor.commands.setTextSelection(pos);
+    expect(editor.commands.insertSmartGraphic('process-chevron')).toBe(true);
+    expect(editor.state.doc.content.content.map((node) => node.type.name)).toEqual(blocks);
     expect(editor.isActive('smartGraphic')).toBe(true);
     expect(coerceGraphic(editor.getAttributes('smartGraphic').graphic).layoutId).toBe('process-chevron');
   });

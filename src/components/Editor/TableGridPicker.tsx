@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatMessage } from '@/lib/translations';
 import { useLocale } from '@/hooks/useLocale';
 import { cn } from '@/lib/utils';
-import { ToolTile } from './toolbarControls';
+import { ToolbarButton, ToolTile } from './toolbarControls';
 
 export const TABLE_PICKER_MAX = 10;
+/** Size the picker starts at, in the grid and the size fields. */
+const DEFAULT_SIZE = 3;
 export const TABLE_CUSTOM_MAX = 20;
 export const TABLE_PICKER_CELL_PX = 16;
 export const TABLE_PICKER_HIT_PX = 24;
@@ -74,11 +75,13 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
   // After inserting, writing continues in the document instead of the trigger.
   const insertedRef = useRef(false);
   const [open, setOpen] = useState(false);
-  const [hoverRows, setHoverRows] = useState(1);
-  const [hoverCols, setHoverCols] = useState(1);
+  // The grid starts at the same 3 × 3 the size fields offer, so the caption
+  // and Insert never name two different sizes.
+  const [hoverRows, setHoverRows] = useState(DEFAULT_SIZE);
+  const [hoverCols, setHoverCols] = useState(DEFAULT_SIZE);
   const [withHeaderRow, setWithHeaderRow] = useState(true);
-  const [customRows, setCustomRows] = useState('3');
-  const [customCols, setCustomCols] = useState('3');
+  const [customRows, setCustomRows] = useState(String(DEFAULT_SIZE));
+  const [customCols, setCustomCols] = useState(String(DEFAULT_SIZE));
 
   useEffect(() => {
     if (!open) return;
@@ -127,8 +130,8 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
           previewedRef.current = false;
-          setHoverRows(1);
-          setHoverCols(1);
+          setHoverRows(DEFAULT_SIZE);
+          setHoverCols(DEFAULT_SIZE);
         }
         setOpen(nextOpen);
       }}
@@ -143,27 +146,16 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
           />
         </PopoverTrigger>
       ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 p-0"
-                aria-label={t('toolbarInsertTable')}
-                aria-haspopup="dialog"
-              >
-                <Table className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('toolbarInsertTable')}</TooltipContent>
-        </Tooltip>
+        <PopoverTrigger asChild>
+          <ToolbarButton label={t('toolbarInsertTable')} aria-haspopup="dialog">
+            <Table />
+          </ToolbarButton>
+        </PopoverTrigger>
       )}
       <PopoverContent
         aria-label={t('toolbarInsertTable')}
         align="start"
-        className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-2.5 bg-popover border border-border shadow-lg z-50"
+        className="w-auto max-w-[min(22rem,calc(100vw-1.5rem))] p-3"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => {
           if (!insertedRef.current) return;
@@ -262,8 +254,8 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
                         aria-hidden="true"
                         className={cn(
                           'pointer-events-none rounded-[1px] border transition-colors duration-75',
-                          isActiveDescendant && 'ring-1 ring-primary ring-offset-0',
-                          active ? 'border-primary bg-primary/25' : 'border-border bg-background',
+                          isActiveDescendant && 'ring-1 ring-selected ring-offset-0',
+                          active ? 'border-selected bg-selected/20' : 'border-input bg-card',
                         )}
                         style={{ width: TABLE_PICKER_CELL_PX, height: TABLE_PICKER_CELL_PX }}
                       />
@@ -280,21 +272,18 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
             {sizeLabel}
           </p>
           <Separator />
-          <label className="flex items-center gap-2 text-xs text-foreground pointer-coarse:min-h-10 pointer-coarse:text-sm">
+          <label className="flex min-h-8 items-center gap-2 text-sm text-foreground pointer-coarse:min-h-10">
             <input
               type="checkbox"
               checked={withHeaderRow}
               onChange={(event) => setWithHeaderRow(event.target.checked)}
-              className="h-3.5 w-3.5 accent-primary pointer-coarse:h-5 pointer-coarse:w-5"
+              className="size-4 accent-primary pointer-coarse:size-5"
             />
             {t('tableHeaderRow')}
           </label>
-          <div className="flex flex-wrap items-end gap-1.5">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-0">
-              <Label
-                htmlFor={`${gridId}-rows`}
-                className="text-[11px] font-normal text-muted-foreground"
-              >
+              <Label htmlFor={`${gridId}-rows`} className="text-xs font-normal text-muted-foreground">
                 {t('tableCustomRows')}
               </Label>
               <Input
@@ -305,20 +294,17 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
                 value={customRows}
                 onChange={(event) => setCustomRows(event.target.value)}
                 inputMode="numeric"
-                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs pointer-coarse:h-10 pointer-coarse:w-16 pointer-coarse:text-base"
+                className="mt-1.5 h-8 w-14 px-1.5 text-center tabular-nums pointer-coarse:h-10 pointer-coarse:w-16"
               />
             </div>
             <span
-              className="mb-1.5 text-xs text-muted-foreground pointer-coarse:mb-3"
+              className="mb-2 text-sm text-muted-foreground pointer-coarse:mb-3"
               aria-hidden="true"
             >
               ×
             </span>
             <div className="min-w-0">
-              <Label
-                htmlFor={`${gridId}-cols`}
-                className="text-[11px] font-normal text-muted-foreground"
-              >
+              <Label htmlFor={`${gridId}-cols`} className="text-xs font-normal text-muted-foreground">
                 {t('tableCustomCols')}
               </Label>
               <Input
@@ -329,12 +315,12 @@ export function TableGridPicker({ editor, variant = 'icon', onComplete }: TableG
                 value={customCols}
                 onChange={(event) => setCustomCols(event.target.value)}
                 inputMode="numeric"
-                className="mt-1 h-7 w-[3.25rem] px-1.5 text-center text-xs pointer-coarse:h-10 pointer-coarse:w-16 pointer-coarse:text-base"
+                className="mt-1.5 h-8 w-14 px-1.5 text-center tabular-nums pointer-coarse:h-10 pointer-coarse:w-16"
               />
             </div>
             <Button
               size="sm"
-              className="h-7 shrink-0 px-2.5 text-xs pointer-coarse:h-10 pointer-coarse:px-4 pointer-coarse:text-sm"
+              className="ms-auto shrink-0 pointer-coarse:h-10 pointer-coarse:px-4"
               disabled={!canInsertCustom}
               aria-label={t('tableInsertCustom')}
               onClick={() => {

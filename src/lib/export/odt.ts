@@ -301,9 +301,12 @@ class OdtWriter {
     return path;
   }
 
-  /** Renders the blocks of one flow (the page, or a table cell). */
-  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope): string {
-    const { leaves, trailing } = flowLeaves(blocks, container);
+  /**
+   * Renders the blocks of one flow (the page, a table cell, or a graphic's
+   * text). `leading` is the gap before its first leaf, px (see FlowOptions).
+   */
+  flow(blocks: ExportBlock[], container: MarginContext['container'], scope: FlowScope, leading = 0): string {
+    const { leaves, trailing } = flowLeaves(blocks, container, { inCell: container === 'cell' || Boolean(scope.cell), leading });
     const byBlock = new Map<ExportBlock, { leaf: FlowLeaf; before: number; after: number }>();
     leaves.forEach((leaf, index) => {
       byBlock.set(leaf.block, {
@@ -349,7 +352,8 @@ class OdtWriter {
           case 'graphic':
             if (block.raster && block.svg) return this.graphicParagraph(block, leaf, before, after, scope);
             this.warnings.add('graphic-layout-simplified');
-            return this.flow(graphicToFallbackBlocks(block), scope.cell ? 'cell' : 'blockquote', scope);
+            // The text takes the drawing's place and its space above.
+            return this.flow(graphicToFallbackBlocks(block), 'graphic', scope, before);
           case 'table':
             return this.table(block, leaf, before, scope);
           default:
@@ -434,18 +438,27 @@ class OdtWriter {
   private paragraph(block: ExportTextBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope): string {
     const context = this.context(block, leaf, scope);
     const base = textBaseStyle(context);
-    const runs = styledRuns({ runs: block.runs, context }, false);
+    const runs = styledRuns({ runs: block.runs, context });
     const line = lineBoxPx(base, runs.map(({ style }) => style));
     const parent = this.parentStyle(block, leaf, scope);
-    const name = this.paragraphStyle({
-      parent,
-      before,
-      after,
-      ...(Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? { line } : {}),
-      ...this.margins(leaf, scope),
-      align: block.align ?? scope.cell?.align,
-      ...(block.type === 'heading' ? { keepNext: true } : {}),
-    });
+    // Cell paragraphs use Table Contents: a quote brings its own bar and
+    // padding, which Quotations would otherwise provide.
+    const { borderWidth, paddingLeft } = DOCUMENT_STYLE.blockquote;
+    const cellQuote = Boolean(scope.cell) && leaf.quoteDepth > 0 && block.type !== 'heading';
+    const name = this.paragraphStyle(
+      {
+        parent,
+        before,
+        after,
+        ...(Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? { line } : {}),
+        ...this.margins(leaf, scope),
+        align: block.align ?? scope.cell?.align,
+        ...(block.type === 'heading' ? { keepNext: true } : {}),
+      },
+      cellQuote
+        ? ` fo:border-left="${pt(borderWidth)} solid #${DOCUMENT_STYLE.borderColor}" fo:padding-left="${pt(paddingLeft)}"`
+        : '',
+    );
     const content = `${this.takeFloats()}${this.runs(runs)}`;
     if (block.type === 'heading') {
       return `<text:h text:style-name="${name}" text:outline-level="${block.level ?? 1}">${content}</text:h>`;
@@ -551,7 +564,7 @@ class OdtWriter {
     const margins = this.margins(leaf, scope);
     if (!image.prepared) {
       const context: TextContext = scope.cell?.context ?? { kind: 'body' };
-      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context }, false);
+      const runs = styledRuns({ runs: imagePlaceholderRuns(image), context });
       const name = this.paragraphStyle({ parent: scope.cell ? 'Table_20_Contents' : 'Standard', before, after, ...margins, align: 'center' });
       return `<text:p text:style-name="${name}">${this.takeFloats()}${this.runs(runs)}</text:p>`;
     }

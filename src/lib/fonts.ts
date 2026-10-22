@@ -3,7 +3,9 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 // Curated font list. These originate from Google Fonts, but LWrite self-hosts
 // them under public/fonts and serves them from its own origin (see
 // scripts/fetch-fonts.mjs), so picking a font makes no third-party request.
-export const FONT_FAMILIES = [
+export type FontCategory = 'sans-serif' | 'serif' | 'monospace' | 'display' | 'system';
+
+export const FONT_FAMILIES: { name: string; category: FontCategory }[] = [
   // Sans-serif
   { name: 'Inter', category: 'sans-serif' },
   { name: 'Roboto', category: 'sans-serif' },
@@ -53,6 +55,31 @@ export const FONT_FAMILIES = [
   { name: 'Courier New', category: 'system' },
 ];
 
+const SYSTEM_FALLBACKS: Record<string, string> = {
+  'Times New Roman': 'serif',
+  Georgia: 'serif',
+  'Courier New': 'monospace',
+};
+
+/** CSS generic family for a picker font (display faces fall back to cursive). */
+export function fontFallback(fontName: string): string {
+  const font = FONT_FAMILIES.find((candidate) => candidate.name === fontName);
+  if (SYSTEM_FALLBACKS[fontName]) return SYSTEM_FALLBACKS[fontName];
+  if (font?.category === 'serif' || font?.category === 'monospace') return font.category;
+  if (font?.category === 'display') return 'cursive';
+  return 'sans-serif';
+}
+
+/** The `font-family` value the editor stores for a picker font. */
+export function fontFamilyValue(fontName: string): string {
+  return `"${fontName}", ${fontFallback(fontName)}`;
+}
+
+/** First family of a stored `font-family` value, without quotes. */
+export function primaryFontName(value: string): string {
+  return value.split(',')[0].replace(/['"]/g, '').trim();
+}
+
 // Fonts that need no stylesheet injection: OS system fonts, plus the interface
 // fonts already loaded globally in index.html.
 const PRELOADED_FONTS = new Set([
@@ -80,14 +107,19 @@ export function loadFont(fontName: string) {
   document.head.appendChild(link);
 }
 
-export function loadDocumentFonts(doc: ProseMirrorNode) {
+/** Font names the content of `node` sets with textStyle marks. */
+export function fontFamiliesIn(node: ProseMirrorNode): Set<string> {
   const families = new Set<string>();
-  doc.descendants((node) => {
-    for (const mark of node.marks) {
+  node.descendants((child) => {
+    for (const mark of child.marks) {
       if (mark.type.name === 'textStyle' && typeof mark.attrs.fontFamily === 'string') {
-        families.add(mark.attrs.fontFamily.split(',')[0].replace(/['"]/g, '').trim());
+        families.add(primaryFontName(mark.attrs.fontFamily));
       }
     }
   });
-  families.forEach(loadFont);
+  return families;
+}
+
+export function loadDocumentFonts(doc: ProseMirrorNode) {
+  fontFamiliesIn(doc).forEach(loadFont);
 }

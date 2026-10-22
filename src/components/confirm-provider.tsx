@@ -11,6 +11,26 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from '@/hooks/useConfirm';
 import { useLocale } from '@/hooks/useLocale';
+import { isTouchInteraction } from '@/lib/inputModality';
+
+const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * A menu item disappears with its menu: confirmations asked from a menu
+ * return focus to the button that opened it (through any submenus).
+ */
+function returnTarget(element: Element | null): HTMLElement | null {
+  let target = element;
+  for (let menu = target?.closest('[role="menu"]'); menu?.id; menu = target?.closest('[role="menu"]')) {
+    const id = menu.id;
+    const trigger = Array.from(document.querySelectorAll('[aria-controls]')).find(
+      (candidate) => candidate.getAttribute('aria-controls') === id,
+    );
+    // A trigger inside the menu it controls would be found again and again.
+    target = trigger && !menu.contains(trigger) ? trigger : null;
+  }
+  return target instanceof HTMLElement ? target : null;
+}
 
 interface PendingConfirm {
   options: ConfirmOptions;
@@ -31,9 +51,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     return new Promise<boolean>((resolve) => {
       // A second request while one is open cancels the first one.
       pendingRef.current?.resolve(false);
-      if (!pendingRef.current)
-        returnFocusRef.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!pendingRef.current) returnFocusRef.current = returnTarget(document.activeElement);
       const next = { options, resolve };
       pendingRef.current = next;
       setPending(next);
@@ -54,7 +72,18 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             requestAnimationFrame(() => {
-              if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
+              const target = returnFocusRef.current;
+              if (target?.isConnected) {
+                target.focus();
+                return;
+              }
+              // What opened the confirmation is gone (a deleted row): stay in
+              // the dialog it was opened from instead of falling to <body>.
+              const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+              const dialog = dialogs[dialogs.length - 1];
+              // After a tap, a text field would open the software keyboard.
+              if (isTouchInteraction()) dialog?.focus();
+              else dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
             });
           }}
         >
