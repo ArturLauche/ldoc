@@ -1,4 +1,5 @@
 import { isWinAnsi, type ExportFontRegistry, type FaceResolution, type LoadedFont } from '../fonts/registry';
+import { bidiLevels, directionalRuns, hasRtlText, reorderByLevels, type BidiDirection } from '../bidi';
 import { shapeText, splitGraphemes } from '../fonts/shaping';
 import { DOCUMENT_STYLE, type RunStyle, type TextBaseStyle } from '../typography';
 import type { ExportAlignment } from '../types';
@@ -52,6 +53,13 @@ interface Cluster {
   missing?: MissingText;
   padStart: number;
   padEnd: number;
+  /** UTF-16 range in the paragraph's combined text. */
+  start: number;
+  end: number;
+  /** Bidi embedding level (0 LTR, 1 RTL, 2 embedded LTR). */
+  level: number;
+  /** False for trailing spaces, which hang and are not justified. */
+  stretchable: boolean;
 }
 
 export interface LinePiece {
@@ -64,6 +72,8 @@ export interface LinePiece {
   glyphs: PlacedGlyph[];
   /** Extra advance after each glyph that ends a space cluster (justification). */
   spaceExtra: number;
+  /** Number of non-trailing spaces merged into this piece. */
+  stretchableSpaces: number;
   text: string;
   missing?: MissingText;
   padStart: number;
@@ -112,7 +122,13 @@ function fallbackMetrics(sizeless: FontMetrics | null): FontMetrics {
 }
 
 /** Shapes one styled run into clusters. */
-function runClusters(env: InlineEnvironment, run: StyledRun, index: number): Cluster[] {
+function runClusters(
+  env: InlineEnvironment,
+  run: StyledRun,
+  index: number,
+  start: number,
+  direction: BidiDirection,
+): Cluster[] {
   const { style } = run;
   const resolution = env.registry.resolve({ family: style.family, weight: style.weight, italic: style.italic });
   if (resolution.requested.kind !== 'system' && resolution.family.name !== resolution.requested.name) {
@@ -126,7 +142,16 @@ function runClusters(env: InlineEnvironment, run: StyledRun, index: number): Clu
   }
   const fallback = env.registry.fallbackFor(style.weight, style.italic);
   const clusters: Cluster[] = [];
-  const pushText = (text: string, font: PdfTextFont | null, metrics: FontMetrics, glyphs: PlacedGlyph[], width: number, missing?: MissingText) => {
+  const pushText = (
+    text: string,
+    font: PdfTextFont | null,
+    metrics: FontMetrics,
+    glyphs: PlacedGlyph[],
+    width: number,
+    from: number,
+    to: number,
+    missing?: MissingText,
+  ) => {
     clusters.push({
       text,
       width,
@@ -140,13 +165,17 @@ function runClusters(env: InlineEnvironment, run: StyledRun, index: number): Clu
       ...(missing ? { missing } : {}),
       padStart: 0,
       padEnd: 0,
+      start: from,
+      end: to,
+      level: 0,
+      stretchable: true,
     });
   };
-  const missingCluster = (grapheme: string, metrics: FontMetrics) => {
+  const missingCluster = (grapheme: string, metrics: FontMetrics, from: number, to: number) => {
     const measured = env.rasterizer?.measure(grapheme, style) ?? null;
     if (measured) {
       env.warnings.add('pdf-glyph-rasterized');
-      pushText(grapheme, null, metrics, [], measured.width, { text: grapheme, ...measured });
+      pushText(grapheme, null, metrics, [], measured.width, from, to, { text: grapheme, ...measured });
     } else {
       env.warnings.add('pdf-glyph-missing', grapheme);
     }
@@ -154,42 +183,64 @@ function runClusters(env: InlineEnvironment, run: StyledRun, index: number): Clu
 
   if (resolution.standard) {
     const standard = standardFamilyFont(env, resolution, style);
+    let cursor = start;
     splitGraphemes(run.text).forEach((grapheme) => {
+      const from = cursor;
+      const to = from + grapheme.length;
+      cursor = to;
       if (grapheme === '\n') {
-        pushText('\n', standard, standard.metrics, [], 0);
+        pushText('\n', standard, standard.metrics, [], 0, from, to);
         return;
       }
       const ansi = Array.from(grapheme).every((char) => isWinAnsi(char.codePointAt(0) as number));
       if (ansi) {
         const text = grapheme === '\t' ? ' ' : grapheme;
-        pushText(grapheme, standard, standard.metrics, [{ id: 0, text, advance: standard.width(text, style.sizePx), xOffset: 0, yOffset: 0 }], standard.width(text, style.sizePx));
+        pushText(
+          grapheme,
+          standard,
+          standard.metrics,
+          [{ id: 0, text, advance: standard.width(text, style.sizePx), xOffset: 0, yOffset: 0 }],
+          standard.width(text, style.sizePx),
+          from,
+          to,
+        );
         return;
       }
-      const shaped = fallback ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback) : [];
+      const graphemeDirection: BidiDirection = hasRtlText(grapheme) ? 'rtl' : 'ltr';
+      const shaped = fallback
+        ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback, graphemeDirection)
+        : [];
       const segment = shaped[0];
       if (segment?.font) {
-        appendShaped(env, segment.font, segment.glyphs, segment.clusters, grapheme, style, pushText);
+        appendShaped(env, segment.font, segment.glyphs, segment.clusters, grapheme, style, pushText, from);
       } else {
-        missingCluster(grapheme, standard.metrics);
+        missingCluster(grapheme, standard.metrics, from, to);
       }
     });
     return clusters;
   }
 
   const primaryMetrics = resolution.fonts[0] ? env.fonts.forLoaded(resolution.fonts[0]).metrics : null;
-  shapeText(run.text, resolution, fallback).forEach((segment) => {
-    if (segment.text === '\n') {
-      pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0);
-      return;
-    }
-    if (!segment.font) {
-      splitGraphemes(segment.text).forEach((grapheme) => {
-        if (grapheme === '\n') pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0);
-        else missingCluster(grapheme, fallbackMetrics(primaryMetrics));
-      });
-      return;
-    }
-    appendShaped(env, segment.font, segment.glyphs, segment.clusters, run.text, style, pushText);
+  directionalRuns(run.text, direction).forEach((part) => {
+    const text = run.text.slice(part.start, part.end);
+    shapeText(text, resolution, fallback, part.direction, start + part.start).forEach((segment) => {
+      if (segment.text === '\n') {
+        pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0, segment.start, segment.end);
+        return;
+      }
+      if (!segment.font) {
+        let cursor = segment.start;
+        splitGraphemes(segment.text).forEach((grapheme) => {
+          const from = cursor;
+          const to = from + grapheme.length;
+          cursor = to;
+          if (grapheme === '\n') pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0, from, to);
+          else missingCluster(grapheme, fallbackMetrics(primaryMetrics), from, to);
+        });
+        return;
+      }
+      appendShaped(env, segment.font, segment.glyphs, segment.clusters, run.text, style, pushText, 0);
+    });
   });
   return clusters;
 }
@@ -201,7 +252,16 @@ function appendShaped(
   clusters: Array<{ start: number; end: number; advance: number }>,
   source: string,
   style: RunStyle,
-  push: (text: string, font: PdfTextFont | null, metrics: FontMetrics, glyphs: PlacedGlyph[], width: number) => void,
+  push: (
+    text: string,
+    font: PdfTextFont | null,
+    metrics: FontMetrics,
+    glyphs: PlacedGlyph[],
+    width: number,
+    from: number,
+    to: number,
+  ) => void,
+  sourceOffset: number,
 ): void {
   const font = env.fonts.forLoaded(loaded);
   const factor = style.sizePx / loaded.font.unitsPerEm;
@@ -221,10 +281,18 @@ function appendShaped(
       glyphIndex += 1;
     }
     if (text.includes('\n')) {
-      push('\n', font, font.metrics, [], 0);
+      push('\n', font, font.metrics, [], 0, sourceOffset + cluster.start, sourceOffset + cluster.end);
       return;
     }
-    push(text, font, font.metrics, placed, cluster.advance * factor);
+    push(
+      text,
+      font,
+      font.metrics,
+      placed,
+      cluster.advance * factor,
+      sourceOffset + cluster.start,
+      sourceOffset + cluster.end,
+    );
   });
 }
 
@@ -258,6 +326,8 @@ export interface InlineLayoutOptions {
   base: TextBaseStyle;
   baseMetrics: FontMetrics;
   align?: ExportAlignment;
+  /** Paragraph base direction; `dir="auto"` resolved by the document. */
+  direction?: BidiDirection;
   /** Available width for a line starting `y` px below the paragraph top. */
   slotAt: (y: number, height: number) => LineSlot;
 }
@@ -268,14 +338,35 @@ function clusterWidth(cluster: Cluster): number {
 
 /** Shapes and lines a paragraph's runs. */
 export function layoutInline(env: InlineEnvironment, runs: StyledRun[], options: InlineLayoutOptions): LayoutLine[] {
-  const clusters = runs.flatMap((run, index) => runClusters(env, run, index));
+  const direction: BidiDirection = options.direction ?? 'ltr';
+  const combined = runs.map((run) => run.text).join('');
+  const levels = bidiLevels(combined, direction);
+  let runStart = 0;
+  const clusters = runs.flatMap((run, index) => {
+    const shaped = runClusters(env, run, index, runStart, direction);
+    runStart += run.text.length;
+    return shaped;
+  });
+  const baseLevel = direction === 'rtl' ? 1 : 0;
+  clusters.forEach((cluster) => {
+    cluster.level = levels[cluster.start] ?? baseLevel;
+  });
   prepareClusters(clusters, runs);
+  // In an RTL run the logical start is the visual right edge: its padding
+  // belongs after the glyphs, not before them.
+  clusters.forEach((cluster) => {
+    if (cluster.level % 2 === 1) {
+      const pad = cluster.padStart;
+      cluster.padStart = cluster.padEnd;
+      cluster.padEnd = pad;
+    }
+  });
   const strut = lineMetricsFor(options.baseMetrics, options.base.sizePx, options.base.lineHeight, 0);
   const lines: LayoutLine[] = [];
   let y = 0;
   let index = 0;
   const pushLine = (from: number, to: number, slot: LineSlot, endsParagraph: boolean) => {
-    const line = buildLine(clusters.slice(from, to), runs, strut, slot, options.align, endsParagraph);
+    const line = buildLine(clusters.slice(from, to), runs, strut, slot, options.align, endsParagraph, direction);
     lines.push(line);
     y += line.height;
   };
@@ -314,11 +405,11 @@ export function layoutInline(env: InlineEnvironment, runs: StyledRun[], options:
       break;
     }
     // Overflow: break after the last opportunity, else anywhere (overflow-wrap: anywhere).
+    // Spaces past the break stay at the start of the next line (break-spaces),
+    // so only the line break itself is consumed.
     const breakAt = lastBreak >= index ? lastBreak + 1 : Math.max(end, index + 1);
-    let next = breakAt;
     pushLine(index, breakAt, slot, false);
-    while (next < clusters.length && clusters[next].space && !clusters[next].hardBreak) next += 1;
-    index = next;
+    index = breakAt;
   }
   return lines;
 }
@@ -351,16 +442,25 @@ function buildLine(
   slot: LineSlot,
   align: ExportAlignment | undefined,
   endsParagraph: boolean,
+  direction: BidiDirection,
 ): LayoutLine {
   // Trailing spaces stay on the line (break-spaces) but are not stretched.
   let trimmed = clusters.length;
   while (trimmed > 0 && clusters[trimmed - 1].space) trimmed -= 1;
-  const visible = clusters;
+  clusters.forEach((cluster, index) => {
+    cluster.stretchable = index < trimmed || !cluster.space;
+  });
+  const visible = reorderByLevels(clusters, clusters.map((cluster) => cluster.level));
   let above = strut.above;
   let below = strut.below;
   const pieces: LinePiece[] = [];
   let x = 0;
+  let lastTrailing = false;
   visible.forEach((cluster) => {
+    // Start a new piece at the first trailing space so justification can
+    // stretch the inner spaces without also stretching the hanging ones.
+    const trailing = cluster.space && !cluster.stretchable;
+    const startsTrailing = trailing && !lastTrailing;
     const style = runs[cluster.run].style;
     const metrics = lineMetricsFor(cluster.metrics, style.sizePx, style.lineHeight, baselineShift(style));
     if (style.lineHeight > 0) {
@@ -368,12 +468,14 @@ function buildLine(
       below = Math.max(below, metrics.below);
     }
     const last = pieces[pieces.length - 1];
+    const stretchableSpaces = cluster.space && cluster.stretchable ? 1 : 0;
     x += cluster.padStart;
-    if (last && last.run === cluster.run && last.font === cluster.font && !cluster.missing && !last.missing && !cluster.padStart) {
+    if (last && !startsTrailing && last.run === cluster.run && last.font === cluster.font && !cluster.missing && !last.missing && !cluster.padStart) {
       last.glyphs.push(...cluster.glyphs);
       last.text += cluster.text;
       last.width += cluster.width;
       last.padEnd = cluster.padEnd;
+      last.stretchableSpaces += stretchableSpaces;
     } else {
       pieces.push({
         run: cluster.run,
@@ -383,30 +485,31 @@ function buildLine(
         width: cluster.width,
         glyphs: [...cluster.glyphs],
         spaceExtra: 0,
+        stretchableSpaces,
         text: cluster.text,
         ...(cluster.missing ? { missing: cluster.missing } : {}),
         padStart: cluster.padStart,
         padEnd: cluster.padEnd,
       });
     }
+    lastTrailing = trailing;
     x += cluster.width + cluster.padEnd;
   });
   const width = x;
   const free = Math.max(0, slot.width - width);
+  const effectiveAlign = align ?? (direction === 'rtl' ? 'right' : 'left');
   let offset = 0;
-  if (align === 'center') offset = free / 2;
-  else if (align === 'right') offset = free;
-  else if (align === 'justify' && !endsParagraph) {
-    const spaces = clusters.slice(0, trimmed).filter((cluster) => cluster.space).length;
+  if (effectiveAlign === 'center') offset = free / 2;
+  else if (effectiveAlign === 'right') offset = free;
+  else if (effectiveAlign === 'justify' && !endsParagraph) {
+    const spaces = visible.reduce((count, cluster) => count + (cluster.space && cluster.stretchable ? 1 : 0), 0);
     if (spaces > 0 && free > 0) {
       const extra = free / spaces;
       // Re-flow piece offsets with the extra space after each inner space.
       let shift = 0;
-      let remaining = spaces;
       pieces.forEach((piece) => {
         piece.x += shift;
-        const count = Math.min(remaining, Array.from(piece.text).filter((char) => /\s/u.test(char) && char !== '\u00a0').length);
-        remaining -= count;
+        const count = piece.stretchableSpaces;
         piece.spaceExtra = count ? extra : 0;
         piece.width += count * extra;
         shift += count * extra;
@@ -415,7 +518,7 @@ function buildLine(
   }
   return {
     pieces,
-    width: align === 'justify' && !endsParagraph ? Math.max(width, slot.width) : width,
+    width: effectiveAlign === 'justify' && !endsParagraph ? Math.max(width, slot.width) : width,
     height: above + below,
     baseline: above,
     offset,

@@ -621,7 +621,9 @@ export function sanitizeGraphicText(
   if (typeof value !== 'string') return '';
   const collapsed = value.replace(/\s+/g, ' ');
   const prepared = options?.trim === false ? collapsed.replace(/^\s+/, '') : collapsed.trim();
-  return prepared.slice(0, maxLength);
+  // Truncate by code point so a limit never leaves a lone surrogate behind.
+  const codePoints = Array.from(prepared);
+  return codePoints.length > maxLength ? codePoints.slice(0, maxLength).join('') : prepared;
 }
 
 function clampGraphic(model: SmartGraphicModel, options = { trim: true }, locale: Locale = 'en'): SmartGraphicModel {

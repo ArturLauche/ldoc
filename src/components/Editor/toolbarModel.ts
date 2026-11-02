@@ -234,7 +234,9 @@ export function stepFontSize(current: string, direction: 1 | -1): string {
     direction > 0
       ? sizes.find((size) => size > value)
       : [...sizes].reverse().find((size) => size < value);
-  return `${next ?? (direction > 0 ? MAX_FONT_SIZE_PX : MIN_FONT_SIZE_PX)}px`;
+  // Past the end of the scale the size stays as it is: jumping to the nearest
+  // step would move an imported 8px text up when the user asked for smaller.
+  return `${next ?? value}px`;
 }
 
 export function useLineSpacings(t: (key: TranslationKey) => string) {

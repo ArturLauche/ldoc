@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asciiUri, bytesToHex, linkTarget } from './shared';
+import { asciiUri, buildTableGrid, bytesToHex, linkTarget } from './shared';
 
 describe('linkTarget', () => {
   it('classifies the link forms the editor accepts', () => {
@@ -27,5 +27,14 @@ describe('bytesToHex', () => {
     expect(bytesToHex(new Uint8Array([1, 2, 3, 4, 5]), 2)).toBe('0102\n0304\n05');
     expect(bytesToHex(new Uint8Array([1, 2, 3, 4]), 2)).toBe('0102\n0304');
     expect(bytesToHex(new Uint8Array(0), 2)).toBe('');
+  });
+});
+
+describe('buildTableGrid', () => {
+  it('handles more rows than the engine accepts as call arguments', () => {
+    const rows = Array.from({ length: 200_000 }, () => ({ cells: [] }));
+    const grid = buildTableGrid({ type: 'table', rows });
+    expect(grid.columnCount).toBe(1);
+    expect(grid.rowCount).toBe(rows.length);
   });
 });

@@ -160,6 +160,17 @@ describe('table insert and tools', () => {
     expect(screen.getByRole('button', { name: 'Cell fill' })).toBeInTheDocument();
   });
 
+  it('keeps cell text readable on imported named and hsl fills', () => {
+    editor = createTestEditor(
+      '<table><tbody><tr><td style="background-color: yellow">Light</td><td style="background-color: navy">Dark</td><td style="background-color: hsl(0, 0%, 10%)">Hsl</td></tr></tbody></table>',
+    );
+
+    const html = editor.getHTML();
+    expect(html).toContain('background-color: yellow; color: rgb(15, 23, 42)');
+    expect(html).toContain('background-color: navy; color: rgb(248, 250, 252)');
+    expect(html).toContain('background-color: rgb(26, 26, 26); color: rgb(248, 250, 252)');
+  });
+
   it('offers labeled contextual tools without the insert picker for touch layouts', () => {
     editor = createTestEditor();
     editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: false });

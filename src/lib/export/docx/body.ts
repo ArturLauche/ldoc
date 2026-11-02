@@ -1,4 +1,5 @@
 import { toHex } from '../color';
+import { hasRtlText, type BidiDirection } from '../bidi';
 import { MONOSPACE_FAMILY, resolveFamily, type ResolvedFamily } from '../fonts/catalog';
 import {
   asciiUri,
@@ -58,7 +59,7 @@ export interface FlowScope {
 export class DocxBodyWriter {
   readonly relationships: Relationship[] = [];
   readonly media: Array<{ path: string; bytes: Uint8Array; extension: string }> = [];
-  readonly numbering = new NumberingRegistry();
+  readonly numbering: NumberingRegistry;
   /** Families referenced by runs (for the font table). */
   readonly families = new Map<string, ResolvedFamily>();
   private nextRelationship: number;
@@ -68,13 +69,17 @@ export class DocxBodyWriter {
   /** A link goes to the start of the document (`#` or `#top`). */
   linksToTop = false;
   private readonly imageRelationships = new Map<PreparedExportImage | Uint8Array, string>();
+  private readonly rtl: boolean;
 
   constructor(
     firstRelationshipId: number,
     private readonly geometry: PageGeometry,
     private readonly warnings: WarningCollector,
+    direction: BidiDirection = 'ltr',
   ) {
     this.nextRelationship = firstRelationshipId;
+    this.rtl = direction === 'rtl';
+    this.numbering = new NumberingRegistry(direction);
   }
 
   private relationship(type: string, target: string, external = false): string {
@@ -205,6 +210,7 @@ export class DocxBodyWriter {
       pStyle ? `<w:pStyle w:val="${pStyle}"/>` : '',
       this.numberingXml(leaf),
       cellQuote ? quoteBorderXml() : '',
+      this.rtl ? '<w:bidi/>' : '',
       spacing(before, after, Math.abs(line - base.sizePx * base.lineHeight) > 0.01 ? line : null),
       indentXml(leaf, scope.indent, Boolean(leaf.listItem)),
       align ? `<w:jc w:val="${align === 'justify' ? 'both' : align}"/>` : '',
@@ -289,6 +295,7 @@ export class DocxBodyWriter {
     if (style.highlight) props.push(`<w:shd w:val="clear" w:color="auto" w:fill="${style.highlight}"/>`);
     if (style.superscript) props.push('<w:vertAlign w:val="superscript"/>');
     else if (style.subscript) props.push('<w:vertAlign w:val="subscript"/>');
+    if (hasRtlText(text)) props.push('<w:rtl/>');
     const rPr = props.length ? `<w:rPr>${props.join('')}</w:rPr>` : '';
     return text
       .split('\n')
@@ -311,7 +318,7 @@ export class DocxBodyWriter {
       .join('');
     const indent = twips(scope.indent) + (leaf.listDepth ? twips(leaf.listDepth * (DOCUMENT_STYLE.list.indent + DOCUMENT_STYLE.list.itemPadding)) : 0) + twips(leaf.quoteDepth * (DOCUMENT_STYLE.blockquote.borderWidth + DOCUMENT_STYLE.blockquote.paddingLeft));
     // Padding above and below the code lines is part of the shaded box.
-    return `<w:p><w:pPr><w:pStyle w:val="Code"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="${Math.round(style.paddingY * 0.75)}" w:color="${style.background}"/><w:bottom w:val="single" w:sz="4" w:space="${Math.round(style.paddingY * 0.75)}" w:color="${style.background}"/></w:pBdr><w:spacing w:before="${twips(before + style.paddingY)}" w:after="${twips(after + style.paddingY)}"/><w:ind w:left="${indent + twips(style.paddingX)}" w:right="${twips(style.paddingX)}"/></w:pPr>${floats.join('')}${runs}</w:p>`;
+    return `<w:p><w:pPr><w:pStyle w:val="Code"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="${Math.round(style.paddingY * 0.75)}" w:color="${style.background}"/><w:bottom w:val="single" w:sz="4" w:space="${Math.round(style.paddingY * 0.75)}" w:color="${style.background}"/></w:pBdr>${this.rtl ? '<w:bidi/>' : ''}<w:spacing w:before="${twips(before + style.paddingY)}" w:after="${twips(after + style.paddingY)}"/><w:ind w:left="${indent + twips(style.paddingX)}" w:right="${twips(style.paddingX)}"/></w:pPr>${floats.join('')}${runs}</w:p>`;
   }
 
   private imageParagraph(
@@ -404,7 +411,7 @@ export class DocxBodyWriter {
     const border = (side: string) =>
       hidden ? `<w:${side} w:val="nil"/>` : `<w:${side} w:val="single" w:sz="${eighths(style.borderWidth)}" w:space="0" w:color="${DOCUMENT_STYLE.borderColor}"/>`;
     const indent = twips(this.geometry.contentWidthPx - available);
-    const tblPr = `<w:tblPr><w:tblW w:w="${twips(total)}" w:type="dxa"/>${indent ? `<w:tblInd w:w="${indent}" w:type="dxa"/>` : ''}<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:left w:w="${twips(style.cellPaddingX)}" w:type="dxa"/><w:bottom w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:right w:w="${twips(style.cellPaddingX)}" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/></w:tblPr>`;
+    const tblPr = `<w:tblPr>${this.rtl ? '<w:bidiVisual/>' : ''}<w:tblW w:w="${twips(total)}" w:type="dxa"/>${indent ? `<w:tblInd w:w="${indent}" w:type="dxa"/>` : ''}<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:left w:w="${twips(style.cellPaddingX)}" w:type="dxa"/><w:bottom w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:right w:w="${twips(style.cellPaddingX)}" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/></w:tblPr>`;
     const grid = `<w:tblGrid>${widths.map((width) => `<w:gridCol w:w="${twips(width)}"/>`).join('')}</w:tblGrid>`;
     const headerRows = table.rows.findIndex((row) => !row.cells.every((cell) => cell.header));
     const rowXml = rows

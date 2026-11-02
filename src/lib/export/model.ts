@@ -34,6 +34,19 @@ const BLOCK_TAGS = new Set(['blockquote', 'div', 'h1', 'h2', 'h3', 'hr', 'img', 
 // text, so the placeholder cannot collide with document characters.
 const SOFT_SPACE = '\u0000';
 
+const RTL_LETTER =
+  /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}]/u;
+const LETTER = /\p{L}/u;
+
+/** The direction `dir="auto"` resolves for this text: its first strong character. */
+export function documentDirection(text: string): 'ltr' | 'rtl' {
+  for (const character of text) {
+    if (!LETTER.test(character)) continue;
+    return RTL_LETTER.test(character) ? 'rtl' : 'ltr';
+  }
+  return 'ltr';
+}
+
 /**
  * Builds the format-neutral document model from sanitized editor HTML. This
  * is the only place that interprets document HTML for export.
@@ -46,6 +59,7 @@ export function extractExportDocumentFromHtml({ html, name, locale }: ModelOptio
     html,
     name,
     locale,
+    direction: documentDirection(doc.body.textContent ?? ''),
     blocks: blocks.length ? blocks : [emptyParagraph()],
   };
 }
@@ -115,8 +129,12 @@ function parseElementAsBlocks(element: HTMLElement, inherited: ExportInlineMarks
       return [{ type: 'horizontal-rule' }];
     case 'img':
       return [parseImage(element as HTMLImageElement)];
-    case 'table':
-      return [parseTable(element as HTMLTableElement, inherited)];
+    case 'table': {
+      // A table without cells renders as nothing in the editor; exporting an
+      // empty native table would add space or an empty box.
+      const table = parseTable(element as HTMLTableElement, inherited);
+      return table.rows.length ? [table] : [];
+    }
     default:
       return parseChildrenAsBlocks(element, containerMarks(element, inherited));
   }
@@ -234,14 +252,22 @@ function parseColumnWidths(table: HTMLTableElement, rows: Array<{ cells: ExportT
       });
   }
   if (!widths.some((width) => width !== null)) {
+    // The first row may be narrower than the table (ragged imported rows), so
+    // every <col> width applies, not just those under the first row's cells.
     const cols = Array.from(table.querySelectorAll(':scope > colgroup > col'));
     cols.forEach((col, index) => {
       const value = (col as HTMLElement).style.width;
       const width = value.endsWith('px') ? Number.parseFloat(value) : Number.NaN;
-      if (index < widths.length || !widths.length) widths[index] = Number.isFinite(width) && width > 0 ? width : null;
+      widths[index] = Number.isFinite(width) && width > 0 ? width : null;
     });
   }
-  const columnCount = Math.max(widths.length, ...rows.map((row) => row.cells.reduce((sum, cell) => sum + cell.colSpan, 0)));
+  // A loop, not `Math.max(...rows.map(...))`: a large imported table would
+  // spread more arguments than the engine's call stack accepts.
+  let columnCount = widths.length;
+  rows.forEach((row) => {
+    const count = row.cells.reduce((sum, cell) => sum + cell.colSpan, 0);
+    if (count > columnCount) columnCount = count;
+  });
   while (widths.length < columnCount) widths.push(null);
   return widths.slice(0, columnCount);
 }

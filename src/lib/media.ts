@@ -17,18 +17,28 @@ export const IMAGE_MIME_PATTERN =
 export const IMAGE_DATA_URL_PATTERN =
   /^data:(image\/(?:png|gif|jpeg|jpg|webp|svg\+xml|avif|bmp|x-icon|vnd\.microsoft\.icon));base64,([a-z0-9+/\s]*={0,2})$/i;
 
-export const normalizeImageAlignment = (value?: string | null): ImageAlignment => {
-  if (value && IMAGE_ALIGNMENT_OPTIONS.includes(value as ImageAlignment)) {
-    return value as ImageAlignment;
-  }
-  return DEFAULT_IMAGE_ALIGNMENT;
-};
+export const isImageAlignment = (value: unknown): value is ImageAlignment =>
+  typeof value === 'string' && IMAGE_ALIGNMENT_OPTIONS.includes(value as ImageAlignment);
+
+export const normalizeImageAlignment = (value?: string | null): ImageAlignment =>
+  isImageAlignment(value) ? value : DEFAULT_IMAGE_ALIGNMENT;
 
 export const normalizeImageWidth = (value?: string | null): ImageWidth => {
   if (value && IMAGE_WIDTH_OPTIONS.includes(value as ImageWidth)) {
     return value as ImageWidth;
   }
   return DEFAULT_IMAGE_WIDTH;
+};
+
+// The editor renders `data-width` inside an inline `width: …%` declaration, so
+// only a plain percentage may pass. Legacy documents can carry any 1–100 value.
+const IMAGE_WIDTH_VALUE_PATTERN = /^(?:[1-9]\d?|100)$/;
+
+/** A safe stored image width, or null when the value could inject CSS. */
+export const normalizeImageWidthValue = (value?: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return IMAGE_WIDTH_VALUE_PATTERN.test(trimmed) ? trimmed : null;
 };
 
 export const sanitizeAltText = (value?: string | null): string => value?.trim() ?? '';

@@ -10,5 +10,10 @@ describe('fileNames', () => {
   it('replaces an existing extension with the requested export extension', () => {
     expect(buildExportFileName('Report.docx', 'pdf')).toBe('Report.pdf');
   });
+
+  it('truncates long names on code point boundaries', () => {
+    const name = sanitizeBaseFileName('a'.repeat(179) + '😀' + 'b');
+    expect(name).toBe('a'.repeat(179) + '😀');
+  });
 });
 

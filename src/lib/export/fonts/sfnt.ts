@@ -505,7 +505,8 @@ export function buildStaticFont(options: StaticFontOptions): StaticFont {
   tables.set('hmtx', hmtx.toBytes());
 
   tables.set('head', buildHead(primary, total, options.bold));
-  tables.set('hhea', buildHhea(primary, Math.max(0, ...advances), finiteOr(minLsb, 0), finiteOr(minRsb, 0), finiteOr(maxExtent, 0), order.length));
+  const maxAdvance = advances.reduce((max, advance) => (advance > max ? advance : max), 0);
+  tables.set('hhea', buildHhea(primary, maxAdvance, finiteOr(minLsb, 0), finiteOr(minRsb, 0), finiteOr(maxExtent, 0), order.length));
   tables.set('maxp', buildMaxp(order.length, maxPoints, maxContours));
 
   const mapped = new Map<number, number>();
@@ -589,9 +590,19 @@ function buildMaxp(numGlyphs: number, maxPoints: number, maxContours: number): U
 
 function buildOs2(font: FontkitFont, options: StaticFontOptions, cmap: Map<number, number>): Uint8Array {
   const raw = readRawTable(font, 'OS/2');
-  const bmp = Array.from(cmap.keys()).filter((codePoint) => codePoint <= 0xffff);
-  const first = bmp.length ? Math.min(...bmp) : 0x20;
-  const last = bmp.length ? Math.max(...bmp) : 0x20;
+  // A loop, not `Math.min(...bmp)`: a large CJK font can map tens of
+  // thousands of BMP code points, more arguments than the engine accepts.
+  let first = 0xffff;
+  let last = 0;
+  for (const codePoint of cmap.keys()) {
+    if (codePoint > 0xffff) continue;
+    if (codePoint < first) first = codePoint;
+    if (codePoint > last) last = codePoint;
+  }
+  if (first > last) {
+    first = 0x20;
+    last = 0x20;
+  }
   if (raw && raw.length >= 78) {
     const table = raw.slice();
     const view = new DataView(table.buffer);
@@ -762,7 +773,7 @@ function buildCmapFormat4(entries: Array<[number, number]>): Uint8Array {
       deltas.push(0);
       // Bytes from this idRangeOffset slot to the segment's first glyphIdArray entry.
       rangeOffsets.push((segCount - index + glyphIdArray.length) * 2);
-      glyphIdArray.push(...segment.glyphs);
+      for (const gid of segment.glyphs) glyphIdArray.push(gid);
     }
   });
   const writer = new ByteWriter();

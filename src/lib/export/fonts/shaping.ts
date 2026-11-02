@@ -72,13 +72,21 @@ export function pickFont(
 const NO_LIGATURES: Record<string, boolean> = { liga: false, clig: false, calt: false, dlig: false, hlig: false };
 
 /** Splits `text` into runs of one font each and shapes them with OpenType features. */
-export function shapeText(text: string, resolution: FaceResolution, fallback: LoadedFont | null): ShapedSegment[] {
+export function shapeText(
+  text: string,
+  resolution: FaceResolution,
+  fallback: LoadedFont | null,
+  direction: 'ltr' | 'rtl' = 'ltr',
+  start = 0,
+): ShapedSegment[] {
   const segments: ShapedSegment[] = [];
   let offset = 0;
   let current: { font: LoadedFont | null; start: number; end: number } | null = null;
   const flush = () => {
     if (!current) return;
-    segments.push(shapeSegment(text.slice(current.start, current.end), current.font, current.start));
+    segments.push(
+      shapeSegment(text.slice(current.start, current.end), current.font, start + current.start, direction),
+    );
     current = null;
   };
   splitGraphemes(text).forEach((grapheme) => {
@@ -137,7 +145,7 @@ function glyphTextIndices(text: string, glyphs: Array<{ codePoints: number[] }>)
   return result;
 }
 
-function shapeSegment(text: string, font: LoadedFont | null, start: number): ShapedSegment {
+function shapeSegment(text: string, font: LoadedFont | null, start: number, direction: 'ltr' | 'rtl'): ShapedSegment {
   if (!font) {
     const clusters = splitGraphemes(text).reduce<Array<{ start: number; end: number; advance: number }>>((all, grapheme) => {
       const from = all.length ? all[all.length - 1].end : start;
@@ -146,7 +154,13 @@ function shapeSegment(text: string, font: LoadedFont | null, start: number): Sha
     }, []);
     return { font: null, text, start, end: start + text.length, glyphs: [], clusters };
   }
-  const run = font.font.layout(text, NO_LIGATURES);
+  const run = font.font.layout(text, NO_LIGATURES, undefined, undefined, direction);
+  // fontkit returns RTL glyphs in visual order. Clusters stay logical so line
+  // breaking can use text order; the line builder reorders them for drawing.
+  if (direction === 'rtl') {
+    run.glyphs.reverse();
+    run.positions.reverse();
+  }
   const indices = glyphTextIndices(text, run.glyphs);
   // A cluster is a run of glyphs whose text ranges touch or overlap: reordered
   // marks (Indic pre-base vowels) and inserted glyphs join their neighbors.

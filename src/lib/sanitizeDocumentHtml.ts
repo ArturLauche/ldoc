@@ -1,4 +1,4 @@
-import { IMAGE_DATA_URL_PATTERN } from './media';
+import { IMAGE_DATA_URL_PATTERN, isImageAlignment, normalizeImageWidthValue } from './media';
 import { logError } from './logger';
 import {
   MAX_GRAPHIC_JSON_LENGTH,
@@ -117,24 +117,29 @@ function removeControlAndWhitespace(value: string): string {
 }
 
 function isUnsafeUri(attributeName: string, value: string): boolean {
-  if (!URI_ATTRIBUTES.has(attributeName.toLowerCase())) {
+  const name = attributeName.toLowerCase();
+  if (!URI_ATTRIBUTES.has(name)) {
     return false;
   }
 
   const trimmed = value.trim();
-  const normalized = removeControlAndWhitespace(trimmed).toLowerCase();
-
   if (!trimmed) return false;
-  if (normalized.startsWith('javascript:')) return true;
-  if (normalized.startsWith('vbscript:')) return true;
   // Embedded images are valid only as image sources, never as executable links.
-  if (
-    normalized.startsWith('data:') &&
-    (attributeName !== 'src' || !IMAGE_DATA_URL_PATTERN.test(trimmed))
-  )
-    return true;
-
-  return false;
+  if (/^data:/i.test(trimmed)) {
+    return name !== 'src' || !IMAGE_DATA_URL_PATTERN.test(trimmed);
+  }
+  // Control characters can hide a scheme from this check and are never valid
+  // in a link the editor can follow.
+  // eslint-disable-next-line no-control-regex -- Intentionally reject URI-obfuscating controls.
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return true;
+  const normalized = removeControlAndWhitespace(trimmed).toLowerCase();
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(normalized)?.[1];
+  if (!scheme) return false;
+  // The same protocols the link controls accept: web/mail links and relative
+  // paths. Other schemes (tel, ftp, file, blob, …) have no target in the app.
+  return name === 'href'
+    ? !['http', 'https', 'mailto'].includes(scheme)
+    : !['http', 'https'].includes(scheme);
 }
 
 function isSafeColorValue(value: string): boolean {
@@ -275,6 +280,14 @@ function sanitizeSpecialAttribute(attributeName: string, value: string): string 
   if (attributeName === 'data-background-color') {
     return isSafeColorValue(value) ? value : null;
   }
+  // The editor turns these into inline layout. Only values it can render
+  // safely may survive; anything else would become CSS after a reload.
+  if (attributeName === 'data-align') {
+    return isImageAlignment(value) ? value : null;
+  }
+  if (attributeName === 'data-width') {
+    return normalizeImageWidthValue(value);
+  }
   if (attributeName === 'data-border' || attributeName === 'data-borders') {
     return value === 'hidden' || value === 'visible' ? value : null;
   }
@@ -296,7 +309,13 @@ export function sanitizeDocumentHtml(value: string): string {
     doc.body.querySelectorAll(BLOCKED_ELEMENTS).forEach((element) => element.remove());
     doc.body.querySelectorAll('*').forEach((element) => {
       if (!ALLOWED_ELEMENTS.has(element.tagName.toLowerCase())) {
-        element.replaceWith(...Array.from(element.childNodes));
+        // Move children out one at a time: a huge imported wrapper can have
+        // more children than the engine accepts as `replaceWith` arguments.
+        const parent = element.parentNode;
+        if (parent) {
+          while (element.firstChild) parent.insertBefore(element.firstChild, element);
+          parent.removeChild(element);
+        }
         return;
       }
 
@@ -321,10 +340,12 @@ export function sanitizeDocumentHtml(value: string): string {
         if (
           attributeName === 'contenteditable' ||
           attributeName === 'colwidth' ||
+          attributeName === 'data-align' ||
           attributeName === 'data-background-color' ||
           attributeName === 'data-border' ||
           attributeName === 'data-borders' ||
-          attributeName === 'data-lwrite-graphic'
+          attributeName === 'data-lwrite-graphic' ||
+          attributeName === 'data-width'
         ) {
           if (specialValue) {
             element.setAttribute(attribute.name, specialValue);

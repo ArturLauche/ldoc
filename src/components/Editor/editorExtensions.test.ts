@@ -37,6 +37,43 @@ describe('editorExtensions', () => {
     editor.destroy();
   });
 
+  it('never interpolates untrusted text-style attributes into inline CSS', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(getPlaceholder),
+      content: '<p>Text</p>',
+    });
+
+    editor.commands.selectAll();
+    editor.commands.setMark('textStyle', {
+      fontSize: '12px; position: fixed',
+      lineHeight: '1.5; background: red',
+    });
+    const html = editor.getHTML();
+
+    expect(html).not.toContain('position');
+    expect(html).not.toContain('background');
+    expect(html).not.toContain('font-size');
+    expect(html).not.toContain('line-height');
+
+    editor.destroy();
+  });
+
+  it('never turns an untrusted image width into injected inline CSS', () => {
+    const editor = new Editor({
+      extensions: createEditorExtensions(getPlaceholder),
+      content:
+        '<p><img src="data:image/png;base64,YWJj" data-align="left; position: fixed" data-width="100; position: fixed; inset: 0; background: red; opacity: 1"></p>',
+    });
+
+    const image = editor.view.dom.querySelector('img');
+    expect(image?.getAttribute('style') ?? '').not.toContain('position');
+    expect(image?.getAttribute('style') ?? '').not.toContain('background');
+    expect(image?.getAttribute('data-width')).toBeNull();
+    expect(image?.getAttribute('data-align')).toBe('center');
+
+    editor.destroy();
+  });
+
   it('keeps imported tables in the schema without the removed smart diagram node', () => {
     const editor = new Editor({
       extensions: createEditorExtensions(getPlaceholder),

@@ -30,6 +30,7 @@ import {
   type SceneShadow,
   type SceneText,
 } from './scene';
+import { groupTextLines, type TextCharacterBox } from './textLines';
 
 /**
  * Captures a Smart Graphic as a vector scene by mounting the editor's own
@@ -356,14 +357,7 @@ function captureText(node: Text, style: CSSStyleDeclaration, context: CaptureCon
   if (!visible(color)) return;
   const fontSize = Number.parseFloat(style.fontSize) || 14;
   const range = document.createRange();
-  interface Line {
-    start: number;
-    end: number;
-    left: number;
-    right: number;
-    top: number;
-  }
-  const lines: Line[] = [];
+  const characters: TextCharacterBox[] = [];
   const pattern = /[\s\S]/gu;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(raw))) {
@@ -374,20 +368,18 @@ function captureText(node: Text, style: CSSStyleDeclaration, context: CaptureCon
     const rect = range.getBoundingClientRect();
     const isSpace = /\s/.test(match[0]);
     if (!rect.width && !rect.height) continue;
-    const current = lines[lines.length - 1];
-    if (current && Math.abs(rect.top - current.top) < fontSize * 0.5 && rect.left >= current.left - 1) {
-      current.end = end;
-      if (!isSpace) current.right = Math.max(current.right, rect.right);
-      continue;
-    }
-    lines.push({
+    characters.push({
       start,
       end,
-      left: isSpace ? rect.right : rect.left,
-      right: isSpace ? rect.right : rect.right,
+      left: rect.left,
+      right: rect.right,
       top: rect.top,
+      space: isSpace,
     });
   }
+  // RTL text runs right-to-left in logical order, so grouping must not assume
+  // the next character is to the right of the previous one.
+  const lines = groupTextLines(characters, fontSize);
   const ascent = fontAscent(style, fontSize);
   const align = style.textAlign;
   const family = primaryFamilyName(style.fontFamily);
@@ -566,7 +558,7 @@ function captureElement(element: Element, context: CaptureContext, locale: strin
     if (!transformed) capturePseudo(element, '::after', rect, own);
   }
 
-  if (raised) context.raised.push(...own.out);
+  if (raised) for (const item of own.out) context.raised.push(item);
 }
 
 interface MountedGraphic {
@@ -575,7 +567,12 @@ interface MountedGraphic {
   unmount: () => void;
 }
 
-async function mountGraphic(model: SmartGraphicModel, width: number, locale: Locale): Promise<MountedGraphic> {
+async function mountGraphic(
+  model: SmartGraphicModel,
+  width: number,
+  locale: Locale,
+  direction: 'ltr' | 'rtl',
+): Promise<MountedGraphic> {
   const [{ createRoot }, { flushSync }, { SmartGraphicCanvas }, { LocaleContext }] = await Promise.all([
     import('react-dom/client'),
     import('react-dom'),
@@ -588,7 +585,7 @@ async function mountGraphic(model: SmartGraphicModel, width: number, locale: Loc
   host.setAttribute('aria-hidden', 'true');
   host.setAttribute('inert', '');
   host.setAttribute('data-export-capture', '');
-  host.style.cssText = `position:fixed;left:-${width * 4}px;top:0;width:${width}px;pointer-events:none;contain:layout style;direction:ltr;font-variant-ligatures:none;`;
+  host.style.cssText = `position:fixed;left:-${width * 4}px;top:0;width:${width}px;pointer-events:none;contain:layout style;direction:${direction};font-variant-ligatures:none;`;
   document.body.appendChild(host);
   const root = createRoot(host);
   const unmount = () => {
@@ -645,9 +642,14 @@ async function settleFonts(element: HTMLElement): Promise<void> {
 }
 
 /** Renders `model` with the editor's renderer at `width` CSS px and returns its drawing. */
-export async function captureGraphicScene(model: SmartGraphicModel, width: number, locale: Locale): Promise<GraphicScene | null> {
+export async function captureGraphicScene(
+  model: SmartGraphicModel,
+  width: number,
+  locale: Locale,
+  direction: 'ltr' | 'rtl' = 'ltr',
+): Promise<GraphicScene | null> {
   if (!canCaptureGraphics()) return null;
-  const mounted = await mountGraphic(model, width, locale);
+  const mounted = await mountGraphic(model, width, locale, direction);
   try {
     await settleFonts(mounted.canvas);
     const rect = mounted.canvas.getBoundingClientRect();

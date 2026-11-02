@@ -13,6 +13,7 @@ import {
   parseSmartGraphicJson,
   promoteGraphicItem,
   removeGraphicItem,
+  sanitizeGraphicText,
   serializeSmartGraphic,
   switchGraphicLayout,
   updateGraphicTitle,
@@ -155,6 +156,12 @@ describe('smartGraphic model', () => {
 
     const oversized = `{"version":1,"layoutId":"list-block","colorSet":"theme","style":"filled","title":"","items":${'['.repeat(MAX_GRAPHIC_JSON_LENGTH)}}`;
     expect(parseSmartGraphicJson(oversized)).toBeNull();
+  });
+
+  it('truncates text on code point boundaries', () => {
+    expect(sanitizeGraphicText('a'.repeat(199) + '😀', 200)).toBe('a'.repeat(199) + '😀');
+    const truncated = sanitizeGraphicText('a'.repeat(200) + '😀', 200);
+    expect(truncated).toBe('a'.repeat(200));
   });
 
   it('sanitizes labels and clamps node counts to the layout', () => {

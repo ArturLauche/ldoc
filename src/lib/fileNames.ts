@@ -16,7 +16,9 @@ export function sanitizeBaseFileName(value: string): string {
     .trim();
 
   const fallback = cleaned || 'Untitled Document';
-  return fallback.slice(0, 180);
+  // Truncate by code point so a limit never leaves a lone surrogate behind.
+  const characters = Array.from(fallback);
+  return characters.length > 180 ? characters.slice(0, 180).join('') : fallback;
 }
 
 export function buildExportFileName(value: string, extension: string): string {

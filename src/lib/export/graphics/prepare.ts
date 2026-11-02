@@ -26,7 +26,7 @@ export async function prepareGraphicScenes(documentModel: ExportDocumentModel, c
     const key = serializeSmartGraphic(model);
     if (!captured.has(key)) {
       try {
-        captured.set(key, await captureGraphicScene(model, width, locale));
+        captured.set(key, await captureGraphicScene(model, width, locale, documentModel.direction));
       } catch {
         captured.set(key, null);
       }

@@ -294,7 +294,7 @@ sub{bottom:-${s.script.subShift}em}
 sup{top:-${s.script.superShift}em}
 code{font-family:${MONO_STACK};font-size:${s.inlineCode.scale}em;font-weight:${s.inlineCode.weight};color:${text}}
 :is(a,h1,h2,h3,blockquote) code{color:inherit}
-pre{font-family:${MONO_STACK};font-size:${em(s.codeBlock.sizePx)};line-height:${s.codeBlock.lineHeightPx / s.codeBlock.sizePx};margin:${s.codeBlock.margin / s.codeBlock.sizePx}em 0;padding:${s.codeBlock.paddingY / s.codeBlock.sizePx}em ${s.codeBlock.paddingX / s.codeBlock.sizePx}em;border-radius:${s.codeBlock.radius}px;background:#${s.codeBlock.background};color:${text};font-weight:400;overflow-x:auto;white-space:pre}
+pre{font-family:${MONO_STACK};font-size:${em(s.codeBlock.sizePx)};line-height:${s.codeBlock.lineHeightPx / s.codeBlock.sizePx};margin:${s.codeBlock.margin / s.codeBlock.sizePx}em 0;padding:${s.codeBlock.paddingY / s.codeBlock.sizePx}em ${s.codeBlock.paddingX / s.codeBlock.sizePx}em;border-radius:${s.codeBlock.radius}px;background:#${s.codeBlock.background};color:${text};font-weight:400;overflow-x:auto;white-space:pre-wrap}
 pre code{font:inherit;color:inherit;background:none;padding:0}
 blockquote{margin:${em(s.blockquote.margin)} 0;padding-inline-start:${s.blockquote.paddingLeft}px;border-inline-start:${s.blockquote.borderWidth}px solid ${border};font-weight:${s.blockquote.weight};font-style:italic;color:${text}}
 blockquote strong{color:inherit}
@@ -323,7 +323,7 @@ th{background-color:#${s.table.headerBackground};font-weight:${s.table.headerWei
 table[data-borders=hidden] :is(th,td){border-color:transparent}
 div.lwrite-graphic{margin:${s.graphic.margin}px 0;padding:${s.graphic.padding}px;border:${s.graphic.borderWidth}px solid #${s.graphic.borderColor};border-radius:${s.graphic.radius}px;background:#${s.graphic.background};overflow-x:auto}
 .lwrite-graphic-title{font-weight:600;margin:0 0 8px}
-svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre;direction:ltr}
+svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre;direction:${documentModel.direction}}
 @media (max-width:639px){
 .lwrite-document{padding:20px 16px 32px}
 h1{font-size:28px;margin-top:24px}

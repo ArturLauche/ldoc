@@ -1,7 +1,7 @@
 import { PDFDocument, PDFName, PDFNumber, PDFNull, PDFHexString, type PDFImage, type PDFRef } from 'pdf-lib';
 import { ExportFontRegistry } from '../fonts/registry';
 import { noteSceneFonts } from '../graphics/fonts';
-import { walkBlocks } from '../shared';
+import { stripInvalidXmlChars, walkBlocks } from '../shared';
 import { noteDocumentFonts } from '../textUsage';
 import { PX_TO_PT, pageGeometry, textBaseStyle, type TextContext } from '../typography';
 import type { ExportDocumentModel, PreparedExportImage } from '../types';
@@ -39,7 +39,15 @@ export async function renderPdf(documentModel: ExportDocumentModel, warnings: Wa
     if (resolution.fonts[0]) return fonts.forLoaded(resolution.fonts[0]).metrics;
     return fonts.forStandard(resolution.standard ?? 'Helvetica', base.weight >= 600, base.italic).metrics;
   };
-  const env: GalleyEnvironment = { registry, fonts, warnings, rasterizer, pageHeight, metricsFor };
+  const env: GalleyEnvironment = {
+    registry,
+    fonts,
+    warnings,
+    rasterizer,
+    pageHeight,
+    direction: documentModel.direction,
+    metricsFor,
+  };
   const galley = layoutGalley(env, documentModel.blocks, geometry.contentWidthPx);
   const pages = paginate(galley, pageHeight);
 
@@ -119,6 +127,18 @@ function collectMissing(galley: Galley, out: Map<string, StyledRun & { key: stri
   });
 }
 
+/** A bookmark title: valid UTF-16, at most 200 characters (not UTF-16 units). */
+function outlineTitle(value: string): string {
+  let title = '';
+  let count = 0;
+  for (const char of stripInvalidXmlChars(value)) {
+    if (count === 200) break;
+    title += char;
+    count += 1;
+  }
+  return title;
+}
+
 /** Bookmarks from h1–h3, nested by level. */
 function addOutline(document: PDFDocument, entries: OutlineEntry[]): void {
   const context = document.context;
@@ -142,7 +162,7 @@ function addOutline(document: PDFDocument, entries: OutlineEntry[]): void {
     node.children.forEach((child, index) => {
       const entry = child.entry as OutlineEntry;
       const dict = context.obj({
-        Title: PDFHexString.fromText(entry.title.slice(0, 200)),
+        Title: PDFHexString.fromText(outlineTitle(entry.title)),
         Parent: node.ref,
         Dest: [entry.page.ref, PDFName.of('XYZ'), PDFNull, PDFNumber.of(Math.round(entry.top + 4)), PDFNull],
       });

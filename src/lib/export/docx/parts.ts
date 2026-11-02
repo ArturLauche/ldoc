@@ -144,6 +144,11 @@ const ABSTRACT_IDS: Record<NumberingKind, number> = { decimal: 1, disc: 2, circl
 export class NumberingRegistry {
   private readonly instances: Array<{ id: number; kind: NumberingKind; level: number; start: number }> = [];
   private readonly byList = new Map<object, number>();
+  private readonly rtl: boolean;
+
+  constructor(direction: 'ltr' | 'rtl' = 'ltr') {
+    this.rtl = direction === 'rtl';
+  }
 
   numFor(list: object, kind: NumberingKind, level: number, start: number): number {
     const existing = this.byList.get(list);
@@ -166,7 +171,8 @@ export class NumberingRegistry {
         const left = twips(indent * (level + 1));
         const text = kind === 'decimal' ? `%${level + 1}.` : BULLETS[kind];
         const font = kind === 'decimal' || kind === 'disc' ? '' : `<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:hint="default"/>`;
-        return `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="${kind === 'decimal' ? 'decimal' : 'bullet'}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${left}" w:hanging="${twips(18)}"/></w:pPr><w:rPr>${font}<w:b w:val="0"/><w:i w:val="0"/><w:color w:val="${style.mutedColor}"/></w:rPr></w:lvl>`;
+        const indentXml = this.rtl ? `w:right="${left}"` : `w:left="${left}"`;
+        return `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="${kind === 'decimal' ? 'decimal' : 'bullet'}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="${this.rtl ? 'right' : 'left'}"/><w:pPr><w:ind ${indentXml} w:hanging="${twips(18)}"/></w:pPr><w:rPr>${font}<w:b w:val="0"/><w:i w:val="0"/><w:color w:val="${style.mutedColor}"/></w:rPr></w:lvl>`;
       }).join('');
       return `<w:abstractNum w:abstractNumId="${ABSTRACT_IDS[kind]}"><w:multiLevelType w:val="hybridMultilevel"/>${levels}</w:abstractNum>`;
     };
@@ -180,7 +186,7 @@ export class NumberingRegistry {
   }
 }
 
-export function sectionXml(geometry: PageGeometry): string {
+export function sectionXml(geometry: PageGeometry, direction: 'ltr' | 'rtl' = 'ltr'): string {
   const margin = Math.round(geometry.marginPt * 20);
-  return `<w:sectPr><w:pgSz w:w="${Math.round(geometry.widthPt * 20)}" w:h="${Math.round(geometry.heightPt * 20)}"/><w:pgMar w:top="${margin}" w:right="${margin}" w:bottom="${margin}" w:left="${margin}" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:space="720"/></w:sectPr>`;
+  return `<w:sectPr><w:pgSz w:w="${Math.round(geometry.widthPt * 20)}" w:h="${Math.round(geometry.heightPt * 20)}"/><w:pgMar w:top="${margin}" w:right="${margin}" w:bottom="${margin}" w:left="${margin}" w:header="720" w:footer="720" w:gutter="0"/><w:cols w:space="720"/>${direction === 'rtl' ? '<w:bidi/>' : ''}</w:sectPr>`;
 }

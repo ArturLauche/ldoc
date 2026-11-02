@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => assets.restore());
 
-async function environment(blocks: ExportBlock[]): Promise<GalleyEnvironment> {
+async function environment(blocks: ExportBlock[], direction: 'ltr' | 'rtl' = 'ltr'): Promise<GalleyEnvironment> {
   const warnings = new WarningCollector('pdf');
   const registry = new ExportFontRegistry(warnings);
   noteDocumentFonts(registry, blocks, { generated: true, graphicFallbacks: false });
@@ -30,6 +30,7 @@ async function environment(blocks: ExportBlock[]): Promise<GalleyEnvironment> {
     warnings,
     rasterizer: null,
     pageHeight: 1000,
+    direction,
     metricsFor: (context: TextContext) => {
       const base = textBaseStyle(context);
       const resolution = registry.resolve({ family: base.family, weight: base.weight, italic: base.italic });
@@ -67,8 +68,70 @@ describe('layoutGalley', () => {
     );
   });
 
-  it("sets a graphic's text fallback in the graphic's place, trimmed at the cell edges", async () => {
-    const timeline = updateGraphicTitle(createStarterGraphic('timeline-vertical'), 'Roadmap');
+  it('keeps a graphic upright in a cell narrower than its frame', async () => {
+    const graphic: ExportGraphicBlock = {
+      type: 'graphic',
+      layoutId: 'process-chevron',
+      title: 'Narrow',
+      items: [],
+      scene: { width: 600, height: 200, items: [] },
+    };
+    const paragraph: ExportBlock = { type: 'paragraph', runs: [{ text: 'x', marks: {} }] };
+    const table: ExportBlock = {
+      type: 'table',
+      rows: [
+        {
+          cells: Array.from({ length: 20 }, (_, index) => ({
+            header: false,
+            colSpan: 1,
+            rowSpan: 1,
+            blocks: index === 0 ? [graphic] : [paragraph],
+          })),
+        },
+      ],
+    };
+    const env = await environment([table]);
+    const galley = layoutGalley(env, [table], 600);
+    const tableAtom = galley.atoms.find((atom): atom is TableAtom => atom.kind === 'table');
+    const graphicAtom = tableAtom?.cells[0].galley.atoms.find((atom) => atom.kind === 'graphic');
+    expect(graphicAtom?.scale).toBeGreaterThan(0);
+    expect(graphicAtom?.height).toBeGreaterThan(0);
+  });
+
+  it('mirrors list markers, quote bars and table columns for RTL', async () => {
+    const paragraph: ExportBlock = { type: 'paragraph', runs: [{ text: 'Item', marks: {} }] };
+    const list: ExportBlock = {
+      type: 'list',
+      ordered: false,
+      start: 1,
+      items: [{ blocks: [paragraph] }],
+    };
+    const quote: ExportBlock = { type: 'blockquote', blocks: [paragraph] };
+    const table: ExportBlock = {
+      type: 'table',
+      rows: [
+        {
+          cells: [
+            { header: false, colSpan: 1, rowSpan: 1, blocks: [paragraph] },
+            { header: false, colSpan: 1, rowSpan: 1, blocks: [paragraph] },
+          ],
+        },
+      ],
+    };
+    const env = await environment([list, quote, table], 'rtl');
+    const galley = layoutGalley(env, [list, quote, table], 600);
+
+    const line = galley.atoms.find((atom) => atom.kind === 'line');
+    expect(line?.marker?.right).toBeCloseTo(600 - DOCUMENT_STYLE.list.indent, 5);
+
+    const bar = galley.decorations.find((decoration) => decoration.kind === 'quote-bar');
+    expect(bar?.x).toBeCloseTo(600 - DOCUMENT_STYLE.blockquote.borderWidth, 5);
+
+    const tableAtom = galley.atoms.find((atom): atom is TableAtom => atom.kind === 'table');
+    expect(tableAtom?.cells[0].x).toBeGreaterThan(tableAtom?.cells[1].x ?? 0);
+  });
+
+  it("sets a graphic's text fallback in the graphic's place, trimmed at the cell edges", async () => {    const timeline = updateGraphicTitle(createStarterGraphic('timeline-vertical'), 'Roadmap');
     const html = `<div data-lwrite-graphic='${serializeSmartGraphic(timeline)}'></div>`;
     const [graphic] = extractExportDocumentFromHtml({ html, name: 'G', locale: 'en' }).blocks as [ExportGraphicBlock];
     const text = graphicToFallbackBlocks(graphic);

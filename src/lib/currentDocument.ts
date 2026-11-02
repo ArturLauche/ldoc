@@ -1,5 +1,5 @@
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from './documentLibrary';
-import { assertDocumentSize } from './documentLimits';
+import { assertDocumentSize, sanitizeDocumentWithinLimit } from './documentLimits';
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
 import { type DocumentStorageResult } from './storage';
 import { readDocumentItem, writeDocumentItem } from './documentDatabase';
@@ -71,14 +71,8 @@ export async function writeCurrentDocument(
   document: CurrentDocument,
 ): Promise<DocumentStorageResult<void>> {
   try {
-    assertDocumentSize(document.content);
-    return writeDocumentItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...document,
-        content: sanitizeDocumentHtml(document.content),
-      }),
-    );
+    const content = sanitizeDocumentWithinLimit(document.content);
+    return writeDocumentItem(STORAGE_KEY, JSON.stringify({ ...document, content }));
   } catch (error) {
     return { ok: false, code: 'invalid-data', error };
   }
