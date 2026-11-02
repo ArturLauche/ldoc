@@ -51,6 +51,8 @@ export interface ExportDocumentModel {
   html: string;
   name: string;
   locale: Locale;
+  /** Direction `dir="auto"` resolves for the editor: the first strong character. */
+  direction: 'ltr' | 'rtl';
   blocks: ExportBlock[];
 }
 

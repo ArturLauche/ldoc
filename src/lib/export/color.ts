@@ -58,6 +58,16 @@ function parseAlpha(token: string | undefined): number {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
 }
 
+/** Hue in degrees. CSS accepts `deg`, `grad`, `rad` and `turn` as well as a bare number. */
+function parseHue(token: string): number {
+  const value = Number.parseFloat(token);
+  if (!Number.isFinite(value)) return Number.NaN;
+  if (token.endsWith('grad')) return value * 0.9;
+  if (token.endsWith('rad')) return (value * 180) / Math.PI;
+  if (token.endsWith('turn')) return value * 360;
+  return value;
+}
+
 function splitArguments(body: string): { parts: string[]; alpha?: string } {
   const [main, alpha] = body.split('/');
   const parts = main.replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean);
@@ -104,7 +114,7 @@ export function parseCssColor(value: string | undefined | null): RgbaColor | nul
   if (name === 'hsl' || name === 'hsla') {
     const { parts, alpha } = splitArguments(body);
     if (parts.length < 3) return null;
-    const h = Number.parseFloat(parts[0]);
+    const h = parseHue(parts[0]);
     const s = Number.parseFloat(parts[1]) / 100;
     const l = Number.parseFloat(parts[2]) / 100;
     if (![h, s, l].every(Number.isFinite)) return null;

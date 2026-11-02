@@ -225,7 +225,12 @@ export function buildTableGrid(table: ExportTableBlock): TableGrid {
       column += gridCell.colSpan;
     });
   });
-  const columnCount = Math.max(1, ...slots.map((row) => row.length));
+  // A loop, not `Math.max(...slots)`: an imported table can have more rows
+  // than the engine accepts as call arguments.
+  let columnCount = 1;
+  slots.forEach((row) => {
+    if (row.length > columnCount) columnCount = row.length;
+  });
   return { columnCount, rowCount, cells, slots };
 }
 

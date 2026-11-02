@@ -23,13 +23,14 @@ async function environment(text: string): Promise<InlineEnvironment> {
   return { registry, fonts: new PdfFontSet(await PDFDocument.create()), warnings, rasterizer: null };
 }
 
-function layout(env: InlineEnvironment, text: string, width: number, align?: ExportAlignment) {
+function layout(env: InlineEnvironment, text: string, width: number, align?: ExportAlignment, direction?: 'ltr' | 'rtl') {
   const base = textBaseStyle({ kind: 'body' });
   const resolution = env.registry.resolve({ family: base.family, weight: 400, italic: false });
   return layoutInline(env, [{ text, style: resolveRunStyle({}, undefined, base) }], {
     base,
     baseMetrics: env.fonts.forLoaded(resolution.fonts[0]).metrics,
     ...(align ? { align } : {}),
+    ...(direction ? { direction } : {}),
     slotAt: () => ({ inset: 0, width }),
   });
 }
@@ -79,5 +80,41 @@ describe('layoutInline', () => {
     const [right] = layout(env, 'Short', 300, 'right');
     expect(centered.offset).toBeCloseTo((300 - centered.width) / 2, 5);
     expect(right.offset).toBeCloseTo(300 - right.width, 5);
+  });
+
+  it('aligns an RTL paragraph to the right and keeps Latin text left-to-right', async () => {
+    const env = await environment('Short text');
+    const [line] = layout(env, 'Short text', 300, undefined, 'rtl');
+    expect(lineText(line)).toBe('Short text');
+    expect(line.offset).toBeCloseTo(300 - line.width, 5);
+  });
+
+  it('places an RTL paragraph number on the left of the Latin text it follows', async () => {
+    const env = await environment('abc 123');
+    const [line] = layout(env, 'abc 123', 300, undefined, 'rtl');
+    expect(lineText(line)).toBe('123 abc');
+  });
+});
+
+describe('justification and trailing spaces', () => {
+  it('does not stretch a trailing space in the same piece as inner spaces', async () => {
+    const env = await environment('one two three');
+    const trailingWidth = layout(env, 'one two ', 1000)[0].width;
+    const [first] = layout(env, 'one two three', trailingWidth + 10, 'justify');
+    expect(lineText(first)).toBe('one two ');
+    const stretched = first.pieces.filter((piece) => piece.spaceExtra > 0);
+    expect(stretched).toHaveLength(1);
+    // Only the inner space is stretched; the trailing space stays at its natural width.
+    expect(stretched[0].text).toBe('one two');
+    expect(first.pieces[first.pieces.length - 1].spaceExtra).toBe(0);
+  });
+});
+
+describe('spaces at a soft wrap', () => {
+  it('keeps preserved spaces that do not fit on the first line', async () => {
+    const env = await environment('a   b');
+    const twoSpaces = layout(env, 'a  ', 1000)[0].width;
+    const lines = layout(env, 'a   b', twoSpaces);
+    expect(lines.map(lineText).join('')).toBe('a   b');
   });
 });

@@ -24,7 +24,7 @@ function blocksToText(blocks: ExportBlock[], inListItem = false): string[] {
     const blockLines = blockToText(block);
     if (!blockLines.length) return;
     if (lines.length && !(inListItem && block.type === 'list')) lines.push('');
-    lines.push(...blockLines);
+    for (const line of blockLines) lines.push(line);
   });
   return lines;
 }

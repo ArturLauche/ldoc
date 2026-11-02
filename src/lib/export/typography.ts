@@ -183,7 +183,13 @@ export interface RunStyle {
  * scale the font's own line gap instead.
  */
 export function lineBoxPx(base: TextBaseStyle, runs: RunStyle[]): number {
-  return Math.max(base.sizePx * base.lineHeight, ...runs.map((style) => (style.lineHeight > 0 ? style.sizePx * style.lineHeight : 0)));
+  // A loop, not `Math.max(...runs)`: a large document can have more runs in
+  // one paragraph than the engine accepts as call arguments.
+  let height = base.sizePx * base.lineHeight;
+  runs.forEach((style) => {
+    if (style.lineHeight > 0) height = Math.max(height, style.sizePx * style.lineHeight);
+  });
+  return height;
 }
 
 /** Resolves a CSS length against the surrounding font size (px). */
@@ -211,7 +217,6 @@ function lineHeightFactor(value: string | undefined, sizePx: number): number | n
 
 export function resolveRunStyle(marks: ExportInlineMarks, link: ExportLink | undefined, base: TextBaseStyle): RunStyle {
   let sizePx = cssLengthToPx(marks.fontSize, base.sizePx) ?? base.sizePx;
-  const parentSizePx = sizePx;
   // Explicit prose weights: links 500 (even inside headings), strong per
   // context (600 in text, 900/800/700 in h1–h3), inline code 600.
   let weight = base.weight;
@@ -223,6 +228,9 @@ export function resolveRunStyle(marks: ExportInlineMarks, link: ExportLink | und
     sizePx *= DOCUMENT_STYLE.inlineCode.scale;
     weight = DOCUMENT_STYLE.inlineCode.weight;
   }
+  // Office formats keep this size and shrink super/subscripts themselves, so
+  // it must already include every enclosing mark's scale (inline code too).
+  const parentSizePx = sizePx;
   if (marks.superscript || marks.subscript) sizePx *= DOCUMENT_STYLE.script.scale;
   // A color set inside a link wins; the link's own color replaces inherited ones
   // (the model drops colors inherited from outside the link).

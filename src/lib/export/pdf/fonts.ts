@@ -119,7 +119,7 @@ class EmbeddedTrueTypeFont implements PdfTextFont {
     const scale = 1000 / font.unitsPerEm;
     const baseFont = `${subsetTag(`${postScript}|${glyphIds.join(',')}`)}+${postScript}`;
 
-    const maxCid = Math.max(0, ...glyphIds);
+    const maxCid = glyphIds.reduce((max, id) => (id > max ? id : max), 0);
     const cidToGid = new Uint8Array((maxCid + 1) * 2);
     built.glyphMaps[0].forEach((newId, oldId) => {
       cidToGid[oldId * 2] = newId >> 8;

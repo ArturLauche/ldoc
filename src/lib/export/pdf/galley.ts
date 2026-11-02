@@ -21,6 +21,7 @@ import type {
   ExportTextBlock,
 } from '../types';
 import type { FontMetrics } from './fonts';
+import type { BidiDirection } from '../bidi';
 import { layoutInline, type InlineEnvironment, type LayoutLine, type LineSlot, type StyledRun } from './inline';
 
 /**
@@ -159,6 +160,8 @@ interface Frame {
 export interface GalleyEnvironment extends InlineEnvironment {
   /** Usable page height, px; tall images and graphics are scaled to fit. */
   pageHeight: number;
+  /** Paragraph base direction; `dir="auto"` resolved by the document. */
+  direction?: BidiDirection;
   /** Metrics of a style's primary font (line struts). */
   metricsFor(context: TextContext): FontMetrics;
 }
@@ -262,13 +265,20 @@ function layoutBlocks(builder: GalleyBuilder, blocks: ExportBlock[], frame: Fram
         builder.pendingTop = Math.max(builder.pendingTop, margins.top);
         const first = builder.atoms.length;
         const inner = DOCUMENT_STYLE.blockquote.borderWidth + DOCUMENT_STYLE.blockquote.paddingLeft;
-        layoutBlocks(builder, block.blocks, { ...frame, x: frame.x + inner, width: frame.width - inner, container: 'blockquote', quote: true, rootList: undefined });
+        const rtl = builder.env.direction === 'rtl';
+        layoutBlocks(builder, block.blocks, {
+          ...frame,
+          ...(rtl ? { width: frame.width - inner } : { x: frame.x + inner, width: frame.width - inner }),
+          container: 'blockquote',
+          quote: true,
+          rootList: undefined,
+        });
         if (builder.atoms.length > first) {
           builder.decorations.push({
             kind: 'quote-bar',
             first,
             last: builder.atoms.length - 1,
-            x: frame.x,
+            x: rtl ? frame.x + frame.width - DOCUMENT_STYLE.blockquote.borderWidth : frame.x,
             width: DOCUMENT_STYLE.blockquote.borderWidth,
             padTop: 0,
             padBottom: 0,
@@ -327,6 +337,7 @@ function layoutText(
     base,
     baseMetrics: builder.env.metricsFor(context),
     ...(align ? { align } : {}),
+    direction: builder.env.direction ?? 'ltr',
     slotAt: (offset, height) => builder.slot(frame, builder.y + offset, height),
   });
   lineTop = builder.y;
@@ -362,6 +373,7 @@ function bulletKind(depth: number): MarkerKind {
 function layoutList(builder: GalleyBuilder, list: ExportListBlock, frame: Frame, margins: { top: number; bottom: number }): void {
   builder.pendingTop = Math.max(builder.pendingTop, margins.top);
   const indent = DOCUMENT_STYLE.list.indent + DOCUMENT_STYLE.list.itemPadding;
+  const rtl = builder.env.direction === 'rtl';
   const bulletDepth = list.ordered ? frame.bulletDepth : frame.bulletDepth + 1;
   const rootList = frame.container === 'root' ? (list.ordered ? 'ordered' : 'bullet') : frame.rootList;
   const itemMargins = listItemMargins(Boolean(frame.cell));
@@ -378,13 +390,14 @@ function layoutList(builder: GalleyBuilder, list: ExportListBlock, frame: Frame,
     builder.pendingMarker = {
       kind: list.ordered ? 'number' : bulletKind(bulletDepth),
       text: list.ordered ? `${number}.` : '',
-      right: frame.x + DOCUMENT_STYLE.list.indent,
+      right: rtl
+        ? frame.x + frame.width - DOCUMENT_STYLE.list.indent
+        : frame.x + DOCUMENT_STYLE.list.indent,
       run: { text: list.ordered ? `${number}.` : '', style: markerStyle },
     };
     layoutBlocks(builder, item.blocks, {
       ...frame,
-      x: frame.x + indent,
-      width: frame.width - indent,
+      ...(rtl ? { width: frame.width - indent } : { x: frame.x + indent, width: frame.width - indent }),
       container: 'list-item',
       listDepth: frame.listDepth + 1,
       bulletDepth,
@@ -431,6 +444,7 @@ function layoutCode(builder: GalleyBuilder, block: ExportCodeBlock, frame: Frame
   const lines = layoutInline(builder.env, runs, {
     base,
     baseMetrics: builder.env.metricsFor(context),
+    direction: builder.env.direction ?? 'ltr',
     slotAt: () => ({ inset: 0, width: frame.width - style.paddingX * 2 }),
   });
   const first = builder.atoms.length;
@@ -538,9 +552,12 @@ function layoutGraphic(builder: GalleyBuilder, graphic: ExportGraphicBlock, fram
   const gap = builder.advance(margins.top);
   const slot = besideFloats(builder, frame, 100);
   const chrome = (FRAME.padding + FRAME.borderWidth) * 2;
-  let scale = Math.min(1.25, (slot.width - chrome) / graphic.scene.width);
+  const inner = Math.max(0, slot.width - chrome);
+  // A cell narrower than the frame still draws upright: a negative scale
+  // would mirror the scene instead of shrinking it.
+  let scale = Math.max(0.001, Math.min(1.25, inner / graphic.scene.width));
   const maxHeight = builder.env.pageHeight - margins.top;
-  if (graphic.scene.height * scale + chrome > maxHeight) scale = (maxHeight - chrome) / graphic.scene.height;
+  if (graphic.scene.height * scale + chrome > maxHeight) scale = Math.max(0.001, (maxHeight - chrome) / graphic.scene.height);
   const width = slot.width;
   const height = graphic.scene.height * scale + chrome;
   builder.push({
@@ -560,6 +577,15 @@ function layoutGraphic(builder: GalleyBuilder, graphic: ExportGraphicBlock, fram
   builder.pendingBottom = margins.bottom;
 }
 
+/** Running totals with a leading 0, e.g. widths → [0, w0, w0+w1, …]. */
+function prefixSums(values: number[]): number[] {
+  const positions = [0];
+  values.forEach((value) => {
+    positions.push(positions[positions.length - 1] + value);
+  });
+  return positions;
+}
+
 function layoutTable(builder: GalleyBuilder, table: ExportTableBlock, frame: Frame, margins: { top: number; bottom: number }): void {
   const style = DOCUMENT_STYLE.table;
   const gap = builder.advance(margins.top);
@@ -567,9 +593,14 @@ function layoutTable(builder: GalleyBuilder, table: ExportTableBlock, frame: Fra
   const slot = besideFloats(builder, frame, 100);
   const widths = resolveColumnWidths(table, grid.columnCount, slot.width, style.minColumnWidth);
   const tableWidth = widths.reduce((sum, width) => sum + width, 0);
-  const columnX = widths.reduce<number[]>((positions, width, index) => [...positions, positions[index] + width], [0]);
+  // Prefix sums with loops: a table can have more columns or rows than a
+  // quadratic `[...positions, ...]` reduce can handle.
+  const columnX = prefixSums(widths);
   const tableX = frame.x + slot.inset;
   const tableId = (tableCounter += 1);
+  const rtl = builder.env.direction === 'rtl';
+  const cellX = (column: number, colSpan: number) =>
+    rtl ? tableWidth - columnX[column + colSpan] : columnX[column];
 
   // Lay out each cell's content in its own galley (cells keep their margins).
   const cellLayouts = grid.cells.map((gridCell) => {
@@ -606,7 +637,7 @@ function layoutTable(builder: GalleyBuilder, table: ExportTableBlock, frame: Fra
   rowHeights.forEach((height, index) => {
     if (!height) rowHeights[index] = textBaseStyle({ kind: 'cell' }).sizePx * 1.75 + style.cellPaddingY * 2;
   });
-  const rowY = rowHeights.reduce<number[]>((positions, height, index) => [...positions, positions[index] + height], [0]);
+  const rowY = prefixSums(rowHeights);
 
   // Rows joined by a rowspan stay together: one atom per group.
   const groups: Array<{ from: number; to: number }> = [];
@@ -638,7 +669,7 @@ function layoutTable(builder: GalleyBuilder, table: ExportTableBlock, frame: Fra
         const cellTop = rowY[gridCell.row] - top;
         const cellHeight = rowY[gridCell.row + gridCell.rowSpan] - rowY[gridCell.row];
         return {
-          x: columnX[gridCell.column],
+          x: cellX(gridCell.column, gridCell.colSpan),
           y: cellTop,
           width,
           height: cellHeight,

@@ -41,8 +41,8 @@ import {
 } from 'pdf-lib';
 import { toHex, type RgbaColor } from '../color';
 import { resolveFamily } from '../fonts/catalog';
-import type { ExportFontRegistry } from '../fonts/registry';
-import { shapeText } from '../fonts/shaping';
+import { isWinAnsi, type ExportFontRegistry } from '../fonts/registry';
+import { shapeText, splitGraphemes, type ShapedSegment } from '../fonts/shaping';
 import { ellipsePath, isGradient, roundedRectPath, type GraphicScene, type PathCommand, type SceneItem, type SceneLinearGradient, type SceneText } from '../graphics/scene';
 import { asciiUri, linkTarget } from '../shared';
 import { DOCUMENT_STYLE, PX_TO_PT, type PageGeometry, type RunStyle } from '../typography';
@@ -92,7 +92,7 @@ function rgbaOf(color: RgbaColor): [number, number, number] {
 }
 
 /** Collects operators and resource names for one PDF page; y grows downwards in px. */
-class PageCanvas {
+export class PageCanvas {
   readonly ops: PDFOperator[] = [];
   private readonly fontNames = new Map<string, PDFName>();
   private readonly alphaNames = new Map<string, PDFName>();
@@ -315,6 +315,11 @@ class PageCanvas {
         start(pen + glyph.xOffset, baseline - glyph.yOffset);
         this.ops.push(PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [context.obj([font.encode([glyph])]) as PDFArray]));
         pen += advance;
+        // Showing the glyph advanced the text matrix by its natural width and
+        // left it on the glyph's shifted baseline. The next glyph needs a fresh
+        // matrix at the corrected pen position, or the rest of the run would
+        // inherit the mark's offset.
+        segmentStarted = false;
         return;
       }
       if (!segmentStarted) start(pen, baseline);
@@ -436,6 +441,21 @@ function drawMarker(canvas: PageCanvas, marker: ListMarker, originX: number, bas
   const space = sizePx * 0.26;
   if (marker.kind === 'number') {
     const resolution = canvas.env.registry.resolve({ family: marker.run.style.family, weight: 400, italic: false });
+    if (resolution.standard) {
+      // The document font could not load: draw the number with the same
+      // standard font body text falls back to instead of dropping it.
+      const standard = canvas.env.fonts.forStandard(resolution.standard, false, false);
+      const width = standard.width(marker.text, sizePx);
+      canvas.glyphs(
+        standard,
+        sizePx,
+        [{ id: 0, text: marker.text, advance: width, xOffset: 0, yOffset: 0 }],
+        right - space - width,
+        baseline,
+        color,
+      );
+      return;
+    }
     const segments = shapeText(marker.text, resolution, canvas.env.registry.fallbackFor(400, false));
     const width = segments.reduce(
       (sum, segment) => sum + (segment.font ? segment.glyphs.reduce((total, glyph) => total + glyph.advance, 0) * (sizePx / segment.font.font.unitsPerEm) : 0),
@@ -503,9 +523,9 @@ function drawGraphicAtom(canvas: PageCanvas, atom: GraphicAtom, originX: number,
   const r: [number, number] = [frame.radius - half, frame.radius - half];
   canvas.path(roundedRectPath(x + half, top + half, atom.width - frame.borderWidth, atom.height - frame.borderWidth, { tl: r, tr: r, br: r, bl: r }), canvas.map);
   canvas.ops.push(stroke(), popGraphicsState());
-  const inner = atom.width - (frame.padding + frame.borderWidth) * 2;
-  const contentWidth = atom.scene.width * atom.scale;
-  const ox = x + frame.padding + frame.borderWidth + (inner - contentWidth) / 2;
+  const inner = Math.max(0, atom.width - (frame.padding + frame.borderWidth) * 2);
+  const contentWidth = Math.min(atom.scene.width * atom.scale, inner);
+  const ox = x + frame.padding + frame.borderWidth + Math.max(0, (inner - contentWidth) / 2);
   const oy = top + frame.padding + frame.borderWidth;
   drawScene(canvas, atom.scene, ox, oy, atom.scale);
 }
@@ -566,29 +586,83 @@ export function drawScene(canvas: PageCanvas, scene: GraphicScene, x: number, y:
   visit(scene.items);
 }
 
-function drawSceneText(canvas: PageCanvas, item: SceneText, originX: number, originY: number, scale: number): void {
+interface SceneTextPiece {
+  font: PdfTextFont;
+  glyphs: PlacedGlyph[];
+  width: number;
+  syntheticBold: boolean;
+  syntheticItalic: boolean;
+}
+
+/**
+ * The drawable pieces of a Smart Graphic label, in logical order. System
+ * families use a PDF standard font (like body text); characters it cannot
+ * encode go through the Noto Sans fallback.
+ */
+function sceneTextPieces(canvas: PageCanvas, item: SceneText, sizePx: number): SceneTextPiece[] {
   const family = resolveFamily(item.font.family);
   const resolution = canvas.env.registry.resolve({ family, weight: item.font.weight, italic: item.font.italic });
-  const sizePx = item.font.size * scale;
-  const segments = shapeText(item.text, resolution, canvas.env.registry.fallbackFor(item.font.weight, item.font.italic));
-  const pieces = segments
-    .filter((segment) => segment.font)
-    .map((segment) => {
-      const loaded = segment.font as NonNullable<typeof segment.font>;
-      const factor = sizePx / loaded.font.unitsPerEm;
-      const glyphs: PlacedGlyph[] = segment.glyphs.map((glyph, index) => {
-        const next = segment.glyphs[index + 1];
-        const end = next && next.cluster > glyph.cluster ? next.cluster : glyph.cluster === segment.glyphs[index - 1]?.cluster ? glyph.cluster : segment.end;
-        return {
-          id: glyph.id,
-          text: index > 0 && segment.glyphs[index - 1].cluster === glyph.cluster ? '' : item.text.slice(glyph.cluster, Math.max(end, glyph.cluster + 1)),
-          advance: glyph.advance * factor,
-          xOffset: glyph.xOffset * factor,
-          yOffset: glyph.yOffset * factor,
-        };
-      });
-      return { font: canvas.env.fonts.forLoaded(loaded), glyphs, width: glyphs.reduce((sum, glyph) => sum + glyph.advance, 0) };
+  const pieces: SceneTextPiece[] = [];
+  const pushSegment = (segment: ShapedSegment, source: string) => {
+    if (!segment.font) return;
+    const loaded = segment.font;
+    const font = canvas.env.fonts.forLoaded(loaded);
+    const factor = sizePx / loaded.font.unitsPerEm;
+    const clusterEnds = new Map(segment.clusters.map((cluster) => [cluster.start, cluster.end]));
+    const glyphs: PlacedGlyph[] = segment.glyphs.map((glyph, index) => ({
+      id: glyph.id,
+      // Only the first glyph of a cluster carries its text: a mark's glyph
+      // must not repeat or extend the cluster in ToUnicode or standard fonts.
+      text:
+        index > 0 && segment.glyphs[index - 1].cluster === glyph.cluster
+          ? ''
+          : source.slice(glyph.cluster, clusterEnds.get(glyph.cluster) ?? segment.end),
+      advance: glyph.advance * factor,
+      xOffset: glyph.xOffset * factor,
+      yOffset: glyph.yOffset * factor,
+    }));
+    pieces.push({
+      font,
+      glyphs,
+      width: glyphs.reduce((sum, glyph) => sum + glyph.advance, 0),
+      syntheticBold: font.synthesizes && resolution.syntheticBold,
+      syntheticItalic: font.synthesizes && resolution.syntheticItalic,
     });
+  };
+
+  if (resolution.standard) {
+    const standard = canvas.env.fonts.forStandard(resolution.standard, item.font.weight >= 600, item.font.italic);
+    const fallback = canvas.env.registry.fallbackFor(item.font.weight, item.font.italic);
+    splitGraphemes(item.text).forEach((grapheme) => {
+      if (Array.from(grapheme).every((char) => isWinAnsi(char.codePointAt(0) as number))) {
+        const text = grapheme === '\t' ? ' ' : grapheme;
+        const width = standard.width(text, sizePx);
+        pieces.push({
+          font: standard,
+          glyphs: [{ id: 0, text, advance: width, xOffset: 0, yOffset: 0 }],
+          width,
+          syntheticBold: false,
+          syntheticItalic: false,
+        });
+        return;
+      }
+      if (!fallback) return;
+      shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback).forEach((segment) =>
+        pushSegment(segment, grapheme),
+      );
+    });
+    return pieces;
+  }
+
+  const fallback = canvas.env.registry.fallbackFor(item.font.weight, item.font.italic);
+  shapeText(item.text, resolution, fallback).forEach((segment) => pushSegment(segment, item.text));
+  return pieces;
+}
+
+function drawSceneText(canvas: PageCanvas, item: SceneText, originX: number, originY: number, scale: number): void {
+  const sizePx = item.font.size * scale;
+  const pieces = sceneTextPieces(canvas, item, sizePx);
+  if (!pieces.length) return;
   const total = pieces.reduce((sum, piece) => sum + piece.width, 0);
   const anchorX = originX + item.x * scale;
   let x = item.anchor === 'middle' ? anchorX - total / 2 : item.anchor === 'end' ? anchorX - total : anchorX;
@@ -597,8 +671,8 @@ function drawSceneText(canvas: PageCanvas, item: SceneText, originX: number, ori
   if (gs) canvas.ops.push(pushGraphicsState(), setGraphicsState(gs));
   pieces.forEach((piece) => {
     x += canvas.glyphs(piece.font, sizePx, piece.glyphs, x, originY + item.y * scale, color, {
-      syntheticBold: piece.font.synthesizes && resolution.syntheticBold,
-      syntheticItalic: piece.font.synthesizes && resolution.syntheticItalic,
+      syntheticBold: piece.syntheticBold,
+      syntheticItalic: piece.syntheticItalic,
     });
   });
   if (gs) canvas.ops.push(popGraphicsState());
@@ -690,5 +764,3 @@ export function drawPages(env: DrawEnvironment, pages: Page[]): OutlineEntry[] {
   });
   return outline;
 }
-
-export type { PageCanvas };

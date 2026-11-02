@@ -1,4 +1,5 @@
 import { toHex } from './color';
+import { hasRtlText, type BidiDirection } from './bidi';
 import {
   DEFAULT_DOCUMENT_FAMILY,
   MONOSPACE_FAMILY,
@@ -70,7 +71,7 @@ export async function renderRtf(documentModel: ExportDocumentModel, warnings: Wa
     await prepareGraphicRenditions(documentModel, registry, warnings);
   }
 
-  const writer = new RtfWriter(pageGeometry(documentModel.locale), warnings);
+  const writer = new RtfWriter(pageGeometry(documentModel.locale), warnings, documentModel.direction);
   writer.topBookmark = linksToTop(documentModel.blocks);
   const body = writer.flow(documentModel.blocks, 'root', { indent: 0, inTable: false }).join('\n');
   if (writer.usesBundledFonts) warnings.add('font-not-embedded');
@@ -155,6 +156,7 @@ class RtfWriter {
   constructor(
     private readonly geometry: PageGeometry,
     private readonly warnings: WarningCollector,
+    private readonly direction: BidiDirection = 'ltr',
   ) {
     this.font(resolveFamily(DEFAULT_DOCUMENT_FAMILY));
   }
@@ -317,17 +319,20 @@ ${body}
   }
 
   private paragraphProperties(options: ParagraphOptions): string {
+    const rtl = this.direction === 'rtl';
     let properties = '\\pard\\plain';
     if (options.inTable) properties += '\\intbl';
+    if (rtl) properties += '\\rtlpar';
     if (options.style) properties += `\\s${options.style}\\outlinelevel${options.style - 1}`;
     if (options.keepNext) properties += '\\keepn';
     if (options.list) properties += options.list;
     properties += `\\sb${twips(options.before)}\\sa${twips(options.after)}`;
     if (options.line) properties += `\\sl${options.line < 0 ? -twips(-options.line) : twips(options.line)}\\slmult0`;
-    if (options.left) properties += `\\li${twips(options.left)}`;
+    if (options.left) properties += `${rtl ? '\\ri' : '\\li'}${twips(options.left)}`;
     if (options.firstLine) properties += `\\fi${twips(options.firstLine)}`;
-    if (options.right) properties += `\\ri${twips(options.right)}`;
-    properties += options.align === 'center' ? '\\qc' : options.align === 'right' ? '\\qr' : options.align === 'justify' ? '\\qj' : '\\ql';
+    if (options.right) properties += `${rtl ? '\\li' : '\\ri'}${twips(options.right)}`;
+    const align = options.align ?? (rtl ? 'right' : 'left');
+    properties += align === 'center' ? '\\qc' : align === 'right' ? '\\qr' : align === 'justify' ? '\\qj' : '\\ql';
     if (options.borders) properties += options.borders;
     if (options.shading) properties += `\\cbpat${options.shading}`;
     return properties;
@@ -376,7 +381,8 @@ ${body}
 
   private quoteBorder(): string {
     const quote = DOCUMENT_STYLE.blockquote;
-    return `\\brdrl\\brdrs\\brdrw${twips(quote.borderWidth)}\\brsp${twips(quote.paddingLeft)}\\brdrcf${this.color(DOCUMENT_STYLE.borderColor)}`;
+    const side = this.direction === 'rtl' ? 'r' : 'l';
+    return `\\brdr${side}\\brdrs\\brdrw${twips(quote.borderWidth)}\\brsp${twips(quote.paddingLeft)}\\brdrcf${this.color(DOCUMENT_STYLE.borderColor)}`;
   }
 
   private runs(runs: Array<{ text: string; style: RunStyle; run: ExportInlineRun }>): string {
@@ -415,6 +421,7 @@ ${body}
     if (style.superscript) controls += '\\super';
     else if (style.subscript) controls += '\\sub';
     if (style.highlight) controls += `\\chshdng0\\chcbpat${this.color(style.highlight)}`;
+    if (hasRtlText(text)) controls += '\\rtlch';
     return `{${controls} ${rtfText(text)}}`;
   }
 
@@ -446,13 +453,17 @@ ${body}
     const muted = this.color(DOCUMENT_STYLE.mutedColor);
     const markerFont = kind === 'circle' || kind === 'square' ? this.font(resolveFamily('Arial')) : 0;
     const step = DOCUMENT_STYLE.list.indent + DOCUMENT_STYLE.list.itemPadding;
+    const rtl = this.direction === 'rtl';
     const levels = Array.from({ length: 9 }, (_, index) => {
       const text =
         kind === 'decimal'
           ? `{\\leveltext\\'02\\'0${index}.;}{\\levelnumbers\\'01;}`
           : `{\\leveltext\\'01\\u${BULLETS[kind]} ?;}{\\levelnumbers;}`;
       const start = index === level ? list.start : 1;
-      return `{\\listlevel\\levelnfc${kind === 'decimal' ? 0 : 23}\\levelnfcn${kind === 'decimal' ? 0 : 23}\\leveljc0\\leveljcn0\\levelfollow0\\levelstartat${start}\\levelspace0\\levelindent0${text}\\f${markerFont}\\cf${muted}\\b0\\i0\\fi${-twips(18)}\\li${twips(step * (index + 1))}\\lin${twips(step * (index + 1))}}`;
+      const indent = rtl
+        ? `\\fi${twips(18)}\\ri${twips(step * (index + 1))}\\rin${twips(step * (index + 1))}`
+        : `\\fi${-twips(18)}\\li${twips(step * (index + 1))}\\lin${twips(step * (index + 1))}`;
+      return `{\\listlevel\\levelnfc${kind === 'decimal' ? 0 : 23}\\levelnfcn${kind === 'decimal' ? 0 : 23}\\leveljc${rtl ? 2 : 0}\\leveljcn${rtl ? 2 : 0}\\levelfollow0\\levelstartat${start}\\levelspace0\\levelindent0${text}\\f${markerFont}\\cf${muted}\\b0\\i0${indent}}`;
     }).join('');
     this.lists.push(`{\\list\\listtemplateid${1000 + id}\\listhybrid${levels}{\\listname ;}\\listid${id}}`);
     this.listOverrides.push(`{\\listoverride\\listid${id}\\listoverridecount0\\ls${id}}`);
@@ -577,7 +588,7 @@ ${body}
 
     return grid.slots
       .map((slots, rowIndex) => {
-        let definition = `\\trowd\\trgaph${padX}\\trleft${left}\\trftsWidth3\\trwWidth${twips(total)}\\trpaddl${padX}\\trpaddr${padX}\\trpaddt${padY}\\trpaddb${padY}\\trpaddfl3\\trpaddfr3\\trpaddft3\\trpaddfb3`;
+        let definition = `\\trowd${this.direction === 'rtl' ? '\\rtlrow' : ''}\\trgaph${padX}\\trleft${left}\\trftsWidth3\\trwWidth${twips(total)}\\trpaddl${padX}\\trpaddr${padX}\\trpaddt${padY}\\trpaddb${padY}\\trpaddfl3\\trpaddfr3\\trpaddft3\\trpaddfb3`;
         if (headerRows > 0 && rowIndex < headerRows) definition += '\\trhdr';
         const cells: string[] = [];
         for (let column = 0; column < grid.columnCount; ) {

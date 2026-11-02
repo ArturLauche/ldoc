@@ -80,6 +80,8 @@ describe('run styles', () => {
     expect(resolveRunStyle({}, { href: 'https://example.com' }, body)).toMatchObject({ weight: 500, color: '2E3D52', underline: true });
     expect(resolveRunStyle({ code: true }, undefined, body)).toMatchObject({ sizePx: 14, weight: 600, family: { name: 'Courier New' } });
     expect(resolveRunStyle({ superscript: true, fontSize: '20px' }, undefined, body)).toMatchObject({ sizePx: 15, parentSizePx: 20, lineHeight: 0 });
+    // Inline code scales the surrounding size too: the superscript is 75% of 14px.
+    expect(resolveRunStyle({ code: true, superscript: true }, undefined, body)).toMatchObject({ sizePx: 10.5, parentSizePx: 14 });
     expect(textBaseStyle({ kind: 'cell', color: 'rgb(248, 250, 252)' }).color).toBe('F8FAFC');
   });
 
@@ -88,6 +90,13 @@ describe('run styles', () => {
     expect(lineBoxPx(body, [])).toBe(28);
     expect(lineBoxPx(body, [resolveRunStyle({ fontSize: '24px' }, undefined, body)])).toBe(42);
     expect(lineBoxPx(body, [resolveRunStyle({ superscript: true, fontSize: '40px' }, undefined, body)])).toBe(28);
+  });
+
+  it('handles more runs than the engine accepts as call arguments', () => {
+    const body = textBaseStyle({ kind: 'body' });
+    const style = resolveRunStyle({}, undefined, body);
+    const runs = Array.from({ length: 200_000 }, () => style);
+    expect(lineBoxPx(body, runs)).toBe(28);
   });
 
   it('uses Letter for English and A4 elsewhere', () => {
@@ -101,6 +110,9 @@ describe('colors', () => {
     expect(parseCssColor('#abc')).toEqual({ r: 170, g: 187, b: 204, a: 1 });
     expect(parseCssColor('rgb(1 2 3 / 50%)')).toEqual({ r: 1, g: 2, b: 3, a: 0.5 });
     expect(parseCssColor('hsl(0, 100%, 50%)')).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    expect(parseCssColor('hsl(0.5turn 100% 50%)')).toEqual({ r: 0, g: 255, b: 255, a: 1 });
+    expect(parseCssColor(`hsl(${Math.PI}rad, 100%, 50%)`)).toEqual({ r: 0, g: 255, b: 255, a: 1 });
+    expect(parseCssColor('hsl(200grad, 100%, 50%)')).toEqual({ r: 0, g: 255, b: 255, a: 1 });
     expect(parseCssColor('color(srgb 1 0 0)')).toEqual({ r: 255, g: 0, b: 0, a: 1 });
     expect(parseCssColor('navy')).toEqual({ r: 0, g: 0, b: 128, a: 1 });
     expect(parseCssColor('url(javascript:x)')).toBeNull();

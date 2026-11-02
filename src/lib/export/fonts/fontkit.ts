@@ -107,7 +107,13 @@ export interface FontkitFont {
   glyphForCodePoint(codePoint: number): FontkitGlyph;
   hasGlyphForCodePoint(codePoint: number): boolean;
   getGlyph(id: number, codePoints?: number[]): FontkitGlyph;
-  layout(text: string, features?: string[] | Record<string, boolean>): FontkitGlyphRun;
+  layout(
+    text: string,
+    features?: string[] | Record<string, boolean>,
+    script?: string,
+    language?: string,
+    direction?: 'ltr' | 'rtl',
+  ): FontkitGlyphRun;
   getVariation(settings: Record<string, number>): FontkitFont;
   /** Internal: positions the shared stream at a table's raw bytes. */
   _getTableStream(tag: string): FontkitStream | null;

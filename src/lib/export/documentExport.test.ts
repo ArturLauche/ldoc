@@ -33,6 +33,15 @@ function expectWellFormedXml(xml: string | undefined) {
 }
 
 describe('extractExportDocumentFromHtml', () => {
+  it('resolves document direction from the first strong character', () => {
+    const direction = (html: string) =>
+      extractExportDocumentFromHtml({ html, name: 'Doc', locale: 'en' }).direction;
+    expect(direction('<p>English text</p>')).toBe('ltr');
+    expect(direction('<p>123 مرحبا</p>')).toBe('rtl');
+    expect(direction('<p>١٢٣ مرحبا</p>')).toBe('rtl');
+    expect(direction('<p>123 456</p>')).toBe('ltr');
+  });
+
   it('extracts structured blocks, links, marks, nested lists, tables and images', () => {
     const model = extractExportDocumentFromHtml({
       html: `
@@ -114,6 +123,35 @@ next()</code></pre>
     const blocks = extractExportDocumentFromHtml({ html: '<pre><code>one<br>two</code></pre><p>Icon \uE000 here</p>', name: 'Doc', locale: 'en' }).blocks;
     expect(blocks[0]).toEqual({ type: 'code-block', text: 'one\ntwo' });
     expect(blocks[1]).toMatchObject({ runs: [{ text: 'Icon \uE000 here' }] });
+  });
+
+  it('reads every <col> width when cells carry no colwidth', () => {
+    const [table] = extractExportDocumentFromHtml({
+      html: '<table><colgroup><col style="width: 120px"><col style="width: 200px"></colgroup><tr><td>A</td><td>B</td></tr></table>',
+      name: 'Doc',
+      locale: 'en',
+    }).blocks;
+    if (table.type !== 'table') throw new Error('expected a table');
+    expect(table.columnWidths).toEqual([120, 200]);
+  });
+
+  it('reads <col> widths beyond the first row when later rows are wider', () => {
+    const [table] = extractExportDocumentFromHtml({
+      html: '<table><colgroup><col style="width: 120px"><col style="width: 200px"><col style="width: 80px"></colgroup><tr><td colspan="1">A</td></tr><tr><td>B</td><td>C</td><td>D</td></tr></table>',
+      name: 'Doc',
+      locale: 'en',
+    }).blocks;
+    if (table.type !== 'table') throw new Error('expected a table');
+    expect(table.columnWidths).toEqual([120, 200, 80]);
+  });
+
+  it('drops tables without cells, which render as nothing', () => {
+    const blocks = extractExportDocumentFromHtml({
+      html: '<p>Before</p><table></table><table><tbody><tr></tr></tbody></table><p>After</p>',
+      name: 'Doc',
+      locale: 'en',
+    }).blocks;
+    expect(blocks.map((block) => block.type)).toEqual(['paragraph', 'paragraph']);
   });
 });
 
@@ -230,6 +268,13 @@ describe('HTML export', () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it('wraps code blocks like the editor instead of clipping long lines', async () => {
+    const result = await exportAs('html', '<pre><code>const longLine = "a".repeat(200)</code></pre>');
+    const html = await result.blob.text();
+    expect(html).toContain('white-space:pre-wrap');
+    expect(html).not.toContain('white-space:pre}');
+  });
+
   it('embeds only the font files the text needs, as data URLs', async () => {
     const result = await exportAs('html', '<p>Plain <strong>latin</strong> text</p><p><span style="font-family: Inter">Zażółć</span></p>');
     const html = await result.blob.text();
@@ -265,13 +310,41 @@ describe('HTML export', () => {
     expect(html).toMatch(/blockquote\{[^}]*border-inline-start:/);
     expect(html).toMatch(/ul,ol\{[^}]*padding-inline-start:/);
     expect(html).not.toMatch(/(?:padding|border)-left:/);
-    // Graphic scenes are captured left to right; an RTL document must not
-    // mirror their text anchors.
-    expect(html).toMatch(/svg\.lwrite-graphic-drawing\{[^}]*direction:ltr/);
+    // Graphic scenes are captured in the document's direction, so their
+    // start/end text anchors must resolve the same way in the exported SVG.
+    expect(html).toMatch(/svg\.lwrite-graphic-drawing\{[^}]*direction:rtl/);
+    const ltr = await (await exportAs('html', '<p>English</p>')).blob.text();
+    expect(ltr).toMatch(/svg\.lwrite-graphic-drawing\{[^}]*direction:ltr/);
   });
 
-  it('embeds data images and links remote images it cannot download instead of loading them', async () => {
-    const result = await exportAs('html', `<img src="${TINY_PNG}" alt="Dot"><img src="https://images.example/remote.png" alt="Remote">`);
+  it('writes right-to-left paragraphs, runs and tables into office formats', async () => {
+    const source =
+      '<h1>مرحبا</h1><p>نص <strong>عريض</strong> 123</p><ul><li>عنصر</li></ul><table><tr><th>عنوان</th><td>خلية</td></tr></table>';
+
+    const docx = await unzip((await exportAs('docx', source)).blob);
+    const documentXml = (await docx.file('word/document.xml')?.async('string')) ?? '';
+    expect(documentXml).toContain('<w:bidi/>');
+    expect(documentXml).toContain('<w:rtl/>');
+    expect(documentXml).toContain('<w:bidiVisual/>');
+    const numbering = (await docx.file('word/numbering.xml')?.async('string')) ?? '';
+    expect(numbering).toContain('<w:lvlJc w:val="right"/>');
+    expect(numbering).toContain('w:right=');
+
+    const odt = await unzip((await exportAs('odt', source)).blob);
+    const styles = (await odt.file('styles.xml')?.async('string')) ?? '';
+    const content = (await odt.file('content.xml')?.async('string')) ?? '';
+    expect(styles).toContain('style:writing-mode="rl-tb"');
+    expect(content).toContain('style:writing-mode="rl-tb"');
+
+    const rtf = await (await exportAs('rtf', source)).blob.text();
+    expect(rtf).toContain('\\rtlpar');
+    expect(rtf).toContain('\\rtlch');
+    expect(rtf).toContain('\\qr');
+    expect(rtf).toContain('\\leveljc2');
+    expect(rtf).toContain('\\rtlrow');
+  });
+
+  it('embeds data images and links remote images it cannot download instead of loading them', async () => {    const result = await exportAs('html', `<img src="${TINY_PNG}" alt="Dot"><img src="https://images.example/remote.png" alt="Remote">`);
     const html = await result.blob.text();
     expect(html).toContain(`src="${TINY_PNG}"`);
     expect(html).not.toContain('src="https://images.example');
@@ -549,6 +622,12 @@ describe('ODT export', () => {
     expect(contentXml).toContain('fo:font-weight="600"');
   });
 
+  it('declares the monospace face used by the Preformatted Text style', async () => {
+    const zip = await unzip((await exportAs('odt', '<p>Plain text</p>')).blob);
+    const contentXml = (await zip.file('content.xml')?.async('string')) ?? '';
+    expect(contentXml).toContain('<style:font-face style:name="Courier New"');
+  });
+
   it('names the medium face, which LibreOffice cannot select by weight', async () => {
     const zip = await unzip((await exportAs('odt', '<p>Text with a <a href="https://example.com/">link</a></p>')).blob);
     const contentXml = (await zip.file('content.xml')?.async('string')) ?? '';
@@ -616,6 +695,14 @@ describe('PDF export', () => {
     expect(outlines.get(PDFName.of('Count'))?.toString()).toBe('2');
     expect(pdf.getTitle()).toBe('Pdf');
     expect(pdf.getProducer()).toContain('LWrite');
+  });
+
+  it('truncates outline titles without splitting a character', async () => {
+    const { pdf } = await loadPdf(`<h1>${'a'.repeat(199)}🚀</h1>`);
+    const outlines = pdf.catalog.lookup(PDFName.of('Outlines'), PDFDict);
+    const first = outlines.lookup(PDFName.of('First'), PDFDict);
+    const title = first.get(PDFName.of('Title'));
+    expect(title instanceof PDFString || title instanceof PDFHexString ? title.decodeText() : '').toBe(`${'a'.repeat(199)}🚀`);
   });
 
   it('maps glyphs back to text for search and copy', async () => {
