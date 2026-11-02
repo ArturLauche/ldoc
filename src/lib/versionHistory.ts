@@ -1,6 +1,6 @@
 import { createDocumentId } from './documentLibrary';
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
-import { assertDocumentSize } from './documentLimits';
+import { sanitizeDocumentWithinLimit } from './documentLimits';
 import { DocumentStorageError, throwIfStorageFailed } from './storage';
 import { documentTransaction, type DocumentRecords } from './documentDatabase';
 
@@ -119,7 +119,6 @@ export function migrateLegacyVersionsToDocument(documentId: string): Promise<voi
           ) {
             throw new DocumentStorageError('invalid-data', new Error('Invalid legacy version.'));
           }
-          assertDocumentSize(legacy.content);
           migrated.push({
             // Stable fallback ids make a retry after a partial write idempotent.
             id:
@@ -127,7 +126,7 @@ export function migrateLegacyVersionsToDocument(documentId: string): Promise<voi
                 ? legacy.id
                 : `legacy-${key}-${index}`,
             documentId,
-            content: sanitizeDocumentHtml(legacy.content),
+            content: sanitizeDocumentWithinLimit(legacy.content),
             timestamp: new Date(legacy.timestamp).toISOString(),
             name: legacy.name,
             kind: isVersionKind(legacy.kind) ? legacy.kind : 'manual',
@@ -185,11 +184,10 @@ type VersionData = {
 };
 
 function saveVersion(records: DocumentRecords, data: VersionData): StoredVersion {
-  assertDocumentSize(data.content);
   const version: StoredVersion = {
     id: createDocumentId(),
     documentId: data.documentId,
-    content: sanitizeDocumentHtml(data.content),
+    content: sanitizeDocumentWithinLimit(data.content),
     name: data.name,
     timestamp: new Date().toISOString(),
     kind: data.kind ?? 'manual',

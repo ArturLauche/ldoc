@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { importDocument } from './DocumentImporter';
+import { assertOdtSpaceExpansion, importDocument } from './DocumentImporter';
 
 function textFile(content: string, name: string, type = 'text/plain'): File {
   return new File([content], name, { type });
@@ -37,6 +37,14 @@ describe('importDocument', () => {
     expect(result.content).toBe('<p>Hallo ü</p><p>Welt</p>');
   });
 
+  it('skips escaped RTF fallback characters instead of leaving fragments', async () => {
+    const result = await importDocument(
+      textFile(String.raw`{\rtf1 \uc1\u252\'fc und \uc2\u8364\'80\'80 Ende}`, 'fallback.rtf', 'application/rtf'),
+    );
+
+    expect(result.content).toBe('<p>ü und € Ende</p>');
+  });
+
   it('imports FODT headings, links, lists and tables as sanitized editor HTML', async () => {
     const fodt = `<?xml version="1.0" encoding="UTF-8"?>
       <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
@@ -62,6 +70,102 @@ describe('importDocument', () => {
     expect(result.content).toContain('<br>');
     expect(result.content).toContain('<ol start="4">');
     expect(result.content).toContain('<td colspan="2">');
+  });
+
+  it('preserves OpenDocument tabs as visible spacing', async () => {
+    const fodt = `<?xml version="1.0" encoding="UTF-8"?>
+      <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+        <office:body><office:text>
+          <text:p>A<text:tab/>B</text:p>
+        </office:text></office:body>
+      </office:document>`;
+
+    const result = await importDocument(
+      textFile(fodt, 'tabs.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'),
+    );
+
+    expect(result.content).toBe('<p>A&nbsp;&nbsp;&nbsp;&nbsp;B</p>');
+  });
+
+  it('reads numbering from OpenDocument list styles, not their names', async () => {    const fodt = `<?xml version="1.0" encoding="UTF-8"?>
+      <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
+        <office:automatic-styles>
+          <text:list-style style:name="L1"><text:list-level-style-number text:level="1"/></text:list-style>
+          <text:list-style style:name="L2"><text:list-level-style-bullet text:level="1"/></text:list-style>
+        </office:automatic-styles>
+        <office:body>
+          <office:text>
+            <text:list text:style-name="L1"><text:list-item><text:p>First</text:p></text:list-item></text:list>
+            <text:list text:style-name="L2"><text:list-item><text:p>Second</text:p></text:list-item></text:list>
+          </office:text>
+        </office:body>
+      </office:document>`;
+
+    const result = await importDocument(
+      textFile(fodt, 'lists.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'),
+    );
+
+    expect(result.content).toContain('<ol><li><p>First</p></li></ol>');
+    expect(result.content).toContain('<ul><li><p>Second</p></li></ul>');
+  });
+
+  it('reads OpenDocument inline emphasis from named text styles', async () => {
+    const fodt = `<?xml version="1.0" encoding="UTF-8"?>
+      <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+        xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
+        <office:automatic-styles>
+          <style:style style:name="T1" style:family="text">
+            <style:text-properties fo:font-weight="bold"/>
+          </style:style>
+          <style:style style:name="T2" style:family="text" style:parent-style-name="T1">
+            <style:text-properties fo:font-style="italic"/>
+          </style:style>
+          <style:style style:name="T3" style:family="text">
+            <style:text-properties fo:font-weight="normal"/>
+          </style:style>
+        </office:automatic-styles>
+        <office:body>
+          <office:text>
+            <text:p>Plain <text:span text:style-name="T1">bold</text:span> <text:span text:style-name="T2">both</text:span> <text:span text:style-name="T3">normal</text:span></text:p>
+          </office:text>
+        </office:body>
+      </office:document>`;
+
+    const result = await importDocument(
+      textFile(fodt, 'emphasis.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'),
+    );
+
+    expect(result.content).toBe(
+      '<p>Plain <strong>bold</strong> <em><strong>both</strong></em> normal</p>',
+    );
+  });
+
+  it('keeps OpenDocument table rows inside header and row-group wrappers', async () => {
+    const fodt = `<?xml version="1.0" encoding="UTF-8"?>
+      <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+        <office:body>
+          <office:text>
+            <table:table>
+              <table:table-header-rows><table:table-row><table:table-cell><text:p>Head</text:p></table:table-cell></table:table-row></table:table-header-rows>
+              <table:table-row-group><table:table-row><table:table-cell><text:p>Body</text:p></table:table-cell></table:table-row></table:table-row-group>
+            </table:table>
+          </office:text>
+        </office:body>
+      </office:document>`;
+
+    const result = await importDocument(
+      textFile(fodt, 'table.fodt', 'application/vnd.oasis.opendocument.text-flat-xml'),
+    );
+
+    expect(result.content).toContain('<td><p>Head</p></td>');
+    expect(result.content).toContain('<td><p>Body</p></td>');
   });
 
   it('imports ODT package images as data URLs', async () => {
@@ -161,7 +265,19 @@ it('rejects an individual embedded image over 10 MB before base64 conversion', a
   );
 });
 
-it('bounds OpenDocument space repetition before building HTML', async () => {
+it('clamps absurd OpenDocument space counts instead of expanding them', async () => {
   const xml = `<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:p><text:s text:c="2000000000"/></text:p></office:text></office:body></office:document>`;
-  await expect(importDocument(new File([xml], 'spaces.fodt'))).rejects.toThrow('size limit');
+  const result = await importDocument(new File([xml], 'spaces.fodt'));
+  expect(result.content).toBe(`<p>${'&nbsp;'.repeat(100)}</p>`);
+});
+
+it('counts the six-character expansion of every repeated OpenDocument space', () => {
+  const xml = `<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:p><text:s text:c="100"/><text:s text:c="100"/></text:p></office:text></office:body></office:document>`;
+  const officeText = new DOMParser()
+    .parseFromString(xml, 'text/xml')
+    .getElementsByTagName('office:text')[0];
+
+  // Two clamped 100-space runs become 1,200 characters of `&nbsp;` markup.
+  expect(() => assertOdtSpaceExpansion(officeText, 1_199)).toThrow('size limit');
+  expect(() => assertOdtSpaceExpansion(officeText, 1_200)).not.toThrow();
 });

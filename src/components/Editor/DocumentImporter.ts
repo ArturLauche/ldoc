@@ -1,5 +1,9 @@
 import { sanitizeDocumentHtml } from '@/lib/sanitizeDocumentHtml';
-import { assertDocumentSize, MAX_DOCUMENT_BYTES } from '@/lib/documentLimits';
+import {
+  assertDocumentSize,
+  MAX_DOCUMENT_BYTES,
+  sanitizeDocumentWithinLimit,
+} from '@/lib/documentLimits';
 import { openDocumentArchive } from '@/lib/documentArchive';
 
 export type SupportedFormat = 'txt' | 'html' | 'htm' | 'rtf' | 'docx' | 'odt' | 'ott' | 'fodt';
@@ -118,7 +122,63 @@ function inferImageMimeType(path: string): string {
   return 'application/octet-stream';
 }
 
-async function processOdtInlineNode(node: Node, resolveImage?: OdtImageResolver): Promise<string> {
+interface OdtTextStyle {
+  bold?: boolean;
+  italic?: boolean;
+}
+
+/**
+ * Bold/italic for each named style, following `style:parent-style-name`.
+ * LibreOffice puts emphasis in automatic text styles (`T1`, `T2`…) whose
+ * names say nothing about the formatting.
+ */
+function collectOdtTextStyles(doc: Document): Map<string, OdtTextStyle> {
+  const declared = new Map<string, { style: OdtTextStyle; parent?: string }>();
+  Array.from(doc.getElementsByTagName('style:style')).forEach((style) => {
+    const name = getXmlAttribute(style, 'style:name').toLowerCase();
+    if (!name) return;
+    const properties = getElementChildren(style).find(
+      (child) => child.tagName.toLowerCase() === 'style:text-properties',
+    );
+    const own: OdtTextStyle = {};
+    if (properties) {
+      const weight = getXmlAttribute(properties, 'fo:font-weight').toLowerCase();
+      const numericWeight = Number.parseInt(weight, 10);
+      if (weight === 'bold' || numericWeight >= 600) own.bold = true;
+      else if (weight === 'normal' || weight === 'lighter' || (weight && numericWeight < 600))
+        own.bold = false;
+      const fontStyle = getXmlAttribute(properties, 'fo:font-style').toLowerCase();
+      if (fontStyle === 'italic' || fontStyle === 'oblique') own.italic = true;
+      else if (fontStyle === 'normal') own.italic = false;
+    }
+    declared.set(name, {
+      style: own,
+      parent: getXmlAttribute(style, 'style:parent-style-name').toLowerCase() || undefined,
+    });
+  });
+  const resolved = new Map<string, OdtTextStyle>();
+  const resolve = (name: string, seen: Set<string>): OdtTextStyle => {
+    const cached = resolved.get(name);
+    if (cached) return cached;
+    const entry = declared.get(name);
+    if (!entry || seen.has(name)) return {};
+    seen.add(name);
+    const merged = {
+      ...(entry.parent ? resolve(entry.parent, seen) : {}),
+      ...entry.style,
+    };
+    resolved.set(name, merged);
+    return merged;
+  };
+  declared.forEach((_entry, name) => resolve(name, new Set()));
+  return resolved;
+}
+
+async function processOdtInlineNode(
+  node: Node,
+  resolveImage?: OdtImageResolver,
+  textStyles?: Map<string, OdtTextStyle>,
+): Promise<string> {
   if (node.nodeType === Node.TEXT_NODE) {
     return escapeHtml(node.textContent ?? '');
   }
@@ -128,7 +188,9 @@ async function processOdtInlineNode(node: Node, resolveImage?: OdtImageResolver)
   const tagName = element.tagName.toLowerCase();
 
   if (tagName === 'text:line-break') return '<br>';
-  if (tagName === 'text:tab') return '    ';
+  // The editor has no tab stops; non-breaking spaces keep the tab's gap
+  // instead of letting HTML collapse it to a single space.
+  if (tagName === 'text:tab') return '&nbsp;'.repeat(4);
   if (tagName === 'text:s') {
     const count = Math.max(
       1,
@@ -142,14 +204,20 @@ async function processOdtInlineNode(node: Node, resolveImage?: OdtImageResolver)
 
   const content = (
     await Promise.all(
-      Array.from(element.childNodes).map((child) => processOdtInlineNode(child, resolveImage)),
+      Array.from(element.childNodes).map((child) =>
+        processOdtInlineNode(child, resolveImage, textStyles),
+      ),
     )
   ).join('');
 
   if (tagName === 'text:span') {
     const styleName = getXmlAttribute(element, 'text:style-name').toLowerCase();
-    const withBold = styleName.includes('bold') ? `<strong>${content}</strong>` : content;
-    return styleName.includes('italic') ? `<em>${withBold}</em>` : withBold;
+    const style = textStyles?.get(styleName);
+    // Documents without style definitions keep the name-based fallback.
+    const bold = style?.bold ?? styleName.includes('bold');
+    const italic = style?.italic ?? styleName.includes('italic');
+    const withBold = bold ? `<strong>${content}</strong>` : content;
+    return italic ? `<em>${withBold}</em>` : withBold;
   }
 
   if (tagName === 'text:a') {
@@ -177,9 +245,31 @@ async function processOdtImageFrame(
   return `<img src="${escapeHtmlAttribute(resolved)}" alt="${escapeHtmlAttribute(alt)}">`;
 }
 
+/**
+ * Whether each `text:list-style` in the document is numbered, by style name.
+ * LibreOffice names list styles `L1`, `L2`…, so the name alone says nothing
+ * about numbering; the level style does.
+ */
+function collectOdtListStyles(doc: Document): Map<string, boolean> {
+  const styles = new Map<string, boolean>();
+  Array.from(doc.getElementsByTagName('text:list-style')).forEach((style) => {
+    const name = getXmlAttribute(style, 'style:name').toLowerCase();
+    if (!name) return;
+    const firstLevel = getElementChildren(style).find((child) =>
+      child.tagName.toLowerCase().startsWith('text:list-level-style-'),
+    );
+    if (firstLevel) {
+      styles.set(name, firstLevel.tagName.toLowerCase() === 'text:list-level-style-number');
+    }
+  });
+  return styles;
+}
+
 async function processOdtBlocks(
   parent: ParentNode,
   resolveImage?: OdtImageResolver,
+  listStyles?: Map<string, boolean>,
+  textStyles?: Map<string, OdtTextStyle>,
 ): Promise<string> {
   const parts: string[] = [];
 
@@ -187,27 +277,36 @@ async function processOdtBlocks(
     const tagName = child.tagName.toLowerCase();
 
     if (tagName === 'text:p') {
-      parts.push(`<p>${await processOdtInlineNode(child, resolveImage)}</p>`);
+      parts.push(`<p>${await processOdtInlineNode(child, resolveImage, textStyles)}</p>`);
     } else if (tagName === 'text:h') {
       const level = clampHeadingLevel(getXmlAttribute(child, 'text:outline-level'));
-      parts.push(`<h${level}>${await processOdtInlineNode(child, resolveImage)}</h${level}>`);
+      parts.push(
+        `<h${level}>${await processOdtInlineNode(child, resolveImage, textStyles)}</h${level}>`,
+      );
     } else if (tagName === 'text:list') {
-      parts.push(await processOdtList(child, resolveImage));
+      parts.push(await processOdtList(child, resolveImage, listStyles, textStyles));
     } else if (tagName === 'table:table') {
-      parts.push(await processOdtTable(child, resolveImage));
+      parts.push(await processOdtTable(child, resolveImage, listStyles, textStyles));
     } else if (tagName === 'draw:frame') {
       parts.push(`<p>${await processOdtImageFrame(child, resolveImage)}</p>`);
     } else {
-      parts.push(await processOdtBlocks(child, resolveImage));
+      parts.push(await processOdtBlocks(child, resolveImage, listStyles, textStyles));
     }
   }
 
   return parts.join('');
 }
 
-async function processOdtList(element: Element, resolveImage?: OdtImageResolver): Promise<string> {
+async function processOdtList(
+  element: Element,
+  resolveImage?: OdtImageResolver,
+  listStyles?: Map<string, boolean>,
+  textStyles?: Map<string, OdtTextStyle>,
+): Promise<string> {
   const styleName = getXmlAttribute(element, 'text:style-name').toLowerCase();
-  const ordered = styleName.includes('number') || styleName.includes('ordered');
+  // Fall back to the style name for documents without a list-style definition.
+  const ordered =
+    listStyles?.get(styleName) ?? (styleName.includes('number') || styleName.includes('ordered'));
   const listTag = ordered ? 'ol' : 'ul';
   const items = getElementChildren(element, 'text:list-item');
   const firstStart = Number.parseInt(getXmlAttribute(items[0] ?? element, 'text:start-value'), 10);
@@ -219,7 +318,7 @@ async function processOdtList(element: Element, resolveImage?: OdtImageResolver)
         const itemStart = Number.parseInt(getXmlAttribute(item, 'text:start-value'), 10);
         const value =
           ordered && Number.isFinite(itemStart) && itemStart > 0 ? ` value="${itemStart}"` : '';
-        return `<li${value}>${await processOdtBlocks(item, resolveImage)}</li>`;
+        return `<li${value}>${await processOdtBlocks(item, resolveImage, listStyles, textStyles)}</li>`;
       }),
     )
   ).join('');
@@ -227,8 +326,31 @@ async function processOdtList(element: Element, resolveImage?: OdtImageResolver)
   return `<${listTag}${start}>${body}</${listTag}>`;
 }
 
-async function processOdtTable(element: Element, resolveImage?: OdtImageResolver): Promise<string> {
-  const rows = getElementChildren(element, 'table:table-row');
+/** All rows of a table, including rows inside header and row-group wrappers. */
+function collectOdtTableRows(element: Element): Element[] {
+  const rows: Element[] = [];
+  getElementChildren(element).forEach((child) => {
+    const tagName = child.tagName.toLowerCase();
+    if (tagName === 'table:table-row') {
+      rows.push(child);
+    } else if (
+      tagName === 'table:table-header-rows' ||
+      tagName === 'table:table-rows' ||
+      tagName === 'table:table-row-group'
+    ) {
+      rows.push(...collectOdtTableRows(child));
+    }
+  });
+  return rows;
+}
+
+async function processOdtTable(
+  element: Element,
+  resolveImage?: OdtImageResolver,
+  listStyles?: Map<string, boolean>,
+  textStyles?: Map<string, OdtTextStyle>,
+): Promise<string> {
+  const rows = collectOdtTableRows(element);
   const body = (
     await Promise.all(
       rows.map(async (row) => {
@@ -250,7 +372,7 @@ async function processOdtTable(element: Element, resolveImage?: OdtImageResolver
                 Number.isFinite(colSpan) && colSpan > 1 ? ` colspan="${colSpan}"` : '',
                 Number.isFinite(rowSpan) && rowSpan > 1 ? ` rowspan="${rowSpan}"` : '',
               ].join('');
-              return `<td${attrs}>${await processOdtBlocks(cell, resolveImage)}</td>`;
+              return `<td${attrs}>${await processOdtBlocks(cell, resolveImage, listStyles, textStyles)}</td>`;
             }),
           )
         ).join('');
@@ -262,21 +384,38 @@ async function processOdtTable(element: Element, resolveImage?: OdtImageResolver
   return `<table>${body}</table>`;
 }
 
+/**
+ * A tiny XML node can request billions of spaces, independently of ZIP size.
+ * Bound the cumulative expansion before any repeat() or parallel conversion.
+ * Each space becomes `&nbsp;` (six characters), and each element is clamped
+ * to 100 spaces, so measure the markup actually produced, not the request.
+ */
+export function assertOdtSpaceExpansion(officeText: Element, limit = MAX_DOCUMENT_BYTES): void {
+  let expanded = 0;
+  for (const element of Array.from(officeText.getElementsByTagName('text:s'))) {
+    const count = Math.max(
+      1,
+      Math.min(100, Number.parseInt(getXmlAttribute(element, 'text:c'), 10) || 1),
+    );
+    expanded += count * '&nbsp;'.length;
+    if (!Number.isSafeInteger(expanded) || expanded > limit)
+      throw new Error('Expanded document exceeds the size limit.');
+  }
+}
+
 async function convertOdtXmlToHtml(
   doc: Document,
   resolveImage?: OdtImageResolver,
 ): Promise<string> {
   const officeText = doc.getElementsByTagName('office:text')[0];
   if (doc.querySelector('parsererror') || !officeText) throw new Error('Invalid OpenDocument XML.');
-  // A tiny XML node can request billions of spaces, independently of ZIP size.
-  // Bound the cumulative expansion before any repeat() or parallel conversion.
-  let spaces = 0;
-  for (const element of Array.from(officeText.getElementsByTagName('text:s'))) {
-    spaces += Math.max(1, Number.parseInt(getXmlAttribute(element, 'text:c'), 10) || 1);
-    if (!Number.isSafeInteger(spaces) || spaces > MAX_DOCUMENT_BYTES)
-      throw new Error('Expanded document exceeds the size limit.');
-  }
-  const html = await processOdtBlocks(officeText, resolveImage);
+  assertOdtSpaceExpansion(officeText);
+  const html = await processOdtBlocks(
+    officeText,
+    resolveImage,
+    collectOdtListStyles(doc),
+    collectOdtTextStyles(doc),
+  );
   return html || '<p></p>';
 }
 
@@ -347,6 +486,28 @@ function readRtfGroupDestination(value: string, index: number): { skip: boolean 
 
 function rtfUnicodeCharacter(value: number): string {
   return String.fromCharCode(value < 0 ? value + 0x10000 : value);
+}
+
+/**
+ * Skips the ANSI fallback after `\uN`. `\ucN` counts characters, and one
+ * fallback character may be written as a `\'hh` escape or a control symbol,
+ * so counting raw source characters would leave `'hh` fragments in the text.
+ */
+function skipRtfFallback(value: string, index: number, count: number): number {
+  let cursor = index;
+  for (let skipped = 0; skipped < count && cursor < value.length; skipped += 1) {
+    if (value[cursor] === '\\') {
+      if (value[cursor + 1] === "'") {
+        cursor += 4;
+      } else {
+        const control = value.slice(cursor + 1).match(/^([a-zA-Z]+)(-?\d+)? ?/);
+        cursor += control ? 1 + control[0].length : 2;
+      }
+    } else {
+      cursor += 1;
+    }
+  }
+  return cursor;
 }
 
 function convertRtfToText(value: string): string {
@@ -439,7 +600,7 @@ function convertRtfToText(value: string): string {
       unicodeFallbackLength = Math.max(0, Math.min(8, numeric));
     } else if (word === 'u' && typeof numeric === 'number') {
       output += rtfUnicodeCharacter(numeric);
-      nextCursor += unicodeFallbackLength;
+      nextCursor = skipRtfFallback(value, nextCursor, unicodeFallbackLength);
     }
 
     cursor = nextCursor;
@@ -482,7 +643,7 @@ export async function importDocument(file: File): Promise<ImportResult> {
 
   assertDocumentSize(content);
   return {
-    content: sanitizeDocumentHtml(content),
+    content: sanitizeDocumentWithinLimit(content),
     fileName,
     format,
   };

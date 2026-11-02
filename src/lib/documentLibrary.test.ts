@@ -133,6 +133,34 @@ describe('documentLibrary', () => {
     expect(doc.content).toBe('<p>Hello</p>');
     expect((await getLibraryDocuments()).some((entry) => entry.id === doc.id)).toBe(true);
   });
+
+  it(
+    'rejects imported library documents whose stored markup exceeds the size limit',
+    { timeout: 30_000 },
+    async () => {
+      // Raw `&` characters are small; sanitizing each into `&amp;` grows the
+      // stored markup past the 20 MB limit.
+      const content = `<p>${'&'.repeat(4_300_000)}</p>`;
+      const raw = JSON.stringify({
+        format: 'lwrite-library',
+        version: 1,
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        documents: [
+          {
+            id: 'oversize',
+            name: 'Oversize',
+            content,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(await importUnifiedLibraryFile(raw)).toEqual({ imported: 0, skipped: 1 });
+      expect(await getLibraryDocuments()).toEqual([]);
+      await expect(async () => importSingleLibraryDocument(raw)).rejects.toThrow('too large');
+    },
+  );
 });
 
 it('does not overwrite an unreadable library during mutations', async () => {

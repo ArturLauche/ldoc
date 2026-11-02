@@ -1,5 +1,5 @@
 import { sanitizeDocumentHtml } from './sanitizeDocumentHtml';
-import { assertDocumentSize } from './documentLimits';
+import { assertDocumentSize, sanitizeDocumentWithinLimit } from './documentLimits';
 import { DocumentStorageError, throwIfStorageFailed } from './storage';
 import { documentTransaction, readDocumentItem, type DocumentRecords } from './documentDatabase';
 
@@ -36,6 +36,16 @@ function isStoredDocument(value: unknown): value is StoredDocument {
 
 function isValidDateString(value: string): boolean {
   return Number.isFinite(Date.parse(value));
+}
+
+/** A normalized record whose stored markup fits the document limit. */
+function withinDocumentLimit(content: string): boolean {
+  try {
+    assertDocumentSize(content);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeStoredDocument(value: unknown): StoredDocument | null {
@@ -137,8 +147,7 @@ export function upsertLibraryDocument(
     data.updatedAt && isValidDateString(data.updatedAt)
       ? new Date(data.updatedAt).toISOString()
       : new Date().toISOString();
-  assertDocumentSize(data.content);
-  const content = sanitizeDocumentHtml(data.content);
+  const content = sanitizeDocumentWithinLimit(data.content);
   return updateLibrary(
     (documents, records) => {
       const existing = data.id ? documents.find((doc) => doc.id === data.id) : undefined;
@@ -248,7 +257,7 @@ export function importUnifiedLibraryFile(
 
     parsed.documents.forEach((doc) => {
       const normalized = normalizeStoredDocument(doc);
-      if (!normalized) {
+      if (!normalized || !withinDocumentLimit(normalized.content)) {
         skipped += 1;
         return;
       }
@@ -280,7 +289,7 @@ export function addImportedDocumentToLibrary(
   return upsertLibraryDocument({
     id: createDocumentId(),
     name: name.trim() || 'Untitled Document',
-    content: sanitizeDocumentHtml(content),
+    content,
     updatedAt: new Date().toISOString(),
   });
 }
@@ -296,6 +305,7 @@ export function importSingleLibraryDocument(rawText: string): Promise<StoredDocu
   if (!normalized) {
     throw new Error('Invalid document data');
   }
+  assertDocumentSize(normalized.content);
 
   return upsertLibraryDocument({
     id: createDocumentId(),

@@ -10,7 +10,11 @@ export function normalizeLinkUrl(value: string): string | null {
     return null;
   if (/^(?:#|\/(?![\\/])|\.\.?\/)/.test(trimmed)) return trimmed;
   try {
-    const url = new URL(/^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    // Only a real scheme (or a host with a port, which also contains a colon)
+    // may skip the `https://` prefix. Treating any `word:` as a scheme made
+    // `example.com:8080` look like an unknown protocol.
+    const hasScheme = /^(?:https?|mailto):/i.test(trimmed) || /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed);
+    const url = new URL(hasScheme ? trimmed : `https://${trimmed}`);
     if (!['https:', 'http:', 'mailto:'].includes(url.protocol)) return null;
     if (url.protocol !== 'mailto:' && (!url.hostname || url.username || url.password)) return null;
     // A phrase pasted instead of an address ("not a link") is not a host; some

@@ -10,6 +10,7 @@ describe('link input', () => {
     'https://example.com\n/',
     'not a link with spaces',
     'https://exa mple.com/',
+    'ftp://example.com/file',
   ])('rejects unsafe link %s', (value) => {
     expect(normalizeLinkUrl(value)).toBeNull();
   });
@@ -18,6 +19,7 @@ describe('link input', () => {
     ['#section', '#section'],
     ['/privacy', '/privacy'],
     ['mailto:writer@example.org', 'mailto:writer@example.org'],
+    ['example.org:8080/path', 'https://example.org:8080/path'],
     // Spaces in the path are fine; they are only refused in the host.
     ['example.org/my file.pdf', 'https://example.org/my%20file.pdf'],
   ])('normalizes %s', (value, expected) => {

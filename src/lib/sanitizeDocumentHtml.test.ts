@@ -21,6 +21,22 @@ describe('sanitizeDocumentHtml', () => {
     expect(sanitizeDocumentHtml(safe)).toBe(safe);
   });
 
+  it('accepts only the link protocols the editor can follow', () => {
+    const sanitized = sanitizeDocumentHtml(
+      '<a href="mailto:a@example.com">Mail</a><a href="/privacy">Path</a><a href="#top">Top</a>' +
+        '<a href="tel:+123">Tel</a><a href="ftp://example.com/file">FTP</a>' +
+        '<img src="file:///tmp/dot.png" alt="Dot"><img src="https://example.com/dot.png" alt="Web">',
+    );
+
+    expect(sanitized).toContain('<a href="mailto:a@example.com">Mail</a>');
+    expect(sanitized).toContain('<a href="/privacy">Path</a>');
+    expect(sanitized).toContain('<a href="#top">Top</a>');
+    expect(sanitized).toContain('<a>Tel</a>');
+    expect(sanitized).toContain('<a>FTP</a>');
+    expect(sanitized).toContain('<img alt="Dot">');
+    expect(sanitized).toContain('<img src="https://example.com/dot.png" alt="Web">');
+  });
+
   it('removes executable content and unsafe URLs', () => {
     const sanitized = sanitizeDocumentHtml(`
       <p onclick="alert(1)">Hello</p>
@@ -68,6 +84,22 @@ describe('sanitizeDocumentHtml', () => {
     expect(sanitized).not.toContain('background-image');
     expect(sanitized).not.toContain('behavior');
     expect(sanitized).not.toContain('contenteditable');
+  });
+
+  it('keeps only image layout values the editor can render safely', () => {
+    const sanitized = sanitizeDocumentHtml(`
+      <img src="data:image/png;base64,YWJj" alt="Safe" data-align="left" data-width="50">
+      <img src="data:image/png;base64,YWJj" alt="Injected" data-align="left; position: fixed" data-width="100; position: fixed; inset: 0; background: red; opacity: 1">
+      <img src="data:image/png;base64,YWJj" alt="Out of range" data-width="1000">
+    `);
+
+    expect(sanitized).toContain('data-align="left"');
+    expect(sanitized).toContain('data-width="50"');
+    expect(sanitized).not.toContain('position');
+    expect(sanitized).not.toContain('background');
+    expect(sanitized).not.toContain('1000');
+    expect(sanitized.match(/data-align=/g)).toHaveLength(1);
+    expect(sanitized.match(/data-width=/g)).toHaveLength(1);
   });
 
   it('keeps table structure, column widths and cell fills', () => {
