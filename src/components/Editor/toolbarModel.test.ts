@@ -3,7 +3,7 @@ import { CellSelection } from '@tiptap/pm/tables';
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEditorExtensions, DEFAULT_HIGHLIGHT_COLOR } from './editorExtensions';
-import { applyTextBlockStyle, HIGHLIGHT_COLORS, normalizeColor, useToolbarState } from './toolbarModel';
+import { applyTextBlockStyle, HIGHLIGHT_COLORS, normalizeColor, stepFontSize, useToolbarState } from './toolbarModel';
 
 let editor: Editor;
 afterEach(() => editor?.destroy());
@@ -73,6 +73,22 @@ describe('toolbar alignment', () => {
   it('reports no alignment when the selected blocks differ', () => {
     const html = '<p style="text-align: center">One</p><p style="text-align: right">Two</p>';
     expect(stateFor(html, 2, 8)?.alignment).toBeUndefined();
+  });
+});
+
+describe('font size steps', () => {
+  it('moves through the toolbar scale in the requested direction', () => {
+    expect(stepFontSize('16px', 1)).toBe('18px');
+    expect(stepFontSize('16px', -1)).toBe('14px');
+    expect(stepFontSize('15px', 1)).toBe('16px');
+    expect(stepFontSize('15px', -1)).toBe('14px');
+  });
+
+  it('keeps free-form sizes past the end of the scale instead of moving the wrong way', () => {
+    expect(stepFontSize('10px', -1)).toBe('10px');
+    expect(stepFontSize('48px', 1)).toBe('48px');
+    expect(stepFontSize('8px', -1)).toBe('8px');
+    expect(stepFontSize('60px', 1)).toBe('60px');
   });
 });
 

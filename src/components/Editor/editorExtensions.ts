@@ -12,7 +12,12 @@ import Placeholder, { type PlaceholderOptions } from '@tiptap/extension-placehol
 import Image from '@tiptap/extension-image';
 import { Extension, mergeAttributes, type Extensions } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import type { ImageAlignment, ImageWidth } from '@/lib/media';
+import {
+  isImageAlignment,
+  normalizeImageWidthValue,
+  type ImageAlignment,
+  type ImageWidth,
+} from '@/lib/media';
 import { FindReplace } from './findReplaceExtension';
 import { ImageFiles } from './imageFileExtension';
 import { selectInsertedNode } from './insertedNode';
@@ -63,21 +68,22 @@ const EnhancedImage = Image.extend({
       ...this.parent?.(),
       align: {
         default: 'center',
-        parseHTML: (element) => element.getAttribute('data-align') || 'center',
+        parseHTML: (element) => {
+          const align = element.getAttribute('data-align');
+          return isImageAlignment(align) ? align : 'center';
+        },
         renderHTML: (attributes) => ({
-          'data-align': attributes.align,
+          'data-align': isImageAlignment(attributes.align) ? attributes.align : 'center',
         }),
       },
       width: {
         default: null,
-        parseHTML: (element) => element.getAttribute('data-width'),
-        renderHTML: (attributes) =>
-          attributes.width
-            ? {
-                'data-width': attributes.width,
-                style: `width: ${attributes.width}%;`,
-              }
-            : {},
+        parseHTML: (element) => normalizeImageWidthValue(element.getAttribute('data-width')),
+        renderHTML: (attributes) => {
+          // `attributes` is untyped ingress; never interpolate it into CSS.
+          const width = normalizeImageWidthValue(attributes.width);
+          return width ? { 'data-width': width, style: `width: ${width}%;` } : {};
+        },
       },
     };
   },
@@ -119,6 +125,17 @@ const EnhancedHighlight = Highlight.extend({
   },
 });
 
+// Same value grammar as the document sanitizer; attributes are untyped ingress
+// and must never be interpolated into CSS unchecked.
+const CSS_SIZE_VALUE = /^(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)$/i;
+const CSS_LINE_HEIGHT_VALUE = /^(?:normal|(?:0|[1-9]\d{0,2})(?:\.\d+)?(?:px|pt|em|rem|%)?)$/i;
+
+function safeStyleValue(value: unknown, pattern: RegExp): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return pattern.test(trimmed) ? trimmed : null;
+}
+
 const EnhancedTextStyle = TextStyle.extend({
   addAttributes() {
     return {
@@ -127,10 +144,11 @@ const EnhancedTextStyle = TextStyle.extend({
         default: null,
         parseHTML: (element) => element.style.fontSize || null,
         renderHTML: (attributes) => {
-          if (!attributes.fontSize) return {};
+          const fontSize = safeStyleValue(attributes.fontSize, CSS_SIZE_VALUE);
+          if (!fontSize) return {};
           return {
             'data-lwrite-theme-text': 'true',
-            style: `font-size: ${attributes.fontSize}`,
+            style: `font-size: ${fontSize}`,
           };
         },
       },
@@ -138,10 +156,11 @@ const EnhancedTextStyle = TextStyle.extend({
         default: null,
         parseHTML: (element) => element.style.lineHeight || null,
         renderHTML: (attributes) => {
-          if (!attributes.lineHeight) return {};
+          const lineHeight = safeStyleValue(attributes.lineHeight, CSS_LINE_HEIGHT_VALUE);
+          if (!lineHeight) return {};
           return {
             'data-lwrite-theme-text': 'true',
-            style: `line-height: ${attributes.lineHeight}`,
+            style: `line-height: ${lineHeight}`,
           };
         },
       },
