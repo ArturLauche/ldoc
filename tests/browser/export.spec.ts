@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { SMART_GRAPHIC_LAYOUT_IDS, createStarterGraphic, serializeSmartGraphic } from '../../src/lib/smartGraphic';
 import JSZip from 'jszip';
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import type { TiptapEditorHTMLElement } from '@tiptap/react';
@@ -78,7 +79,7 @@ test.describe('document export', () => {
     await expect(page.locator('.lwrite-graphic-node')).toBeVisible();
   });
 
-  test('exports every format locally with fonts and Smart Graphic drawings', async ({ page }) => {
+  test('exports every format locally with fonts and Smart Graphic drawings', async ({ page }, testInfo) => {
     const external: string[] = [];
     page.on('request', (request) => {
       if (!request.url().startsWith('http://127.0.0.1:4178/') && !request.url().startsWith('data:') && !request.url().startsWith('blob:')) {
@@ -102,11 +103,20 @@ test.describe('document export', () => {
     expect(fonts.some((name) => name.includes('Inter'))).toBe(true);
     expect(loaded.getTitle()).toBeTruthy();
 
-    const docx = await JSZip.loadAsync(await exportAs(page, 'docx').then((file) => file.bytes));
+    const docxFile = await exportAs(page, 'docx');
+    expect(docxFile.name).toMatch(/\.docx$/);
+    await writeFile(testInfo.outputPath('editable-smart-graphic.docx'), docxFile.bytes);
+    const docx = await JSZip.loadAsync(docxFile.bytes);
     const docxMedia = Object.keys(docx.files).filter((name) => name.startsWith('word/media/'));
-    // The graphic as SVG with a PNG fallback, plus the floating image.
-    expect(docxMedia.some((name) => name.endsWith('.svg'))).toBe(true);
-    expect(docxMedia.filter((name) => name.endsWith('.png')).length).toBe(2);
+    // Only the actual photograph is media; the graphic is editable Word shapes.
+    expect(docxMedia.some((name) => name.endsWith('.svg'))).toBe(false);
+    expect(docxMedia.filter((name) => name.endsWith('.png')).length).toBe(1);
+    const docxXml = await docx.file('word/document.xml')!.async('string');
+    expect(docxXml).toContain('<wpg:wgp>');
+    expect(docxXml).toContain('<wps:txbx>');
+    for (const label of ['Launch plan', 'Research', 'Build', 'Ship']) {
+      expect(docxXml).toContain(`>${label}</w:t>`);
+    }
     expect(Object.keys(docx.files).some((name) => name.startsWith('word/fonts/'))).toBe(true);
 
     const odt = await JSZip.loadAsync(await exportAs(page, 'odt').then((file) => file.bytes));
@@ -123,6 +133,36 @@ test.describe('document export', () => {
     expect(html).toMatch(/@font-face\{font-family:'Inter'/);
 
     expect(external).toEqual([]);
+  });
+
+  test('every Smart Graphic layout exports editable shapes and labels without media', async ({ page }, testInfo) => {
+    const models = SMART_GRAPHIC_LAYOUT_IDS.map((id) => ({ ...createStarterGraphic(id), title: id }));
+    const html = models.map((model) => `<div data-lwrite-graphic='${serializeSmartGraphic(model)}'></div>`).join('');
+    await setContent(page, html);
+    const file = await exportAs(page, 'docx');
+    await writeFile(testInfo.outputPath('all-smart-graphics.docx'), file.bytes);
+    const zip = await JSZip.loadAsync(file.bytes);
+    const xml = await zip.file('word/document.xml')!.async('string');
+    const counts = await page.evaluate((source) => {
+      const document = new DOMParser().parseFromString(source, 'application/xml');
+      return {
+        errors: document.getElementsByTagName('parsererror').length,
+        groups: Array.from(document.getElementsByTagNameNS('http://schemas.microsoft.com/office/word/2010/wordprocessingGroup', 'wgp')).map((group) => ({
+          text: group.textContent,
+          geometry: group.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'custGeom').length,
+        })),
+      };
+    }, xml);
+    expect(counts.errors).toBe(0);
+    expect(counts.groups).toHaveLength(models.length);
+    const labels = (items: typeof models[number]['items']): string[] => items.flatMap((item) => [item.label, ...labels(item.children)]);
+    for (const [index, model] of models.entries()) {
+      // Every group already has a frame path; require actual diagram geometry too.
+      expect(counts.groups[index].geometry, `${model.layoutId} geometry beyond its frame`).toBeGreaterThan(1);
+      expect(counts.groups[index].text).toContain(model.title);
+      for (const label of labels(model.items)) expect(counts.groups[index].text).toContain(label);
+    }
+    expect(Object.keys(zip.files).filter((path) => path.startsWith('word/media/'))).toEqual([]);
   });
 
   test('HTML export is self-contained and matches the editor layout', async ({ page, context }) => {

@@ -96,7 +96,7 @@ export function noteGraphicFonts(registry: ExportFontRegistry, documentModel: Ex
 }
 
 /**
- * Office formats get each graphic as a framed SVG with outlined text (exact
+ * ODT and RTF get each graphic as a framed SVG with outlined text (exact
  * without the fonts installed) and a PNG of the same drawing. Identical
  * graphics share one rendition.
  */

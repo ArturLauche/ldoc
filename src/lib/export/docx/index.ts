@@ -1,13 +1,14 @@
 import { DEFAULT_DOCUMENT_FAMILY, resolveFamily } from '../fonts/catalog';
 import { createFontKey, obfuscateFont, wordFaces } from '../fonts/embedding';
 import { ExportFontRegistry } from '../fonts/registry';
-import { noteGraphicFonts, prepareGraphicRenditions } from '../graphics/renditions';
+import { noteGraphicFonts } from '../graphics/renditions';
 import { languageTag } from '../shared';
 import { noteDocumentFonts } from '../textUsage';
 import { pageGeometry } from '../typography';
 import type { ExportDocumentModel } from '../types';
 import type { WarningCollector } from '../warnings';
 import { DocxBodyWriter, withTopBookmark } from './body';
+import { WORD_GROUP_NS, WORD_SHAPE_NS } from './graphics';
 import {
   RELATIONSHIP_TYPES,
   appXml,
@@ -27,14 +28,13 @@ import {
  * DOCX: native WordprocessingML (heading styles, numbered lists, real
  * tables with merges and shading, hyperlinks, floating pictures), the
  * document's fonts embedded as static instances, and Smart Graphics as
- * pictures (PNG with an SVG for Office 2016+).
+ * editable Word 2010+ groups of freeform shapes and text boxes.
  */
 export async function renderDocx(documentModel: ExportDocumentModel, warnings: WarningCollector): Promise<Blob> {
   const registry = new ExportFontRegistry(warnings);
   noteDocumentFonts(registry, documentModel.blocks, { generated: false, graphicFallbacks: false });
   noteGraphicFonts(registry, documentModel);
   await registry.load({ instances: true, fallback: false });
-  await prepareGraphicRenditions(documentModel, registry, warnings);
 
   const geometry = pageGeometry(documentModel.locale);
   const language = languageTag(documentModel.locale);
@@ -45,11 +45,11 @@ export async function renderDocx(documentModel: ExportDocumentModel, warnings: W
     { id: 'rId3', type: RELATIONSHIP_TYPES.settings, target: 'settings.xml' },
     { id: 'rId4', type: RELATIONSHIP_TYPES.fontTable, target: 'fontTable.xml' },
   ];
-  const writer = new DocxBodyWriter(fixed.length + 1, geometry, warnings, documentModel.direction);
+  const writer = new DocxBodyWriter(fixed.length + 1, geometry, warnings, documentModel.direction, registry);
   let body = writer.flow(documentModel.blocks, 'root', { indent: 0 }) || '<w:p/>';
   if (writer.linksToTop) body = withTopBookmark(body);
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}${body.endsWith('</w:tbl>') ? '<w:p/>' : ''}${sectionXml(geometry, documentModel.direction)}</w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wpg="${WORD_GROUP_NS}" xmlns:wps="${WORD_SHAPE_NS}" mc:Ignorable="wpg wps"><w:body>${body}${body.endsWith('</w:tbl>') ? '<w:p/>' : ''}${sectionXml(geometry, documentModel.direction)}</w:body></w:document>`;
 
   // Fonts: embed the self-hosted families (static instances), list the rest by name.
   const faces = wordFaces(registry);
