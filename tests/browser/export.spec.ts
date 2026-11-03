@@ -147,15 +147,20 @@ test.describe('document export', () => {
       const document = new DOMParser().parseFromString(source, 'application/xml');
       return {
         errors: document.getElementsByTagName('parsererror').length,
-        groups: Array.from(document.getElementsByTagNameNS('http://schemas.microsoft.com/office/word/2010/wordprocessingGroup', 'wgp')).map((group) => group.textContent),
+        groups: Array.from(document.getElementsByTagNameNS('http://schemas.microsoft.com/office/word/2010/wordprocessingGroup', 'wgp')).map((group) => ({
+          text: group.textContent,
+          geometry: group.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'custGeom').length,
+        })),
       };
     }, xml);
     expect(counts.errors).toBe(0);
     expect(counts.groups).toHaveLength(models.length);
     const labels = (items: typeof models[number]['items']): string[] => items.flatMap((item) => [item.label, ...labels(item.children)]);
     for (const [index, model] of models.entries()) {
-      expect(counts.groups[index]).toContain(model.title);
-      for (const label of labels(model.items)) expect(counts.groups[index]).toContain(label);
+      // Every group already has a frame path; require actual diagram geometry too.
+      expect(counts.groups[index].geometry, `${model.layoutId} geometry beyond its frame`).toBeGreaterThan(1);
+      expect(counts.groups[index].text).toContain(model.title);
+      for (const label of labels(model.items)) expect(counts.groups[index].text).toContain(label);
     }
     expect(Object.keys(zip.files).filter((path) => path.startsWith('word/media/'))).toEqual([]);
   });

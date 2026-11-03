@@ -6,7 +6,7 @@ import { renderDocx } from './index';
 import { emu } from './parts';
 import { roundedRectPath, type GraphicScene, type SceneText } from '../graphics/scene';
 import { frameScene } from '../graphics/renditions';
-import { pageGeometry } from '../typography';
+import { DOCUMENT_STYLE, pageGeometry } from '../typography';
 import type { ExportDocumentModel, ExportGraphicBlock } from '../types';
 import { WarningCollector } from '../warnings';
 
@@ -45,9 +45,9 @@ function elements(root: Document | Element, prefix: keyof typeof NS, name: strin
   return Array.from(root.getElementsByTagNameNS(NS[prefix], name));
 }
 
-async function exportModel(blocks: ExportDocumentModel['blocks'], direction: 'ltr' | 'rtl' = 'ltr') {
+async function exportModel(blocks: ExportDocumentModel['blocks'], direction: 'ltr' | 'rtl' = 'ltr', locale: 'en' | 'de' = 'en') {
   const warnings = new WarningCollector('docx');
-  const blob = await renderDocx({ html: '', name: 'Editable graphic', locale: 'en', direction, blocks }, warnings);
+  const blob = await renderDocx({ html: '', name: 'Editable graphic', locale, direction, blocks }, warnings);
   expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   const zip = await JSZip.loadAsync(await blob.arrayBuffer());
   const xml = await zip.file('word/document.xml')!.async('string');
@@ -114,6 +114,70 @@ describe('editable DOCX Smart Graphics', () => {
     expect(Number(extents[2].getAttribute('cy'))).toBeLessThanOrEqual(emu(pageGeometry('en').contentHeightPt / 0.75));
     const framed = frameScene(scene);
     expect(Number(extents[0].getAttribute('cy')) / Number(extents[0].getAttribute('cx'))).toBeCloseTo(framed.height / framed.width);
+  });
+
+  it.each(['en', 'de'] as const)('fits graphics to cells below 48px on %s pages', async (locale) => {
+    const columns = 15;
+    const { document } = await exportModel([{
+      type: 'table', rows: [{ cells: Array.from({ length: columns }, () => ({
+        header: false, colSpan: 1, rowSpan: 1, blocks: [graphic()],
+      })) }],
+    }], 'ltr', locale);
+    const contentWidth = pageGeometry(locale).contentWidthPx / columns - DOCUMENT_STYLE.table.cellPaddingX * 2;
+    expect(contentWidth).toBeLessThan(48);
+    const extents = elements(document, 'wp', 'extent');
+    expect(extents).toHaveLength(columns);
+    for (const extent of extents) {
+      expect(Number(extent.getAttribute('cx'))).toBeGreaterThan(0);
+      expect(Number(extent.getAttribute('cx'))).toBeLessThanOrEqual(emu(contentWidth));
+    }
+  });
+
+  it('does not shift a nested table left when its cell content is below 48px', async () => {
+    const { document } = await exportModel([{
+      type: 'table', columnWidths: [40], rows: [{ cells: [{
+        header: false, colSpan: 1, rowSpan: 1, blocks: [{
+          type: 'table', rows: [{ cells: [{
+            header: false, colSpan: 1, rowSpan: 1,
+            blocks: [{ type: 'paragraph', runs: [{ text: 'Nested', marks: {} }] }],
+          }] }],
+        }],
+      }] }],
+    }]);
+    expect(elements(document, 'w', 'tbl')).toHaveLength(2);
+    for (const indent of elements(document, 'w', 'tblInd')) {
+      expect(Number(indent.getAttributeNS(NS.w, 'w'))).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('reports dropped invalid geometry once without warning for empty paths', async () => {
+    const invalid: GraphicScene = { ...scene, items: [
+      { kind: 'shape', path: [['M', 0, 0], ['L', Number.NaN, 10]], fill: blue },
+      { kind: 'shape', path: [['M', 0, 0], ['L', 10, Number.POSITIVE_INFINITY]], fill: blue },
+      { kind: 'shape', path: [], fill: blue },
+      label,
+    ] };
+    const { document, xml, warnings } = await exportModel([graphic(invalid)]);
+    expect(elements(document, 'wps', 'wsp')).toHaveLength(2); // frame and label survive
+    expect(xml).not.toMatch(/NaN|Infinity/);
+    expect(warnings.toArray()).toEqual([expect.objectContaining({
+      code: 'unsupported-style-dropped', detail: 'Smart Graphic invalid geometry',
+    })]);
+    const empty = await exportModel([graphic({ ...scene, items: [{ kind: 'shape', path: [] }] })]);
+    expect(empty.warnings.toArray()).toEqual([]);
+  });
+
+  it('omits zero-width dashed strokes without losing the fill or emitting non-finite values', async () => {
+    const { document, xml, warnings } = await exportModel([graphic({ ...scene, items: [{
+      kind: 'shape', path: roundedRectPath(0, 0, 100, 100), fill: blue,
+      stroke: { color: blue, width: 0, dash: [4, 2] },
+    }] })]);
+    const shape = elements(document, 'wps', 'spPr')[1];
+    expect(elements(shape, 'a', 'solidFill')).toHaveLength(1);
+    expect(elements(elements(shape, 'a', 'ln')[0], 'a', 'noFill')).toHaveLength(1);
+    expect(elements(shape, 'a', 'custDash')).toHaveLength(0);
+    expect(xml).not.toMatch(/NaN|Infinity/);
+    expect(warnings.toArray()).toEqual([]);
   });
 
   it('preserves alpha, gradients, stroke and drop shadows and reports unsupported clipping/soft shadows', async () => {

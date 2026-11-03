@@ -312,6 +312,7 @@ export class DocxBodyWriter {
       .join('');
   }
 
+  /** Keep preformatted lines in a shaded paragraph with explicit padding and font. */
   private code(block: ExportCodeBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope, floats: string[]): string {
     this.families.set(MONOSPACE_FAMILY, resolveFamily(MONOSPACE_FAMILY));
     const style = DOCUMENT_STYLE.codeBlock;
@@ -344,12 +345,14 @@ export class DocxBodyWriter {
     return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.drawing(image, leaf, false, scope)}</w:p>`;
   }
 
-  private available(leaf: FlowLeaf, scope: FlowScope): number {
+  /** Text-column width after list/quote indents; graphics may shrink below the legacy 48px floor. */
+  private available(leaf: FlowLeaf, scope: FlowScope, floor = 48): number {
     const listIndent = leaf.listDepth * (DOCUMENT_STYLE.list.indent + DOCUMENT_STYLE.list.itemPadding);
     const quoteIndent = leaf.quoteDepth * (DOCUMENT_STYLE.blockquote.borderWidth + DOCUMENT_STYLE.blockquote.paddingLeft);
-    return Math.max(48, (scope.width ?? this.geometry.contentWidthPx) - scope.indent - listIndent - quoteIndent);
+    return Math.max(floor, (scope.width ?? this.geometry.contentWidthPx) - scope.indent - listIndent - quoteIndent);
   }
 
+  /** Reuse image media and size each picture relative to its current flow column. */
   private drawing(image: ExportImageBlock, leaf: FlowLeaf, floating: boolean, scope: FlowScope = { indent: 0 }): string {
     const prepared = image.prepared as PreparedExportImage;
     const available = this.available(leaf, scope);
@@ -362,6 +365,7 @@ export class DocxBodyWriter {
     return this.wrapDrawing(picture, emu(width), emu(height), image.alt || imageLabel(image), floating ? image.float : undefined);
   }
 
+  /** PictureML payload; rounded corners use an adjustment relative to the short edge. */
   private picture(relationshipId: string, cx: number, cy: number, name: string, radius: number): string {
     const geometry = radius > 0
       ? `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${Math.min(50000, radius)}"/></a:avLst></a:prstGeom>`
@@ -369,6 +373,7 @@ export class DocxBodyWriter {
     return `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="${escapeXmlAttr(name)}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>${geometry}</pic:spPr></pic:pic></a:graphicData></a:graphic>`;
   }
 
+  /** Place an inline drawing or wrapped anchor; editable groups include a VML text fallback. */
   private wrapDrawing(graphic: string, cx: number, cy: number, description: string, float?: 'left' | 'right', editable = false): string {
     const id = this.nextDrawing;
     this.nextDrawing += 1;
@@ -387,6 +392,7 @@ export class DocxBodyWriter {
     return `<w:r><w:drawing><wp:anchor distT="${vertical}" distB="${vertical}" distL="${float === 'right' ? gap : 0}" distR="${float === 'left' ? gap : 0}" simplePos="0" relativeHeight="${this.nextAnchorHeight}" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="0"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>${float}</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>${vertical}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/>${docPr}${locks}${graphic}</wp:anchor></w:drawing></w:r>`;
   }
 
+  /** Fit an editable group to its text column and printable page without changing its aspect ratio. */
   private graphicParagraph(
     graphic: ExportGraphicBlock,
     leaf: FlowLeaf,
@@ -396,7 +402,7 @@ export class DocxBodyWriter {
     floats: string[],
   ): string {
     const scene = frameScene(graphic.scene!);
-    const width = this.available(leaf, scope);
+    const width = this.available(leaf, scope, 1);
     // Word does not split a drawing across pages. Fit tall layouts to a page.
     const heightLimit = this.geometry.contentHeightPt / 0.75 - 8;
     const fittedWidth = Math.min(width, heightLimit * scene.width / scene.height);
@@ -410,6 +416,7 @@ export class DocxBodyWriter {
     return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.wrapDrawing(drawing, emu(fittedWidth), emu(height), graphicAltText(graphic), undefined, true)}</w:p>`;
   }
 
+  /** Write a fixed grid with spans, cell shading, and per-cell widths for nested content. */
   private table(table: ExportTableBlock, leaf: FlowLeaf, scope: FlowScope): string {
     const style = DOCUMENT_STYLE.table;
     const { colCount, rows } = expandTableGrid(table);
@@ -419,7 +426,7 @@ export class DocxBodyWriter {
     const hidden = table.borders === 'hidden';
     const border = (side: string) =>
       hidden ? `<w:${side} w:val="nil"/>` : `<w:${side} w:val="single" w:sz="${eighths(style.borderWidth)}" w:space="0" w:color="${DOCUMENT_STYLE.borderColor}"/>`;
-    const indent = twips((scope.width ?? this.geometry.contentWidthPx) - available);
+    const indent = twips(Math.max(0, (scope.width ?? this.geometry.contentWidthPx) - available));
     const tblPr = `<w:tblPr>${this.rtl ? '<w:bidiVisual/>' : ''}<w:tblW w:w="${twips(total)}" w:type="dxa"/>${indent ? `<w:tblInd w:w="${indent}" w:type="dxa"/>` : ''}<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:left w:w="${twips(style.cellPaddingX)}" w:type="dxa"/><w:bottom w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:right w:w="${twips(style.cellPaddingX)}" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/></w:tblPr>`;
     const grid = `<w:tblGrid>${widths.map((width) => `<w:gridCol w:w="${twips(width)}"/>`).join('')}</w:tblGrid>`;
     const headerRows = table.rows.findIndex((row) => !row.cells.every((cell) => cell.header));
