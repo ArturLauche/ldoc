@@ -12,6 +12,7 @@
 - Cross-tab conflict detection with actions to reload the saved document or save a separate copy.
 - Find/replace, word/character counts (also for the selection, with CJK-aware word segmentation), a keyboard shortcut reference (Ctrl/⌘ + /), and document-only printing.
 - Import TXT, HTML, RTF, DOCX, ODT/OTT, and FODT. Export TXT, HTML, RTF, DOCX, ODT, and PDF. Exports report unsupported content rather than silently claiming a perfect conversion.
+- DOCX Smart Graphics export as editable Word shapes and text boxes, with embedded fonts. See [behavior and compatibility](docs/editable-docx-graphics.md).
 
 ## Development
 

@@ -1,5 +1,8 @@
 import { toHex } from '../color';
 import { hasRtlText, type BidiDirection } from '../bidi';
+import type { ExportFontRegistry } from '../fonts/registry';
+import { frameScene } from '../graphics/renditions';
+import { editableGraphicXml } from './graphics';
 import { MONOSPACE_FAMILY, resolveFamily, type ResolvedFamily } from '../fonts/catalog';
 import {
   asciiUri,
@@ -52,6 +55,8 @@ import {
 /** Where a flow renders: extra indentation, and the table cell it sits in. */
 export interface FlowScope {
   indent: number;
+  /** Width of the current text column, after table-cell padding. */
+  width?: number;
   cell?: { context: TextContext; align?: ExportAlignment };
 }
 
@@ -75,7 +80,8 @@ export class DocxBodyWriter {
     firstRelationshipId: number,
     private readonly geometry: PageGeometry,
     private readonly warnings: WarningCollector,
-    direction: BidiDirection = 'ltr',
+    direction: BidiDirection,
+    private readonly registry: ExportFontRegistry,
   ) {
     this.nextRelationship = firstRelationshipId;
     this.rtl = direction === 'rtl';
@@ -121,7 +127,7 @@ export class DocxBodyWriter {
       const before = container === 'root' && index === 0 ? 0 : leaf.spaceBefore;
       const block = leaf.block;
       if (block.type === 'image' && block.float && block.prepared) {
-        pendingFloats.push(this.drawing(block, leaf, true));
+        pendingFloats.push(this.drawing(block, leaf, true, scope));
         return;
       }
       const floats = pendingFloats;
@@ -144,7 +150,7 @@ export class DocxBodyWriter {
           parts.push({ xml: (after) => this.imageParagraph(block, leaf, before, after, scope, floats) });
           break;
         case 'graphic':
-          if (block.raster && block.svg) {
+          if (block.scene) {
             parts.push({ xml: (after) => this.graphicParagraph(block, leaf, before, after, scope, floats) });
           } else {
             this.warnings.add('graphic-layout-simplified');
@@ -306,7 +312,7 @@ export class DocxBodyWriter {
       .join('');
   }
 
-  private code(block: ExportCodeBlock, leaf: FlowLeaf, before: number, after: number, scope: { indent: number }, floats: string[]): string {
+  private code(block: ExportCodeBlock, leaf: FlowLeaf, before: number, after: number, scope: FlowScope, floats: string[]): string {
     this.families.set(MONOSPACE_FAMILY, resolveFamily(MONOSPACE_FAMILY));
     const style = DOCUMENT_STYLE.codeBlock;
     const lines = block.text.split('\n');
@@ -338,13 +344,13 @@ export class DocxBodyWriter {
     return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.drawing(image, leaf, false, scope)}</w:p>`;
   }
 
-  private available(leaf: FlowLeaf, scope: { indent: number }): number {
+  private available(leaf: FlowLeaf, scope: FlowScope): number {
     const listIndent = leaf.listDepth * (DOCUMENT_STYLE.list.indent + DOCUMENT_STYLE.list.itemPadding);
     const quoteIndent = leaf.quoteDepth * (DOCUMENT_STYLE.blockquote.borderWidth + DOCUMENT_STYLE.blockquote.paddingLeft);
-    return Math.max(48, this.geometry.contentWidthPx - scope.indent - listIndent - quoteIndent);
+    return Math.max(48, (scope.width ?? this.geometry.contentWidthPx) - scope.indent - listIndent - quoteIndent);
   }
 
-  private drawing(image: ExportImageBlock, leaf: FlowLeaf, floating: boolean, scope: { indent: number } = { indent: 0 }): string {
+  private drawing(image: ExportImageBlock, leaf: FlowLeaf, floating: boolean, scope: FlowScope = { indent: 0 }): string {
     const prepared = image.prepared as PreparedExportImage;
     const available = this.available(leaf, scope);
     let width = image.widthPercent ? (available * image.widthPercent) / 100 : Math.min(prepared.width, available);
@@ -356,23 +362,23 @@ export class DocxBodyWriter {
     return this.wrapDrawing(picture, emu(width), emu(height), image.alt || imageLabel(image), floating ? image.float : undefined);
   }
 
-  private picture(relationshipId: string, cx: number, cy: number, name: string, radius: number, svgRelationshipId?: string): string {
-    const svg = svgRelationshipId
-      ? `<a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="${svgRelationshipId}"/></a:ext></a:extLst>`
-      : '';
+  private picture(relationshipId: string, cx: number, cy: number, name: string, radius: number): string {
     const geometry = radius > 0
       ? `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val ${Math.min(50000, radius)}"/></a:avLst></a:prstGeom>`
       : '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
-    return `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="${escapeXmlAttr(name)}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relationshipId}">${svg}</a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>${geometry}</pic:spPr></pic:pic></a:graphicData></a:graphic>`;
+    return `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="${escapeXmlAttr(name)}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>${geometry}</pic:spPr></pic:pic></a:graphicData></a:graphic>`;
   }
 
-  private wrapDrawing(graphic: string, cx: number, cy: number, description: string, float?: 'left' | 'right'): string {
+  private wrapDrawing(graphic: string, cx: number, cy: number, description: string, float?: 'left' | 'right', editable = false): string {
     const id = this.nextDrawing;
     this.nextDrawing += 1;
-    const docPr = `<wp:docPr id="${id}" name="Picture ${id}" descr="${escapeXmlAttr(description)}"/>`;
+    const docPr = `<wp:docPr id="${id}" name="${editable ? 'Smart Graphic' : 'Picture'} ${id}" descr="${escapeXmlAttr(description)}"/>`;
     const locks = '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>';
     if (!float) {
-      return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${docPr}${locks}${graphic}</wp:inline></w:drawing></w:r>`;
+      const drawing = `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${docPr}${locks}${graphic}</wp:inline></w:drawing>`;
+      // The extension must be inside AlternateContent in a run (MS-ODRAWXML
+      // §2.2.7). Older readers get an editable VML text box.
+      return `<w:r>${editable ? `<mc:AlternateContent><mc:Choice Requires="wpg">${drawing}</mc:Choice><mc:Fallback><w:pict><v:rect id="GraphicFallback${id}" style="width:${cx / 12700}pt;height:${cy / 12700}pt" filled="f" stroked="f"><v:textbox inset="0,0,0,0"><w:txbxContent><w:p><w:r><w:t xml:space="preserve">${escapeXml(description)}</w:t></w:r></w:p></w:txbxContent></v:textbox></v:rect></w:pict></mc:Fallback></mc:AlternateContent>` : drawing}</w:r>`;
     }
     const gap = emu(DOCUMENT_STYLE.image.floatGap);
     const vertical = emu(DOCUMENT_STYLE.image.floatMargin);
@@ -386,22 +392,25 @@ export class DocxBodyWriter {
     leaf: FlowLeaf,
     before: number,
     after: number,
-    scope: { indent: number },
+    scope: FlowScope,
     floats: string[],
   ): string {
-    const raster = graphic.raster as PreparedExportImage;
-    const svg = graphic.svg as Uint8Array;
-    const available = this.available(leaf, scope);
-    const aspect = raster.height / raster.width;
-    const width = available;
-    const height = width * aspect;
-    const pngId = this.mediaRelationship(raster, raster.bytes, 'png');
-    const svgId = this.mediaRelationship(svg, svg, 'svg');
-    const picture = this.picture(pngId, emu(width), emu(height), 'Smart Graphic', 0, svgId);
-    return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.wrapDrawing(picture, emu(width), emu(height), graphicAltText(graphic))}</w:p>`;
+    const scene = frameScene(graphic.scene!);
+    const width = this.available(leaf, scope);
+    // Word does not split a drawing across pages. Fit tall layouts to a page.
+    const heightLimit = this.geometry.contentHeightPt / 0.75 - 8;
+    const fittedWidth = Math.min(width, heightLimit * scene.width / scene.height);
+    const height = fittedWidth * scene.height / scene.width;
+    const drawing = editableGraphicXml(scene, fittedWidth, {
+      nextId: () => this.nextDrawing++,
+      families: this.families,
+      registry: this.registry,
+      warnings: this.warnings,
+    });
+    return `<w:p><w:pPr>${this.numberingXml(leaf)}${spacing(before, after, 'single')}${indentXml(leaf, scope.indent, Boolean(leaf.listItem))}<w:jc w:val="center"/></w:pPr>${floats.join('')}${this.wrapDrawing(drawing, emu(fittedWidth), emu(height), graphicAltText(graphic), undefined, true)}</w:p>`;
   }
 
-  private table(table: ExportTableBlock, leaf: FlowLeaf, scope: { indent: number }): string {
+  private table(table: ExportTableBlock, leaf: FlowLeaf, scope: FlowScope): string {
     const style = DOCUMENT_STYLE.table;
     const { colCount, rows } = expandTableGrid(table);
     const available = this.available(leaf, scope);
@@ -410,7 +419,7 @@ export class DocxBodyWriter {
     const hidden = table.borders === 'hidden';
     const border = (side: string) =>
       hidden ? `<w:${side} w:val="nil"/>` : `<w:${side} w:val="single" w:sz="${eighths(style.borderWidth)}" w:space="0" w:color="${DOCUMENT_STYLE.borderColor}"/>`;
-    const indent = twips(this.geometry.contentWidthPx - available);
+    const indent = twips((scope.width ?? this.geometry.contentWidthPx) - available);
     const tblPr = `<w:tblPr>${this.rtl ? '<w:bidiVisual/>' : ''}<w:tblW w:w="${twips(total)}" w:type="dxa"/>${indent ? `<w:tblInd w:w="${indent}" w:type="dxa"/>` : ''}<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:left w:w="${twips(style.cellPaddingX)}" w:type="dxa"/><w:bottom w:w="${twips(style.cellPaddingY)}" w:type="dxa"/><w:right w:w="${twips(style.cellPaddingX)}" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/></w:tblPr>`;
     const grid = `<w:tblGrid>${widths.map((width) => `<w:gridCol w:w="${twips(width)}"/>`).join('')}</w:tblGrid>`;
     const headerRows = table.rows.findIndex((row) => !row.cells.every((cell) => cell.header));
@@ -432,6 +441,7 @@ export class DocxBodyWriter {
             };
             const content = this.flow(entry.cell.blocks, 'cell', {
               indent: 0,
+              width: Math.max(1, width - style.cellPaddingX * 2),
               cell: { context: cellContext, ...(entry.cell.align ? { align: entry.cell.align } : {}) },
             });
             const endsWithTable = content.endsWith('</w:tbl>');
