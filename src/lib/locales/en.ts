@@ -24,7 +24,6 @@ const en = {
   saveAsCopy: 'Save as a copy',
   retrySave: 'Try saving again',
   moreFormatting: 'More formatting',
-  lessFormatting: 'Less formatting',
   formattingToolbar: 'Document formatting',
   formatPanelToggle: 'Text formatting',
   formatPanelLabel: 'Formatting options',

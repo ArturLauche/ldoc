@@ -20,7 +20,6 @@ const ar: TranslationCatalog = {
   saveAsCopy: 'حفظ كنسخة',
   retrySave: 'إعادة محاولة الحفظ',
   moreFormatting: 'مزيد من التنسيق',
-  lessFormatting: 'تنسيق أقل',
   formattingToolbar: 'تنسيق المستند',
   formatPanelToggle: 'تنسيق النص',
   formatPanelLabel: 'خيارات التنسيق',

@@ -23,7 +23,6 @@ const ja: TranslationCatalog = {
   saveAsCopy: 'コピーとして保存',
   retrySave: 'もう一度保存',
   moreFormatting: 'その他の書式',
-  lessFormatting: '書式を折りたたむ',
   formattingToolbar: 'ドキュメントの書式',
   formatPanelToggle: 'テキストの書式',
   formatPanelLabel: '書式オプション',

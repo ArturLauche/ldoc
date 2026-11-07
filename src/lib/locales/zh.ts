@@ -20,7 +20,6 @@ const zh: TranslationCatalog = {
   saveAsCopy: '另存为副本',
   retrySave: '重试保存',
   moreFormatting: '更多格式',
-  lessFormatting: '收起格式',
   formattingToolbar: '文档格式',
   formatPanelToggle: '文本格式',
   formatPanelLabel: '格式选项',

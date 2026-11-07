@@ -49,36 +49,41 @@ export function ShortcutLabel({ shortcut }: { shortcut: string }) {
  * Forwards props so it can serve as a Popover/Dialog/Menu trigger.
  */
 export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  ({ label, shortcut, pressed, hint, tooltipSide = 'bottom', className, children, ...props }, ref) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          ref={ref}
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn('p-0', className)}
-          aria-label={label}
-          aria-pressed={pressed}
-          aria-keyshortcuts={shortcut ? ariaKeyShortcut(shortcut) : undefined}
-          {...props}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side={tooltipSide}>
-        <span className="flex items-center gap-2">
-          <span>{label}</span>
-          {shortcut ? (
-            <kbd className="font-sans text-background/60">
-              <ShortcutLabel shortcut={shortcut} />
-            </kbd>
-          ) : null}
-        </span>
-        {hint ? <span className="block font-normal text-background/70">{hint}</span> : null}
-      </TooltipContent>
-    </Tooltip>
-  ),
+  ({ label, shortcut, pressed, hint, tooltipSide = 'bottom', className, children, ...props }, ref) => {
+    const [tooltipOpen, setTooltipOpen] = useState(false);
+    // Radix portals menus/popovers over the trigger; its tooltip must not cover them.
+    const overlayOpen = 'data-state' in props && props['data-state'] === 'open';
+    return (
+      <Tooltip open={tooltipOpen && !overlayOpen} onOpenChange={setTooltipOpen}>
+        <TooltipTrigger asChild>
+          <Button
+            ref={ref}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('p-0', className)}
+            aria-label={label}
+            aria-pressed={pressed}
+            aria-keyshortcuts={shortcut ? ariaKeyShortcut(shortcut) : undefined}
+            {...props}
+          >
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side={tooltipSide}>
+          <span className="flex items-center gap-2">
+            <span>{label}</span>
+            {shortcut ? (
+              <kbd className="font-sans text-background/60">
+                <ShortcutLabel shortcut={shortcut} />
+              </kbd>
+            ) : null}
+          </span>
+          {hint ? <span className="block font-normal text-background/70">{hint}</span> : null}
+        </TooltipContent>
+      </Tooltip>
+    );
+  },
 );
 ToolbarButton.displayName = 'ToolbarButton';
 

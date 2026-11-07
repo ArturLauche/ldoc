@@ -24,7 +24,6 @@ const fr: TranslationCatalog = {
   saveAsCopy: 'Enregistrer une copie',
   retrySave: 'Réessayer l’enregistrement',
   moreFormatting: 'Plus d’options de mise en forme',
-  lessFormatting: 'Moins d’options de mise en forme',
   formattingToolbar: 'Mise en forme du document',
   formatPanelToggle: 'Mise en forme du texte',
   formatPanelLabel: 'Options de mise en forme',

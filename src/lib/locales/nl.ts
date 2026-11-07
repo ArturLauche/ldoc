@@ -24,7 +24,6 @@ const nl: TranslationCatalog = {
   saveAsCopy: 'Opslaan als kopie',
   retrySave: 'Opnieuw opslaan',
   moreFormatting: 'Meer opmaak',
-  lessFormatting: 'Minder opmaak',
   formattingToolbar: 'Documentopmaak',
   formatPanelToggle: 'Tekstopmaak',
   formatPanelLabel: 'Opmaakopties',

@@ -366,19 +366,20 @@ header.app-bar {
 .editor-main {
   scroll-margin-top: 10rem;
 }
-.editor-toolbar,
-.toolbar-primary,
-.toolbar-secondary.is-expanded {
+/* One row at every width: overflow scrolls inside the strip instead of
+   wrapping into a second toolbar. The negative margin keeps the focus rings
+   visible without making the chrome taller. */
+.editor-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px;
-}
-.toolbar-primary {
-  width: 100%;
+  padding-block: 0.25rem;
+  margin-block: -0.25rem;
 }
 .toolbar-group {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 2px;
 }
@@ -400,25 +401,27 @@ header.app-bar {
   margin-inline: 0.375rem;
   background: hsl(var(--border));
 }
-.toolbar-row-separator {
-  display: none;
-}
 .toolbar-context {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 2px;
   padding-inline-start: 0.375rem;
   margin-inline-start: 0.25rem;
   border-inline-start: 1px solid hsl(var(--border));
 }
-.toolbar-secondary {
-  display: none;
+.toolbar-panel-trigger {
+  gap: 0.125rem;
 }
-.toolbar-secondary.is-expanded {
-  border-top: 1px solid hsl(var(--border));
-  padding-top: 0.375rem;
-  margin-top: 0.375rem;
-  width: 100%;
+/* The full inline row fits without scrolling, including with classic
+   (space-taking) scrollbars; touch screens need a little more width. */
+@media (min-width: 1280px) and (pointer: fine), (min-width: 1360px) {
+  .editor-toolbar {
+    gap: 0;
+  }
+  .editor-toolbar .toolbar-separator {
+    margin-inline: 0.25rem;
+  }
 }
 .session-notice {
   border-bottom: 1px solid hsl(var(--warning) / 0.35);
@@ -447,28 +450,6 @@ header.app-bar {
 @media (min-width: 640px) {
   .editor-container {
     margin: 2rem 1.5rem;
-  }
-}
-/* One row from 1280px wide, including with classic (space-taking)
-   scrollbars; the overflow toggle is not needed there. Touch screens use
-   40px controls, so their single row needs about 70px more. */
-@media (min-width: 1280px) and (pointer: fine), (min-width: 1360px) {
-  .toolbar-primary,
-  .toolbar-secondary,
-  .toolbar-secondary.is-expanded {
-    display: contents;
-  }
-  .editor-toolbar {
-    gap: 0;
-  }
-  .editor-toolbar .toolbar-separator {
-    margin-inline: 0.25rem;
-  }
-  .toolbar-row-separator {
-    display: block;
-  }
-  .toolbar-more {
-    display: none;
   }
 }
 .header-context-slot {
