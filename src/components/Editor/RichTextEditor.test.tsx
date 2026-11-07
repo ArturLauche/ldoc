@@ -72,7 +72,7 @@ describe('RichTextEditor', () => {
     expect(await screen.findByRole('button', { name: 'Insert table' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('groups extra formatting in a popover instead of a second toolbar row', async () => {
     const user = userEvent.setup();

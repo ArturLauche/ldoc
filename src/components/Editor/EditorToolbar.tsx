@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
 import {
@@ -205,8 +205,6 @@ export const EditorToolbar = memo(function EditorToolbar({
   const regular = useMediaQuery('(min-width: 768px)');
   // Touch controls are 4px wider, so the full row needs a little more room.
   const full = useMediaQuery('(min-width: 1280px) and (pointer: fine), (min-width: 1360px)');
-  const [formatOpen, setFormatOpen] = useState(false);
-  const [insertOpen, setInsertOpen] = useState(false);
   const state = useToolbarState(editor);
   const lineSpacings = useLineSpacings(t);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -516,14 +514,10 @@ export const EditorToolbar = memo(function EditorToolbar({
             lineSpacings={lineSpacings}
             regular={regular}
             wide={wide}
-            open={formatOpen}
-            onOpenChange={setFormatOpen}
           />
         </>
       ) : null}
-      {!wide ? (
-        <InsertPopover editor={editor} open={insertOpen} onOpenChange={setInsertOpen} />
-      ) : null}
+      {!wide ? <InsertPopover editor={editor} /> : null}
     </div>
   );
 });
@@ -535,18 +529,24 @@ function FormatPopover({
   lineSpacings,
   regular,
   wide,
-  open,
-  onOpenChange,
 }: {
   editor: Editor;
   state: ToolbarState;
   lineSpacings: { name: string; value: string }[];
   regular: boolean;
   wide: boolean;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useLocale();
+  const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+  const onOpenChange = (next: boolean) => {
+    openRef.current = next;
+    setOpen(next);
+  };
+  // Breakpoint unmounts bypass Radix close focus restoration.
+  useEffect(() => () => {
+    if (openRef.current && editor && !editor.isDestroyed) editor.commands.focus();
+  }, [editor]);
   const focus = useReturnToEditor(editor);
   const pick = (command: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => {
     focus.markPicked();
@@ -735,16 +735,18 @@ function FormatPopover({
 }
 
 /** Insertions stay one labeled grid until the viewport has room for icons. */
-function InsertPopover({
-  editor,
-  open,
-  onOpenChange,
-}: {
-  editor: Editor;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+function InsertPopover({ editor }: { editor: Editor }) {
   const { t } = useLocale();
+  const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+  const onOpenChange = (next: boolean) => {
+    openRef.current = next;
+    setOpen(next);
+  };
+  // Breakpoint unmounts bypass Radix close focus restoration.
+  useEffect(() => () => {
+    if (openRef.current && editor && !editor.isDestroyed) editor.commands.focus();
+  }, [editor]);
   const focus = useReturnToEditor(editor);
   const complete = () => {
     focus.markPicked();

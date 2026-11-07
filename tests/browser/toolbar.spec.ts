@@ -78,6 +78,82 @@ test.describe('desktop toolbar', () => {
     }
   });
 
+  test('keeps the desktop toolbar usable at short heights', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 450 });
+    await expect(page.getByRole('button', { name: 'Select font' })).toBeVisible();
+    expect(await headerHeight(page)).toBeLessThanOrEqual(110);
+    await expect(editor(page)).toBeVisible();
+    await expectToolbarFits(page);
+    await expectNoPageOverflow(page);
+  });
+
+  test.describe('coarse pointer', () => {
+    test.use({ hasTouch: true });
+
+    test('uses the wider full-row breakpoint for coarse pointers', async ({ page }) => {
+      await page.setViewportSize({ width: 1360, height: 800 });
+      await expect(page.getByRole('button', { name: 'Select font' })).toBeVisible();
+      expect(await headerHeight(page)).toBeLessThanOrEqual(110);
+      await expectToolbarFits(page);
+      await expectNoPageOverflow(page);
+
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await expect(page.getByRole('button', { name: 'More formatting' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Insert table' })).toBeVisible();
+      await expectToolbarFits(page);
+      await expectNoPageOverflow(page);
+    });
+  });
+
+  test('keeps popover panels inside an RTL viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 800 });
+    await page.evaluate(() => {
+      document.documentElement.dir = 'rtl';
+    });
+
+    for (const name of ['More formatting', 'Insert']) {
+      await page.getByRole('button', { name, exact: true }).click();
+      const panel = popovers(page).first();
+      await expect(panel).toBeVisible();
+      const box = (await panel.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(768);
+      await expectNoPageOverflow(page);
+      await page.keyboard.press('Escape');
+      await expect(popovers(page)).toHaveCount(0);
+    }
+  });
+
+  test('closes breakpoint panels when they unmount and keeps editor focus', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 800 });
+    await setContent(page, '<p>Hello world</p>');
+
+    await page.getByRole('button', { name: 'Insert', exact: true }).click();
+    await expect(popovers(page)).toHaveCount(1);
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await expect(page.getByRole('button', { name: 'Insert', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Insert table' })).toBeVisible();
+    await expect(popovers(page)).toHaveCount(0);
+    await expect(editor(page)).toBeFocused();
+    await page.setViewportSize({ width: 768, height: 800 });
+    await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeVisible();
+    await expect(popovers(page)).toHaveCount(0);
+    await expect(editor(page)).toBeFocused();
+
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.getByRole('button', { name: 'More formatting' }).click();
+    await expect(popovers(page)).toHaveCount(1);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.getByRole('button', { name: 'More formatting' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Select font' })).toBeVisible();
+    await expect(popovers(page)).toHaveCount(0);
+    await expect(editor(page)).toBeFocused();
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await expect(page.getByRole('button', { name: 'More formatting' })).toBeVisible();
+    await expect(popovers(page)).toHaveCount(0);
+    await expect(editor(page)).toBeFocused();
+  });
+
   test('inserts from a popover without moving the document or losing focus', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 800 });
     await setContent(page, '<p>Hello world</p>');
