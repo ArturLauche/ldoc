@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 const MiB = 1024 * 1024;
 const editor = (page: Page) => page.locator('.ProseMirror[contenteditable=true]');
-async function ready(page: Page) {
-  await expect(page.getByRole('main')).toHaveAttribute('aria-busy', 'false');
+async function ready(page: Page, timeout = 15_000) {
+  await expect(page.getByRole('main')).toHaveAttribute('aria-busy', 'false', { timeout });
   await expect(editor(page)).toBeVisible();
 }
 async function save(page: Page) {
@@ -17,8 +17,10 @@ async function openFile(page: Page, name: string, buffer: Buffer) {
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('menuitem', { name: 'Open file…', exact: true }).click();
   await (await chooser).setFiles({ name, mimeType: 'text/html', buffer });
+  // Parsing the 20 MB boundary document can outlast the default assertion timeout.
   await expect(page.getByRole('textbox', { name: 'Document name', exact: true })).toHaveValue(
     name.replace(/\.[^.]+$/, ''),
+    { timeout: 60_000 },
   );
   await ready(page);
 }
@@ -82,6 +84,7 @@ test('an accepted 10 MB image survives saving and a fresh page load', async ({ p
 });
 
 test('an accepted 20 MB HTML document survives saving and reloading', async ({ page }) => {
+  test.setTimeout(180_000);
   // Exercise the exact persistence boundary with paragraphs, rather than the
   // browser's pathological line layout for a single 20-million-character word.
   const paragraph = `<p>${'Sample text. '.repeat(320).slice(0, 4088)}x</p>`;
@@ -91,7 +94,8 @@ test('an accepted 20 MB HTML document survives saving and reloading', async ({ p
   await openFile(page, 'at-limit.html', bytes);
   await save(page);
   await page.reload();
-  await ready(page);
+  // Restoring the boundary document from IndexedDB is slower than a normal load.
+  await ready(page, 90_000);
   expect(await editor(page).evaluate((element) => element.textContent?.length)).toBe(textLength);
   await expect(page.getByRole('textbox', { name: 'Document name', exact: true })).toHaveValue(
     'at-limit',

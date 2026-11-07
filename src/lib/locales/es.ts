@@ -24,7 +24,6 @@ const es: TranslationCatalog = {
   saveAsCopy: 'Guardar como copia',
   retrySave: 'Volver a guardar',
   moreFormatting: 'Más opciones de formato',
-  lessFormatting: 'Menos opciones de formato',
   formattingToolbar: 'Formato del documento',
   formatPanelToggle: 'Formato de texto',
   formatPanelLabel: 'Opciones de formato',

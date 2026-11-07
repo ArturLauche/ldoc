@@ -22,7 +22,6 @@ const de: TranslationCatalog = {
   saveAsCopy: 'Als Kopie speichern',
   retrySave: 'Erneut speichern',
   moreFormatting: 'Weitere Formatierung',
-  lessFormatting: 'Weniger Formatierung',
   formattingToolbar: 'Dokumentformatierung',
   formatPanelToggle: 'Textformatierung',
   formatPanelLabel: 'Formatierungsoptionen',

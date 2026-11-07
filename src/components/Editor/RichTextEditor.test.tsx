@@ -66,11 +66,32 @@ describe('RichTextEditor', () => {
     });
     expect(screen.getByLabelText('Document editor')).toHaveTextContent('Saved body');
     // The real lazy toolbar also needs its first module transform on a cold test run.
-    expect(
-      await screen.findByRole('button', { name: 'Insert table' }, { timeout: 3000 }),
-    ).toBeInTheDocument();
+    const insert = await screen.findByRole('button', { name: 'Insert' }, { timeout: 3000 });
+    const user = userEvent.setup();
+    await user.click(insert);
+    expect(await screen.findByRole('button', { name: 'Insert table' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Insert graphic' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diagram' })).not.toBeInTheDocument();
+  });
+
+  it('groups extra formatting in a popover instead of a second toolbar row', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    const toolbar = await screen.findByRole(
+      'toolbar',
+      { name: 'Document formatting' },
+      { timeout: 3000 },
+    );
+    expect(within(toolbar).queryByRole('button', { name: 'Strikethrough' })).not.toBeInTheDocument();
+
+    await user.click(within(toolbar).getByRole('button', { name: 'More formatting' }));
+    const panel = await screen.findByLabelText('Formatting options');
+    expect(within(panel).getByRole('button', { name: 'Strikethrough' })).toBeInTheDocument();
+    expect(within(panel).getByRole('group', { name: 'Line spacing' })).toBeInTheDocument();
+    expect(within(panel).getByRole('group', { name: 'Indent' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByLabelText('Formatting options')).not.toBeInTheDocument());
   });
 
   it('keeps the document accessible name in the current language after later renders', async () => {
@@ -109,17 +130,36 @@ describe('RichTextEditor', () => {
   });
 
   it('opens toolbar menus on a tap, not when a touch scroll starts on them', async () => {
-    renderEditor();
-    for (const name of ['Alignment', 'Line spacing']) {
-      const trigger = await screen.findByRole('button', { name }, { timeout: 3000 });
-      fireEvent.pointerDown(trigger, { pointerType: 'touch', button: 0 });
-      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-      fireEvent.click(trigger);
-      expect(await screen.findByRole('menu')).toBeInTheDocument();
-      act(() => {
-        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-      });
-      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    const originalMatchMedia = window.matchMedia;
+    // Alignment and line-spacing menus sit inline only on the widest tier.
+    window.matchMedia = ((query: string) => ({
+      matches:
+        query === '(min-width: 768px)' ||
+        query === '(min-width: 1024px)' ||
+        query.startsWith('(min-width: 1280px)'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      renderEditor();
+      for (const name of ['Alignment', 'Line spacing']) {
+        const trigger = await screen.findByRole('button', { name }, { timeout: 3000 });
+        fireEvent.pointerDown(trigger, { pointerType: 'touch', button: 0 });
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        fireEvent.click(trigger);
+        expect(await screen.findByRole('menu')).toBeInTheDocument();
+        act(() => {
+          fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+        });
+        await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+      }
+    } finally {
+      window.matchMedia = originalMatchMedia;
     }
   });
 

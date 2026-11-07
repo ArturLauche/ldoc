@@ -24,7 +24,6 @@ const ru: TranslationCatalog = {
   saveAsCopy: 'Сохранить как копию',
   retrySave: 'Повторить сохранение',
   moreFormatting: 'Дополнительное форматирование',
-  lessFormatting: 'Скрыть дополнительное форматирование',
   formattingToolbar: 'Форматирование документа',
   formatPanelToggle: 'Форматирование текста',
   formatPanelLabel: 'Параметры форматирования',
