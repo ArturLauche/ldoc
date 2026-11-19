@@ -31,6 +31,7 @@ export const SHORTCUTS = {
   alignJustify: 'Mod+Shift+J',
   lineBreak: 'Shift+Enter',
   save: 'Mod+S',
+  print: 'Mod+P',
   find: 'Mod+F',
   shortcuts: 'Mod+/',
 } as const;
@@ -45,6 +46,7 @@ export const SHORTCUT_GROUPS: { label: TranslationKey; items: { id: ShortcutId; 
       { id: 'find', label: 'findReplaceTitle' },
       { id: 'undo', label: 'toolbarUndo' },
       { id: 'redo', label: 'toolbarRedo' },
+      { id: 'print', label: 'fileMenuPrint' },
       { id: 'shortcuts', label: 'keyboardShortcuts' },
     ],
   },
