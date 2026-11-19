@@ -16,6 +16,9 @@ for (const route of routes) {
   assert.equal([...html.matchAll(/<h1[\s>]/g)].length, 1, `${route}: initial heading`);
   assert(html.includes('name="description"'), `${route}: description`);
   assert(html.includes('property="og:image"'), `${route}: share image`);
+  for (const path of ['/favicon.ico', '/favicon.svg', '/apple-touch-icon.png', '/site.webmanifest']) {
+    assert(html.includes(`href="${path}"`), `${route}: linked icon or manifest ${path}`);
+  }
   assert(
     !html.includes('lwrite.app') && !html.includes('@LWrite'),
     `${route}: no obsolete identity`,
@@ -44,12 +47,20 @@ for (const asset of [
   'favicon.svg',
   'favicon.ico',
   'apple-touch-icon.png',
+  'icon-192.png',
+  'icon-512.png',
+  'site.webmanifest',
   'og-image.png',
   'llms.txt',
   'robots.txt',
   'sitemap.xml',
 ]) {
   assert((await stat(`dist/${asset}`)).size > 0, `${asset} exists and is nonempty`);
+}
+const manifest = JSON.parse(await readFile('dist/site.webmanifest', 'utf8'));
+for (const size of [192, 512]) {
+  const icon = manifest.icons.find((entry) => entry.sizes === `${size}x${size}`);
+  assert(icon?.src === `/icon-${size}.png` && icon.type === 'image/png', `Manifest icon at ${size}px`);
 }
 const sitemap = await readFile('dist/sitemap.xml', 'utf8');
 assert.equal([...sitemap.matchAll(/<loc>/g)].length, 5, 'All five public paths are listed');
