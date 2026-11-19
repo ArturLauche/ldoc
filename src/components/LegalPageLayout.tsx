@@ -26,7 +26,7 @@ export const LegalPageLayout = ({ copy, locale }: LegalPageLayoutProps) => {
       <header className="app-bar sticky top-0 z-40">
         <div className="mx-auto flex h-12 w-full max-w-3xl items-center justify-between px-5">
           <Link to="/" className="flex min-w-0 items-center gap-2 rounded-sm">
-            <BrandLogo title={siteConfig.siteName} />
+            <BrandLogo alt="" />
             <span className="truncate text-sm font-semibold tracking-tight">
               {siteConfig.siteName}
             </span>

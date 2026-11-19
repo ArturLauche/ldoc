@@ -210,7 +210,9 @@ export const RichTextEditor = () => {
           <div className="app-bar-row">
             <div className="flex shrink-0 items-center gap-2 pe-1">
               <BrandLogo />
-              <span className="hidden text-sm font-semibold tracking-tight sm:inline">LWrite</span>
+              <span aria-hidden="true" className="hidden text-sm font-semibold tracking-tight sm:inline">
+                LWrite
+              </span>
             </div>
 
             <Suspense fallback={<FileMenuFallback compact={compact} />}>
