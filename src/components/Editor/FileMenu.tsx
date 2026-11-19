@@ -258,7 +258,7 @@ export const FileMenu = ({
               <Printer />
               {t('fileMenuPrint')}
               <DropdownMenuShortcut>
-                <ShortcutLabel shortcut="Mod+P" />
+                <ShortcutLabel shortcut={SHORTCUTS.print} />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>

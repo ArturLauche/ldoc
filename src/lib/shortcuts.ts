@@ -37,23 +37,33 @@ function splitShortcut(shortcut: string): string[] {
 /** Modifier names as printed on keyboards in the interface language (Strg, Maj, …). */
 export type ModifierNames = Partial<Record<'Ctrl' | 'Shift' | 'Alt', string>>;
 
+/**
+ * One entry per key press: `['⌘', '⇧', 'Z']` on Apple platforms,
+ * `['Strg', 'Umschalt', 'Z']` (or `['Ctrl', 'Shift', 'Z']`) elsewhere.
+ * Lets references render each key as its own chip.
+ */
+export function formatShortcutParts(
+  shortcut: string,
+  apple = isApplePlatform(),
+  names: ModifierNames = {},
+): string[] {
+  return splitShortcut(shortcut).map((part) => {
+    if (apple) return APPLE_SYMBOLS[part] ?? part.toUpperCase();
+    const modifier = part === 'Mod' ? 'Ctrl' : part;
+    if (modifier === 'Ctrl' || modifier === 'Shift' || modifier === 'Alt') {
+      return names[modifier] ?? modifier;
+    }
+    return part.length === 1 ? part.toUpperCase() : part;
+  });
+}
+
 /** Visible label: `⌘⇧Z` on Apple platforms, `Ctrl+Shift+Z` (or `Strg+Umschalt+Z`) elsewhere. */
 export function formatShortcut(
   shortcut: string,
   apple = isApplePlatform(),
   names: ModifierNames = {},
 ): string {
-  const parts = splitShortcut(shortcut);
-  if (apple) return parts.map((part) => APPLE_SYMBOLS[part] ?? part.toUpperCase()).join('');
-  return parts
-    .map((part) => {
-      const modifier = part === 'Mod' ? 'Ctrl' : part;
-      if (modifier === 'Ctrl' || modifier === 'Shift' || modifier === 'Alt') {
-        return names[modifier] ?? modifier;
-      }
-      return part.length === 1 ? part.toUpperCase() : part;
-    })
-    .join('+');
+  return formatShortcutParts(shortcut, apple, names).join(apple ? '' : '+');
 }
 
 /** Value for `aria-keyshortcuts`, e.g. `Control+Shift+Z` or `Meta+Shift+Z`. */
