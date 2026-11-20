@@ -102,6 +102,7 @@ const ar: TranslationCatalog = {
   exportFailedToast: 'فشل التصدير: {message}',
   exportWarningSingle: 'اكتمل التصدير مع تحذير: {message}',
   exportWarningMany: 'اكتمل التصدير مع تحذيرات عددها {count}: {message}',
+  printFallbackToast: 'تعذّر إعداد عرض الطباعة ({message})، تمت طباعة صفحة المحرر بدلاً من ذلك.',
 
   // Document library
   documentLibrary: 'مكتبة المستندات',

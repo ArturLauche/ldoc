@@ -113,6 +113,7 @@ const es: TranslationCatalog = {
   exportFailedToast: 'No se pudo exportar: {message}',
   exportWarningSingle: 'Exportación completada con una advertencia: {message}',
   exportWarningMany: 'Exportación completada con {count} advertencias: {message}',
+  printFallbackToast: 'No se pudo preparar la vista de impresión ({message}); se imprimió la página del editor en su lugar.',
 
   // Document library
   documentLibrary: 'Biblioteca de documentos',

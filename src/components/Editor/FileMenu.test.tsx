@@ -1,12 +1,19 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Editor } from '@tiptap/core';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/components/locale-provider';
 import { ConfirmProvider } from '@/components/confirm-provider';
 import { FileMenu } from './FileMenu';
+import { createEditorExtensions } from './editorExtensions';
 
 const documentLibraryMocks = vi.hoisted(() => ({
   getLibraryDocuments: vi.fn(() => []),
+}));
+
+const printMocks = vi.hoisted(() => ({
+  printDocument: vi.fn(),
 }));
 
 vi.mock('@/lib/documentLibrary', async (importOriginal) => {
@@ -16,6 +23,10 @@ vi.mock('@/lib/documentLibrary', async (importOriginal) => {
     getLibraryDocuments: documentLibraryMocks.getLibraryDocuments,
   };
 });
+
+vi.mock('@/lib/printDocument', () => ({
+  printDocument: printMocks.printDocument,
+}));
 
 describe('FileMenu startup', () => {
   beforeEach(() => {
@@ -116,5 +127,105 @@ describe('FileMenu startup', () => {
     await user.click(within(sheet).getByRole('button', { name: 'Version history' }));
     await waitFor(() => expect(onShowVersionHistory).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('dialog', { name: 'File' })).not.toBeInTheDocument();
+  });
+});
+
+describe('FileMenu printing', () => {
+  let editor: Editor;
+  let windowPrint: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    editor = new Editor({
+      extensions: createEditorExtensions(() => ''),
+      content: '<p>Checklist body</p>',
+    });
+    windowPrint = vi.spyOn(window, 'print').mockImplementation(() => {
+      /* no native dialog in jsdom */
+    });
+    printMocks.printDocument.mockReset();
+  });
+
+  afterEach(() => {
+    editor.destroy();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function renderMenu() {
+    return render(
+      <LocaleProvider>
+        <ConfirmProvider>
+          <FileMenu
+            editor={editor}
+            documentId="doc-1"
+            documentName="Print checklist"
+            setDocumentName={vi.fn()}
+            onSaveDocument={vi.fn()}
+            onLoadDocument={vi.fn()}
+            onCreateNewDocument={vi.fn()}
+            onImportDocument={vi.fn()}
+            onShowVersionHistory={vi.fn()}
+          />
+        </ConfirmProvider>
+      </LocaleProvider>,
+    );
+  }
+
+  async function printViaMenu() {
+    const user = userEvent.setup();
+    renderMenu();
+    await user.click(screen.getByRole('button', { name: 'File' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Print/ }));
+  }
+
+  it('prints the rendered export document instead of the editor page', async () => {
+    printMocks.printDocument.mockResolvedValue(undefined);
+    await printViaMenu();
+
+    await waitFor(() => expect(printMocks.printDocument).toHaveBeenCalledTimes(1));
+    const options = printMocks.printDocument.mock.calls[0][0];
+    expect(options.name).toBe('Print checklist');
+    expect(options.locale).toBe('en');
+    expect(options.html).toContain('Checklist body');
+    expect(windowPrint).not.toHaveBeenCalled();
+  });
+
+  it('warns and prints the editor page when the print document cannot be prepared', async () => {
+    const warning = vi.spyOn(toast, 'warning');
+    printMocks.printDocument.mockRejectedValue(new Error('This document is too large to export.'));
+    // jsdom has no animation frames; run the fallback frame immediately.
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+
+    await printViaMenu();
+
+    await waitFor(() => expect(windowPrint).toHaveBeenCalledTimes(1));
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning.mock.calls[0][0]).toContain('This document is too large to export.');
+    expect(warning.mock.calls[0][0]).toContain('printed the editor page instead');
+  });
+
+  it('guards the menu while a print is being prepared', async () => {
+    let finishPrint!: () => void;
+    printMocks.printDocument.mockImplementation(
+      () => new Promise<void>((resolve) => (finishPrint = resolve)),
+    );
+
+    const user = userEvent.setup();
+    renderMenu();
+    await user.click(screen.getByRole('button', { name: 'File' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Print/ }));
+    await waitFor(() => expect(printMocks.printDocument).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: 'File' }));
+    const item = screen.getByRole('menuitem', { name: /^Print/ });
+    expect(item).toHaveAttribute('data-disabled');
+
+    finishPrint();
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /^Print/ })).not.toHaveAttribute('data-disabled'),
+    );
   });
 });

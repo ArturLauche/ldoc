@@ -113,6 +113,7 @@ const nl: TranslationCatalog = {
   exportFailedToast: 'Exporteren mislukt: {message}',
   exportWarningSingle: 'Export voltooid met een waarschuwing: {message}',
   exportWarningMany: 'Export voltooid met {count} waarschuwingen: {message}',
+  printFallbackToast: 'De afdrukweergave kon niet worden voorbereid ({message}); de editorpagina is afgedrukt.',
 
   // Document library
   documentLibrary: 'Documentbibliotheek',

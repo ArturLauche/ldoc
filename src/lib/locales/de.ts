@@ -99,6 +99,7 @@ const de: TranslationCatalog = {
   exportFailedToast: 'Export fehlgeschlagen: {message}',
   exportWarningSingle: 'Export mit einer Warnung abgeschlossen: {message}',
   exportWarningMany: 'Export mit {count} Warnungen abgeschlossen: {message}',
+  printFallbackToast: 'Druckansicht konnte nicht vorbereitet werden ({message}), die Editorseite wurde stattdessen gedruckt.',
   documentLibrary: 'Dokumentenbibliothek',
   documentLibraryDescription: 'Dokumente, die in diesem Browser gespeichert sind.',
   searchDocuments: 'Aus Bibliothek öffnen…',

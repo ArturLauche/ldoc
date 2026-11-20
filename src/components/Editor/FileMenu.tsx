@@ -254,7 +254,7 @@ export const FileMenu = ({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={actions.print}>
+            <DropdownMenuItem onSelect={actions.print} disabled={actions.isPrinting}>
               <Printer />
               {t('fileMenuPrint')}
               <DropdownMenuShortcut>

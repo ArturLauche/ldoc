@@ -113,6 +113,7 @@ const ru: TranslationCatalog = {
   exportFailedToast: 'Ошибка экспорта: {message}',
   exportWarningSingle: 'Экспорт завершён с предупреждением: {message}',
   exportWarningMany: 'Экспорт завершён с предупреждениями ({count}): {message}',
+  printFallbackToast: 'Не удалось подготовить вид печати ({message}); вместо этого была распечатана страница редактора.',
 
   // Document library
   documentLibrary: 'Библиотека документов',

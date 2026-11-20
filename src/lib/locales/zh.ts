@@ -102,6 +102,7 @@ const zh: TranslationCatalog = {
   exportFailedToast: '导出失败：{message}',
   exportWarningSingle: '导出已完成，但有一条警告：{message}',
   exportWarningMany: '导出已完成，但有 {count} 条警告：{message}',
+  printFallbackToast: '无法准备打印视图（{message}），已改为打印编辑器页面。',
 
   // Document library
   documentLibrary: '文档库',
