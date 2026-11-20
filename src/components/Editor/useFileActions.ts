@@ -72,6 +72,7 @@ export function useFileActions({
   // (always mounted) dialog first rendered.
   const [libraryListedAt, setLibraryListedAt] = useState(() => Date.now());
   const [renameOpen, setRenameOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const refreshLibrary = useCallback(async () => {
     setLibraryLoading(true);
@@ -319,11 +320,36 @@ export function useFileActions({
     return true;
   };
 
-  const print = () => requestAnimationFrame(() => window.print());
+  /**
+   * Prints the document rendered like the exports (shared typography, paper
+   * size, fonts and drawings). If that document cannot be built, the editor
+   * page still prints like before.
+   */
+  const print = async () => {
+    if (!editor || isPrinting) return;
+    setIsPrinting(true);
+    try {
+      const { printDocument } = await import('@/lib/printDocument');
+      await printDocument({
+        html: editor.getHTML(),
+        name: documentName,
+        locale: requestedLocale,
+      });
+    } catch (error) {
+      logError('Print failed', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.warning(formatMessage(t('printFallbackToast'), { message }));
+      // One frame so the warning is visible before the blocking dialog opens.
+      requestAnimationFrame(() => window.print());
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   return {
     isImporting,
     isExporting,
+    isPrinting,
     library: {
       open: libraryOpen,
       setOpen: setLibraryVisible,

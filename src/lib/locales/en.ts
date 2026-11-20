@@ -108,6 +108,7 @@ const en = {
   exportFailedToast: 'Export failed: {message}',
   exportWarningSingle: 'Export completed with a warning: {message}',
   exportWarningMany: 'Export completed with {count} warnings: {message}',
+  printFallbackToast: 'Could not prepare the print view ({message}), printed the editor page instead.',
 
   // Document library
   documentLibrary: 'Document library',

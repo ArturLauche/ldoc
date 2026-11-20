@@ -112,6 +112,7 @@ const ja: TranslationCatalog = {
   exportFailedToast: 'エクスポートに失敗しました: {message}',
   exportWarningSingle: 'エクスポートは完了しましたが、警告があります: {message}',
   exportWarningMany: 'エクスポートは完了しましたが、{count} 件の警告があります: {message}',
+  printFallbackToast: '印刷ビューを準備できませんでした（{message}）。代わりにエディタのページを印刷しました。',
 
   // Document library
   documentLibrary: 'ドキュメントライブラリ',

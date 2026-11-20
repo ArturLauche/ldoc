@@ -146,6 +146,7 @@ export function FileSheet({
               <SheetAction
                 icon={<Printer />}
                 label={t('fileMenuPrint')}
+                disabled={actions.isPrinting}
                 onClick={() => run(actions.print, 'after-close')}
               />
             </SheetSection>

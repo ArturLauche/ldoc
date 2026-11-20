@@ -112,6 +112,7 @@ const it: TranslationCatalog = {
   exportFailedToast: 'Esportazione non riuscita: {message}',
   exportWarningSingle: 'Esportazione completata con un avviso: {message}',
   exportWarningMany: 'Esportazione completata con {count} avvisi: {message}',
+  printFallbackToast: 'Impossibile preparare la vista di stampa ({message}); la pagina dell’editor è stata stampata al suo posto.',
 
   // Document library
   documentLibrary: 'Libreria documenti',
