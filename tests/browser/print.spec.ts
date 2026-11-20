@@ -78,7 +78,8 @@ test.describe('printing', () => {
     expect((await frameCounts()).page).toBe(0);
 
     const printed = await page.evaluate(() => {
-      const frame = document.querySelector('iframe');
+      // The print frame is tagged, so another embedded iframe could never match.
+      const frame = document.querySelector('iframe[data-lwrite-print]') as HTMLIFrameElement | null;
       const doc = frame?.contentDocument;
       const css = doc?.querySelector('style')?.textContent ?? '';
       return {
@@ -100,8 +101,9 @@ test.describe('printing', () => {
 
     // Closing the print dialog removes the frame and releases its document.
     await page.evaluate(() => {
-      document.querySelector('iframe')?.contentWindow?.dispatchEvent(new Event('afterprint'));
+      const frame = document.querySelector('iframe[data-lwrite-print]') as HTMLIFrameElement | null;
+      frame?.contentWindow?.dispatchEvent(new Event('afterprint'));
     });
-    await expect(page.locator('iframe')).toHaveCount(0);
+    await expect(page.locator('iframe[data-lwrite-print]')).toHaveCount(0);
   });
 });

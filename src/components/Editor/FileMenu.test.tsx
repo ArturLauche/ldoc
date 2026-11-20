@@ -139,8 +139,9 @@ describe('FileMenu printing', () => {
       extensions: createEditorExtensions(() => ''),
       content: '<p>Checklist body</p>',
     });
-    windowPrint = vi.fn();
-    window.print = windowPrint as unknown as typeof window.print;
+    windowPrint = vi.spyOn(window, 'print').mockImplementation(() => {
+      /* no native dialog in jsdom */
+    });
     printMocks.printDocument.mockReset();
   });
 

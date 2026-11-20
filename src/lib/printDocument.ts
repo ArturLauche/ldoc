@@ -15,19 +15,37 @@ export interface PrintDocumentOptions {
  */
 export async function printDocument({ html, name, locale }: PrintDocumentOptions): Promise<void> {
   const { exportDocument } = await import('./export/documentExport');
-  const { blob } = await exportDocument({ html, name, locale, format: 'html' });
+  const { blob, warnings } = await exportDocument({ html, name, locale, format: 'html' });
+  // An image the export could not embed would print as a placeholder, while
+  // the editor page still shows it: print that page instead (the caller
+  // falls back), with the warning as the reason.
+  const lossyImage = warnings.find((warning) => warning.code === 'image-not-embedded');
+  if (lossyImage) throw new Error(lossyImage.message);
   await printFrame(blob);
 }
+
+/** Blob documents carry no network load; this only guards against a stalled engine. */
+const FRAME_LOAD_TIMEOUT_MS = 20_000;
 
 /**
  * A `display: none` frame does not render in every engine, so the print
  * document stays in the page but zero-sized and out of sight. Engines that
  * return from `print()` while the dialog is still open (Safari opens it
- * asynchronously) keep the frame until it reports `afterprint`.
+ * asynchronously) keep the frame until it reports `afterprint`; if an engine
+ * never reports it, the next print replaces the leftover frame, and the guard
+ * in the menu covers the gap.
  */
 async function printFrame(blob: Blob): Promise<void> {
   const url = URL.createObjectURL(blob);
+  // Supersede a frame an earlier print left behind (no `afterprint` came).
+  document.querySelectorAll('iframe[data-lwrite-print]').forEach((stale) => {
+    stale.remove();
+    const staleUrl = stale.getAttribute('data-lwrite-print');
+    if (staleUrl) URL.revokeObjectURL(staleUrl);
+  });
+
   const frame = document.createElement('iframe');
+  frame.setAttribute('data-lwrite-print', url);
   frame.style.position = 'fixed';
   frame.style.right = '0';
   frame.style.bottom = '0';
@@ -36,15 +54,27 @@ async function printFrame(blob: Blob): Promise<void> {
   frame.style.border = '0';
   frame.setAttribute('aria-hidden', 'true');
 
+  // Printing moves focus into the frame; put the caret back afterwards.
+  const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const removeFrame = () => {
     frame.remove();
     URL.revokeObjectURL(url);
+    if (previouslyFocused?.isConnected && document.activeElement !== previouslyFocused) {
+      previouslyFocused.focus();
+    }
   };
   const loaded = new Promise<void>((resolve, reject) => {
-    frame.addEventListener('load', () => resolve(), { once: true });
+    // Most load failures do not fire the frame's `error` event; the deadline
+    // keeps the flow from hanging (and the menu disabled forever).
+    const timeout = setTimeout(() => reject(new Error('The print document could not be displayed.')), FRAME_LOAD_TIMEOUT_MS);
+    const settle = (finish: () => void) => () => {
+      clearTimeout(timeout);
+      finish();
+    };
+    frame.addEventListener('load', settle(resolve), { once: true });
     frame.addEventListener(
       'error',
-      () => reject(new Error('The print document could not be displayed.')),
+      settle(() => reject(new Error('The print document could not be displayed.'))),
       { once: true },
     );
   });
