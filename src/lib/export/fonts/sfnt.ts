@@ -581,10 +581,15 @@ function buildMaxp(numGlyphs: number, maxPoints: number, maxContours: number): U
   writer.u16(numGlyphs);
   writer.u16(maxPoints);
   writer.u16(maxContours);
-  writer.u16(0);
-  writer.u16(0);
-  writer.u16(2);
-  for (let index = 0; index < 7; index += 1) writer.u16(0);
+  // No composites and no hinting instructions remain in the flattened outlines;
+  // version 1.0 requires all fields through maxComponentDepth (32 bytes), and
+  // maxZones 2 as before, or strict parsers reject the table.
+  writer.u16(0); // maxCompositePoints
+  writer.u16(0); // maxCompositeContours
+  writer.u16(2); // maxZones
+  for (let index = 0; index < 6; index += 1) writer.u16(0);
+  writer.u16(0); // maxComponentElements
+  writer.u16(0); // maxComponentDepth
   return writer.toBytes();
 }
 

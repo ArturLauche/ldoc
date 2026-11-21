@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { serveExportAssets } from '@/test/exportAssets';
 import { ExportFontRegistry } from '../fonts/registry';
 import { DOCUMENT_STYLE, resolveRunStyle, textBaseStyle } from '../typography';
-import type { ExportAlignment } from '../types';
+import type { ExportAlignment, ExportInlineMarks } from '../types';
 import { WarningCollector } from '../warnings';
 import { PdfFontSet } from './fonts';
 import { layoutInline, type InlineEnvironment } from './inline';
@@ -116,5 +116,53 @@ describe('spaces at a soft wrap', () => {
     const twoSpaces = layout(env, 'a  ', 1000)[0].width;
     const lines = layout(env, 'a   b', twoSpaces);
     expect(lines.map(lineText).join('')).toBe('a   b');
+  });
+});
+
+describe('runs within a paragraph', () => {
+  function layoutRuns(env: InlineEnvironment, runs: Array<{ text: string; marks: ExportInlineMarks }>, width: number) {
+    const base = textBaseStyle({ kind: 'body' });
+    const resolution = env.registry.resolve({ family: base.family, weight: 400, italic: false });
+    return layoutInline(
+      env,
+      runs.map((run) => ({
+        text: run.text,
+        style: resolveRunStyle(run.marks, undefined, base),
+      })),
+      {
+        base,
+        baseMetrics: env.fonts.forLoaded(resolution.fonts[0]).metrics,
+        slotAt: () => ({ inset: 0, width }),
+      },
+    );
+  }
+
+  it('gives the glyphs of every run the text they represent', async () => {
+    const runs: Array<{ text: string; marks: ExportInlineMarks }> = [
+      { text: 'Vom Hintergrund und ', marks: {} },
+      { text: 'Umgebungen der Politik', marks: { highlight: '#FEF08A' } },
+      { text: ', auch', marks: {} },
+    ];
+    const combined = runs.map((run) => run.text).join('');
+    const env = await environment(combined);
+    const lines = layoutRuns(env, runs, 1000);
+    const drawn = lines.flatMap((line) => line.pieces).map((piece) => piece.glyphs.map((glyph) => glyph.text).join('')).join('');
+    // The ToUnicode CMap is built from these texts; a later run's letters were
+    // lost entirely when its cluster offsets sliced out of the run's text.
+    expect(drawn).toBe(combined);
+  });
+
+  it('breaks lines at spaces inside runs that follow the first one', async () => {
+    const runs: Array<{ text: string; marks: ExportInlineMarks }> = [
+      { text: 'aaaa ', marks: {} },
+      { text: 'bbbb ', marks: {} },
+      { text: 'cccc', marks: {} },
+    ];
+    const env = await environment('aaaa bbbb cccc');
+    const fitting = layout(env, 'aaaa bbbb ', 1000)[0].width;
+    const lines = layoutRuns(env, runs, fitting);
+    expect(lines.map(lineText).join('')).toBe('aaaa bbbb cccc');
+    expect(lineText(lines[0])).toBe('aaaa bbbb ');
+    expect(lineText(lines[1] ?? { pieces: [] })).toBe('cccc');
   });
 });

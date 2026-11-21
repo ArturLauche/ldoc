@@ -208,7 +208,7 @@ function runClusters(
       }
       const graphemeDirection: BidiDirection = hasRtlText(grapheme) ? 'rtl' : 'ltr';
       const shaped = fallback
-        ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback, graphemeDirection)
+        ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback, graphemeDirection, from)
         : [];
       const segment = shaped[0];
       if (segment?.font) {
@@ -239,12 +239,19 @@ function runClusters(
         });
         return;
       }
-      appendShaped(env, segment.font, segment.glyphs, segment.clusters, run.text, style, pushText, 0);
+      appendShaped(env, segment.font, segment.glyphs, segment.clusters, run.text, style, pushText, start);
     });
   });
   return clusters;
 }
 
+/**
+ * Places one shaped segment's glyphs into clusters. Cluster offsets are
+ * absolute within the paragraph; `source` starts at the paragraph offset
+ * `sourceStart`, so text is sliced from `source` at the cluster's relative
+ * position (a later run's clusters would otherwise slice out of range and
+ * register every glyph without the text it represents).
+ */
 function appendShaped(
   env: InlineEnvironment,
   loaded: LoadedFont,
@@ -261,13 +268,13 @@ function appendShaped(
     from: number,
     to: number,
   ) => void,
-  sourceOffset: number,
+  sourceStart: number,
 ): void {
   const font = env.fonts.forLoaded(loaded);
   const factor = style.sizePx / loaded.font.unitsPerEm;
   let glyphIndex = 0;
   clusters.forEach((cluster) => {
-    const text = source.slice(cluster.start, cluster.end);
+    const text = source.slice(cluster.start - sourceStart, cluster.end - sourceStart);
     const placed: PlacedGlyph[] = [];
     while (glyphIndex < glyphs.length && glyphs[glyphIndex].cluster < cluster.end) {
       const glyph = glyphs[glyphIndex];
@@ -281,18 +288,10 @@ function appendShaped(
       glyphIndex += 1;
     }
     if (text.includes('\n')) {
-      push('\n', font, font.metrics, [], 0, sourceOffset + cluster.start, sourceOffset + cluster.end);
+      push('\n', font, font.metrics, [], 0, cluster.start, cluster.end);
       return;
     }
-    push(
-      text,
-      font,
-      font.metrics,
-      placed,
-      cluster.advance * factor,
-      sourceOffset + cluster.start,
-      sourceOffset + cluster.end,
-    );
+    push(text, font, font.metrics, placed, cluster.advance * factor, cluster.start, cluster.end);
   });
 }
 

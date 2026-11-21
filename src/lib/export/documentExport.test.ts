@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString, PDFHexString } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString, PDFHexString, decodePDFRawStream } from 'pdf-lib';
 import { createStarterGraphic, demoteGraphicItem, serializeSmartGraphic, updateGraphicTitle } from '@/lib/smartGraphic';
 import { serveExportAssets } from '@/test/exportAssets';
 import { exportDocument } from './documentExport';
@@ -706,14 +706,42 @@ describe('PDF export', () => {
   });
 
   it('maps glyphs back to text for search and copy', async () => {
-    const { pdf } = await loadPdf('<p>Searchable</p>');
-    const toUnicode = pdf.context
+    // H and U appear only in runs that follow the sentence's first one, where
+    // a cluster-offset bug once registered their glyphs without any text.
+    const { pdf } = await loadPdf(
+      '<p>Von Macht und <mark>Umgebungen</mark>, geprägt durch <a href="https://example.com">Hintergründe</a>.</p>',
+    );
+    const maps = pdf.context
       .enumerateIndirectObjects()
       .map(([, object]) => object)
-      .find((object) => object instanceof PDFDict && object.get(PDFName.of('Subtype')) === PDFName.of('Type0'));
-    expect(toUnicode).toBeInstanceOf(PDFDict);
-    const stream = (toUnicode as PDFDict).lookup(PDFName.of('ToUnicode'));
-    expect(stream).toBeInstanceOf(PDFRawStream);
+      .filter((object) => object instanceof PDFDict && object.get(PDFName.of('Subtype')) === PDFName.of('Type0'))
+      .map((object) => (object as PDFDict).lookup(PDFName.of('ToUnicode')))
+      .filter((stream): stream is PDFRawStream => stream instanceof PDFRawStream)
+      .map((stream) => new TextDecoder().decode(decodePDFRawStream(stream).decode()))
+      .join('\n');
+    expect(maps).toContain('<0055>'); // U
+    expect(maps).toContain('<0048>'); // H
+  });
+
+  it('draws the text of every run with standard fonts', async () => {
+    // Arial paragraphs encode their runs as text, not glyphs: a later run's
+    // text was dropped from the page entirely.
+    const { pdf } = await loadPdf('<p style="font-family: Arial">Alpha <b>Hidden</b> Charlie</p>');
+    const pages = pdf.getPages();
+    const drawn = pages
+      .flatMap((page) => {
+        const contents = page.node.Contents();
+        const streams = contents instanceof PDFArray ? contents.asArray().map((ref) => pdf.context.lookup(ref)) : [contents];
+        return streams
+          .filter((stream): stream is PDFRawStream => stream instanceof PDFRawStream)
+          .map((stream) => new TextDecoder('latin1').decode(decodePDFRawStream(stream).decode()));
+      })
+      .join('\n');
+    const strings = Array.from(drawn.matchAll(/<([0-9A-Fa-f]+)>/g)).map((match) =>
+      Array.from((match[1] as string).match(/../g) ?? []).map((byte) => String.fromCharCode(Number.parseInt(byte, 16))).join(''),
+    );
+    expect(strings.join(' ')).toContain('Hidden');
+    expect(strings.join(' ')).toContain('Charlie');
   });
 
   it('keeps merged tables and images without simplifying them', async () => {

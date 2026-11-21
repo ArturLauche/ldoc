@@ -65,4 +65,30 @@ describe('sfnt writer', () => {
     expect(view.getUint16(2)).toBe(4);
     expect(fontkit).toBeTruthy();
   });
+
+  it('writes the maxp table complete through maxComponentDepth', async () => {
+    const fontkit = await loadFontkit();
+    const variable = fontkit.create(woff2ToTrueType(fontkit.create(fontFile('dm-sans-400-normal-latin.woff2'))));
+    const instance = variable.getVariation({ wght: 400 });
+    const built = buildStaticFont({
+      sources: [{ font: instance, glyphIds: [22, 49], codePoints: new Map() }],
+      names: { family: 'DM Sans', subfamily: 'Regular', fullName: 'DM Sans', postScriptName: 'DMSans-Regular' },
+      weightClass: 400,
+      bold: false,
+    });
+    // Strict parsers reject a version 1.0 maxp without all 32 bytes.
+    const view = new DataView(built.bytes.buffer, built.bytes.byteOffset, built.bytes.byteLength);
+    const numTables = view.getUint16(4);
+    let entry: { offset: number; length: number } | null = null;
+    for (let index = 0; index < numTables; index += 1) {
+      const at = 12 + index * 16;
+      const tag = String.fromCharCode(view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2), view.getUint8(at + 3));
+      if (tag === 'maxp') entry = { offset: view.getUint32(at + 8), length: view.getUint32(at + 12) };
+    }
+    expect(entry).not.toBeNull();
+    expect(entry?.length).toBe(32);
+    expect(view.getUint32((entry as { offset: number }).offset)).toBe(0x00010000);
+    expect(view.getUint16((entry as { offset: number }).offset + 4)).toBe(3);
+    expect(fontkit.create(built.bytes).numGlyphs).toBe(3);
+  });
 });
