@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString, PDFHexString, decodePDFRawStream } from 'pdf-lib';
 import { createStarterGraphic, demoteGraphicItem, serializeSmartGraphic, updateGraphicTitle } from '@/lib/smartGraphic';
 import { serveExportAssets } from '@/test/exportAssets';
+import { DEFAULT_DOCUMENT_FAMILY } from './fonts/catalog';
 import { exportDocument } from './documentExport';
 import { loadFontkit } from './fonts/fontkit';
 import { obfuscateFont } from './fonts/embedding';
@@ -25,6 +26,14 @@ function exportAs(format: ExportFormat, html: string, name = 'Doc', locale: 'en'
 async function unzip(blob: Blob) {
   return JSZip.loadAsync(await blob.arrayBuffer());
 }
+
+/** The print block of an exported stylesheet (the last `@media print` section). */
+function insidePrintBlock(html: string): string {
+  return html.slice(html.indexOf('@media print{') + '@media print{'.length).replace(/\n\}\n`[\s\S]*$/, '');
+}
+
+/** The document's default family, as the exported CSS names it. */
+const documentFamily = () => DEFAULT_DOCUMENT_FAMILY;
 
 function expectWellFormedXml(xml: string | undefined) {
   expect(xml).toBeTruthy();
@@ -380,6 +389,107 @@ describe('HTML export', () => {
     expect(doc.querySelector('script')).toBeNull();
     expect(doc.title).toBe('<script>bad</script>');
   });
+
+  it('promotes leading header rows into a thead so every printed page repeats them', async () => {
+    const source =
+      '<table><tr><th><p>Head A</p></th><th><p>Head B</p></th></tr><tr><td><p>Body A</p></td><td><p>Body B</p></td></tr></table>';
+    const doc = new DOMParser().parseFromString(await (await exportAs('html', source)).blob.text(), 'text/html');
+    const table = doc.querySelector('table') as HTMLTableElement;
+    expect(table.querySelector('thead tr th p')?.textContent).toBe('Head A');
+    expect(table.tHead?.rows).toHaveLength(1);
+    expect(table.tBodies[0]?.rows).toHaveLength(1);
+
+    // A row that mixes header and body cells opens the body, not a header group.
+    const mixed = await (
+      await exportAs('html', '<table><tr><th><p>Head</p></th><td><p>Body</p></td></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr></table>')
+    ).blob.text();
+    expect(new DOMParser().parseFromString(mixed, 'text/html').querySelector('table thead')).toBeNull();
+
+    // A rowspan reaching past the header group stays in the body (a thead row
+    // must not own cells of the body).
+    const span = await (
+      await exportAs(
+        'html',
+        '<table><tr><th rowspan="2"><p>Head</p></th><th><p>Head</p></th></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr></table>',
+      )
+    ).blob.text();
+    expect(new DOMParser().parseFromString(span, 'text/html').querySelector('table thead')).toBeNull();
+
+    // A table of only header rows has no body to repeat them for (the galley's rule).
+    const headersOnly = await (
+      await exportAs('html', '<table><tr><th><p>Head</p></th></tr></table>')
+    ).blob.text();
+    expect(new DOMParser().parseFromString(headersOnly, 'text/html').querySelector('table thead')).toBeNull();
+  });
+
+  it('prints the pagination and paper rules the PDF export lives by', async () => {
+    const en = await (await exportAs('html', '<p>Text</p>')).blob.text();
+    // Responsive overrides are screen-only: the print layout always uses the
+    // paper's own geometry, never a viewport's.
+    expect(en).toContain('@media screen and (max-width:639px)');
+    expect(en).toContain('@media screen and (max-width:479px)');
+    expect(en).not.toMatch(/@media \(max-width/);
+    // Paragraphs and code blocks keep at least two lines on either side of a
+    // page break: code flows between them like the PDF's line atoms.
+    expect(en).toContain('p,li,pre{orphans:2;widows:2}');
+    // Rows taller than a page fragment like the PDF's split rows.
+    expect(en).toContain('tr[data-lwrite-breakable]{break-inside:auto}');
+    // Backgrounds print without the browser's background-graphics switch.
+    expect(en).toContain('-webkit-print-color-adjust:exact;print-color-adjust:exact');
+    // Letter content: 624px wide, 864px tall; oversized content scales like the PDF.
+    expect(insidePrintBlock(en)).toContain('img{max-height:832px;object-fit:contain}');
+    expect(insidePrintBlock(en)).toContain('svg.lwrite-graphic-drawing{max-height:774px}');
+    // Links underline like the editor (and the PDF's constant offset).
+    expect(en).toMatch(/a\{color:#2E3D52;text-decoration:underline;text-underline-offset:3px;font-weight:500\}/);
+
+    const de = await (await exportAs('html', '<p>Text</p>', 'Doc', 'de')).blob.text();
+    const dePrint = insidePrintBlock(de);
+    // A4 content: 604.72px wide, 933.53px tall.
+    expect(dePrint).toContain('img{max-height:901.53px;object-fit:contain}');
+    expect(dePrint).toContain('svg.lwrite-graphic-drawing{max-height:843.53px}');
+    expect(de).toContain('@page{size:595.28pt 841.89pt;margin:70.87pt}');
+  });
+
+  it('scales resized tables to the paper like the PDF export, without touching the file', async () => {    const source =
+      '<table style="width:657px"><colgroup><col style="width:219px"><col style="width:438px"></colgroup><tr><th><p>Head A</p></th><th><p>Head B</p></th></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr></table>';
+    const printDocument = await exportDocument({ html: source, name: 'Doc', locale: 'en', format: 'html', paper: true });
+    const printed = new DOMParser().parseFromString(await printDocument.blob.text(), 'text/html');
+    const printedTable = printed.querySelector('table') as HTMLTableElement;
+    expect(printedTable.style.width).toBe('100%');
+    const printedCols = Array.from(printedTable.querySelectorAll(':scope > colgroup > col')).map(
+      (column) => (column as HTMLElement).style.width,
+    );
+    // Proportional columns of the declared 219+438px across the 624px page.
+    expect(printedCols).toEqual(['33.3333%', '66.6667%']);
+    expect(printDocument.warnings).toEqual([]);
+
+    const fileExport = await exportAs('html', source);
+    const file = new DOMParser().parseFromString(await fileExport.blob.text(), 'text/html');
+    const table = file.querySelector('table') as HTMLTableElement;
+    // A file opened on a screen keeps the editor's table metrics.
+    expect(table.style.width).toBe('657px');
+    expect(Array.from(table.querySelectorAll(':scope > colgroup > col')).map((column) => (column as HTMLElement).style.width)).toEqual([
+      '219px',
+      '438px',
+    ]);
+  });
+
+  it('embeds the PDF fallback font for characters the selected fonts lack', async () => {
+    const greek = await (await exportAs('html', '<p>Ελληνικά κείμενο</p>')).blob.text();
+    // The bundled Noto Sans covers what the latin subsets cannot, like the
+    // PDF export does; nothing is embedded for plain latin text.
+    expect(greek).toMatch(/@font-face\{font-family:'Noto Sans';font-style:normal;font-weight:400;src:url\(data:font\/ttf;base64,/);
+    expect(greek).toContain(`font-family:'${documentFamily()}', 'Noto Sans', ui-sans-serif`);
+    const latin = await (await exportAs('html', '<p>Plain latin words</p>')).blob.text();
+    expect(latin).not.toMatch(/font-family:'Noto Sans'/);
+    expect(latin).not.toMatch(/NotoSans-Regular/);
+    // The bundled Noto Sans is latin/greek/cyrillic only: no dead weight
+    // embedded for scripts it cannot draw (the browser keeps falling back).
+    const arabic = await (await exportAs('html', '<p>نص عربي</p>')).blob.text();
+    expect(arabic).toContain(`font-family:'${documentFamily()}', 'Noto Sans', ui-sans-serif`);
+    expect(arabic).not.toMatch(/data:font\/ttf;base64/);
+  });
+
 });
 
 describe('RTF export', () => {

@@ -44,8 +44,10 @@ function nextKeepTarget(atoms: Atom[], index: number): number {
 export function paginate(galley: Galley, pageHeight: number): Page[] {
   const pages: Page[] = [{ atoms: [], decorations: [] }];
   const placements = new Map<Atom, { page: number; top: number }>();
-  let offset = 0;
   const atoms = galley.atoms.slice();
+  // Every page starts at its first atom's content, its collapsed margin dropped:
+  // the first page too, like the editor and the HTML export (`:first-child`).
+  let offset = atoms[0] ? atoms[0].y - atoms[0].insetBefore : 0;
 
   const newPage = (atom: Atom) => {
     pages.push({ atoms: [], decorations: [] });

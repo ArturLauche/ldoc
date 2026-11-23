@@ -129,6 +129,11 @@ function loadBinary(url: string): Promise<Uint8Array> {
   return request;
 }
 
+/** The bundled Noto Sans file for a style, for HTML embedding (like the PDF's fallback). */
+export function loadFallbackBytes(bold: boolean, italic: boolean): Promise<Uint8Array> {
+  return loadBinary(fallbackFontUrl(bold, italic));
+}
+
 function isWoff2(bytes: Uint8Array): boolean {
   return bytes[0] === 0x77 && bytes[1] === 0x4f && bytes[2] === 0x46 && bytes[3] === 0x32;
 }
@@ -324,6 +329,37 @@ export class ExportFontRegistry {
   fallbackFor(weight: number, italic: boolean): LoadedFont | null {
     const bold = weight >= 600;
     return this.fallbackFonts.get(`${bold}|${italic}`) ?? this.fallbackFonts.get(`${bold}|false`) ?? this.fallbackFonts.get('false|false') ?? null;
+  }
+
+  /**
+   * Fallback styles the document needs: styles (bold/italic) whose text has a
+   * character outside every declared face of the family's fonts. The PDF
+   * draws those characters with the bundled Noto Sans; the HTML export embeds
+   * the same faces, so the file and Direct Print show the same glyphs instead
+   * of whatever the reading system substitutes.
+   */
+  fallbackStyles(): Array<{ bold: boolean; italic: boolean; codePoints: number[] }> {
+    const needed = new Map<string, { bold: boolean; italic: boolean; codePoints: number[] }>();
+    this.usage.forEach((entry) => {
+      const family = this.renderFamily(entry.family);
+      if (family.kind !== 'bundled') return;
+      const faces = this.faces.get(family.name);
+      if (!faces) return;
+      entry.weights.forEach((codePoints, weight) => {
+        const match = matchFontFace(faces, weight);
+        const segments = match?.face.segments;
+        const missing = Array.from(codePoints).filter(
+          (codePoint) =>
+            codePoint > 0x20 && !segments?.some((segment) => rangesContain(segment.ranges, codePoint)),
+        );
+        if (missing.length === 0) return;
+        const key = `${weight >= 600}|${entry.italic}`;
+        const entryStyle = needed.get(key) ?? { bold: weight >= 600, italic: entry.italic, codePoints: [] };
+        entryStyle.codePoints.push(...missing);
+        needed.set(key, entryStyle);
+      });
+    });
+    return Array.from(needed.values());
   }
 
   private renderFamily(family: ResolvedFamily): ResolvedFamily {

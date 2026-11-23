@@ -48,4 +48,19 @@ describe('paginate', () => {
     expect(pagesOf([line(1, 0, 85), line(2, 85, 10, true), line(3, 95, 10)])).toEqual([[0], [1, 2]]);
     expect(pagesOf([line(1, 0, 60), line(2, 60, 10, true), row(70, 30)])).toEqual([[0, 1, 2]]);
   });
+
+  it('drops the margin above the first atom on the first page, like every page', () => {
+    const withMargin = { ...line(1, 32, 43.2), gapBefore: 32 };
+    const galley: Galley = {
+      atoms: [withMargin, line(2, 75.2, 28)],
+      decorations: [],
+      height: 103.2,
+      tableHeaders: new Map(),
+    };
+    const [first] = paginate(galley, 100);
+    // The document begins flush with the paper's content edge (the editor and
+    // the HTML export zero the first child's margin; the office writers drop
+    // the first leaf's gap), while the paragraph gap inside stays.
+    expect(first.atoms.map(({ top }) => top)).toEqual([0, 43.2]);
+  });
 });

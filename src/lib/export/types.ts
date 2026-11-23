@@ -9,6 +9,12 @@ export interface ExportDocumentOptions {
   name: string;
   locale: Locale;
   format: ExportFormat;
+  /**
+   * Lay the document out for the locale's paper instead of the editor column
+   * (Direct Print). HTML exports for the paper fit the PDF export's geometry:
+   * text, Smart Graphics and resized tables print like the PDF pages.
+   */
+  paper?: boolean;
 }
 
 export interface ExportResult {

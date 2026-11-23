@@ -27,6 +27,7 @@ export async function exportDocument({
   name,
   locale,
   format,
+  paper,
 }: ExportDocumentOptions): Promise<ExportResult> {
   if (!isExportFormat(format)) {
     throw new Error('Unsupported export format.');
@@ -48,7 +49,7 @@ export async function exportDocument({
   });
   const warnings = new WarningCollector(format);
 
-  const blob = await renderFormat(format, documentModel, warnings);
+  const blob = await renderFormat(format, documentModel, warnings, { paper: paper === true });
 
   return {
     blob,
@@ -61,9 +62,10 @@ async function renderFormat(
   format: ExportFormat,
   documentModel: ExportDocumentModel,
   warnings: WarningCollector,
+  { paper }: { paper: boolean },
 ): Promise<Blob> {
   if (format === 'txt') return renderTxt(documentModel);
-  const columnWidth = format === 'html' ? EDITOR_COLUMN_WIDTH : pageGeometry(documentModel.locale).contentWidthPx;
+  const columnWidth = format !== 'html' || paper ? pageGeometry(documentModel.locale).contentWidthPx : EDITOR_COLUMN_WIDTH;
   await Promise.all([
     prepareExportImages(documentModel, warnings, { mode: format === 'html' ? 'html' : 'raster' }),
     prepareGraphicScenes(documentModel, columnWidth, documentModel.locale),
@@ -71,7 +73,7 @@ async function renderFormat(
   switch (format) {
     case 'html': {
       const { renderHtml } = await import('./html');
-      return renderHtml(documentModel, warnings);
+      return renderHtml(documentModel, warnings, { paper });
     }
     case 'rtf': {
       const { renderRtf } = await import('./rtf');

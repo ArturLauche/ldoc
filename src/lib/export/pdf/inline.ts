@@ -103,6 +103,42 @@ export interface InlineEnvironment {
 const BREAK_AFTER = /[\s\u2010\u2013\u2014-]$/u;
 const CJK = /[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\u3000-\u303F\uFF00-\uFFEF]/u;
 
+/** Whether a line break may sit between two adjacent graphemes. */
+function breakBetween(previous: string, next: string): boolean {
+  return (
+    previous === '\n' ||
+    next === '\n' ||
+    /^\s+$/u.test(previous) ||
+    BREAK_AFTER.test(previous) ||
+    CJK.test(previous) ||
+    CJK.test(next)
+  );
+}
+
+/**
+ * Groups text no embeddable font covers into clusters that keep unbreakable
+ * character sequences together: the rasterizer draws each cluster through
+ * the browser's system fonts, which shape whole sequences — Arabic's joined
+ * letterforms among them — while per-character clusters would print isolated
+ * forms. Whitespace runs, hyphen ends and CJK boundaries stay break points,
+ * like the CSS fragmentation the print document uses.
+ */
+function missingChunks(text: string): string[] {
+  const chunks: string[] = [];
+  let current = '';
+  let previous: string | null = null;
+  for (const grapheme of splitGraphemes(text)) {
+    if (previous !== null && !breakBetween(previous, grapheme)) current += grapheme;
+    else {
+      if (current) chunks.push(current);
+      current = grapheme;
+    }
+    previous = grapheme;
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 function standardFamilyFont(env: InlineEnvironment, resolution: FaceResolution, style: RunStyle): StandardTextFont {
   return env.fonts.forStandard(resolution.standard ?? 'Helvetica', style.weight >= 600, style.italic);
 }
@@ -183,17 +219,29 @@ function runClusters(
 
   if (resolution.standard) {
     const standard = standardFamilyFont(env, resolution, style);
+    const graphemes = splitGraphemes(run.text);
+    const ansiGrapheme = (grapheme: string): boolean =>
+      Array.from(grapheme).every((char) => isWinAnsi(char.codePointAt(0) as number));
+    const shapedSegment = (grapheme: string, from: number) => {
+      const direction: BidiDirection = hasRtlText(grapheme) ? 'rtl' : 'ltr';
+      const shaped = fallback
+        ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback, direction, from)
+        : [];
+      return shaped[0] ?? null;
+    };
+    let index = 0;
     let cursor = start;
-    splitGraphemes(run.text).forEach((grapheme) => {
+    while (index < graphemes.length) {
+      const grapheme = graphemes[index] as string;
       const from = cursor;
       const to = from + grapheme.length;
-      cursor = to;
       if (grapheme === '\n') {
         pushText('\n', standard, standard.metrics, [], 0, from, to);
-        return;
+        cursor = to;
+        index += 1;
+        continue;
       }
-      const ansi = Array.from(grapheme).every((char) => isWinAnsi(char.codePointAt(0) as number));
-      if (ansi) {
+      if (ansiGrapheme(grapheme)) {
         const text = grapheme === '\t' ? ' ' : grapheme;
         pushText(
           grapheme,
@@ -204,19 +252,33 @@ function runClusters(
           from,
           to,
         );
-        return;
+        cursor = to;
+        index += 1;
+        continue;
       }
-      const graphemeDirection: BidiDirection = hasRtlText(grapheme) ? 'rtl' : 'ltr';
-      const shaped = fallback
-        ? shapeText(grapheme, { ...resolution, fonts: [], standard: undefined }, fallback, graphemeDirection, from)
-        : [];
-      const segment = shaped[0];
+      const segment = shapedSegment(grapheme, from);
       if (segment?.font) {
         appendShaped(env, segment.font, segment.glyphs, segment.clusters, grapheme, style, pushText, from);
-      } else {
-        missingCluster(grapheme, standard.metrics, from, to);
+        cursor = to;
+        index += 1;
+        continue;
       }
-    });
+      // Uncovered: extend over the unbreakable run so the rasterizer draws it
+      // shaped the way the browser does, not as isolated letterforms.
+      let chunk = grapheme;
+      let last = grapheme;
+      let end = index + 1;
+      while (end < graphemes.length) {
+        const next = graphemes[end] as string;
+        if (next === '\n' || ansiGrapheme(next) || shapedSegment(next, from)?.font || breakBetween(last, next)) break;
+        chunk += next;
+        last = next;
+        end += 1;
+      }
+      missingCluster(chunk, standard.metrics, from, from + chunk.length);
+      cursor = from + chunk.length;
+      index = end;
+    }
     return clusters;
   }
 
@@ -230,12 +292,12 @@ function runClusters(
       }
       if (!segment.font) {
         let cursor = segment.start;
-        splitGraphemes(segment.text).forEach((grapheme) => {
+        missingChunks(segment.text).forEach((chunk) => {
           const from = cursor;
-          const to = from + grapheme.length;
+          const to = from + chunk.length;
           cursor = to;
-          if (grapheme === '\n') pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0, from, to);
-          else missingCluster(grapheme, fallbackMetrics(primaryMetrics), from, to);
+          if (chunk === '\n') pushText('\n', null, fallbackMetrics(primaryMetrics), [], 0, from, to);
+          else missingCluster(chunk, fallbackMetrics(primaryMetrics), from, to);
         });
         return;
       }

@@ -60,6 +60,8 @@ describe('printDocument', () => {
       name: 'Printed doc',
       locale: 'en',
       format: 'html',
+      // The print document is laid out for the locale's paper, like the PDF.
+      paper: true,
     });
     expect(frame.src).toBe('blob:print-1');
     expect(frame.getAttribute('aria-hidden')).toBe('true');
@@ -103,6 +105,27 @@ describe('printDocument', () => {
     await expect(
       printDocument({ html: '<p>Print me</p>', name: 'Printed doc', locale: 'en' }),
     ).rejects.toThrow('A remote image could not be embedded and was replaced with its alt text.');
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('rejects when a Smart Graphic printed only its outline', async () => {
+    // The scene capture failed, so the printed page would show the stored
+    // outline instead of the drawing the editor still shows.
+    exportDocument.mockResolvedValue({
+      ...exportBlob(),
+      warnings: [
+        {
+          code: 'graphic-layout-simplified',
+          format: 'html',
+          message: 'A Smart Graphic could not be drawn and was exported as its outline.',
+        },
+      ],
+    });
+
+    await expect(
+      printDocument({ html: '<p>Print me</p>', name: 'Printed doc', locale: 'en' }),
+    ).rejects.toThrow('A Smart Graphic could not be drawn and was exported as its outline.');
     expect(document.querySelector('iframe')).toBeNull();
     expect(createObjectURL).not.toHaveBeenCalled();
   });
