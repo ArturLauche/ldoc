@@ -1,4 +1,5 @@
 import type { Locale } from '@/lib/translations';
+import { PX_TO_PT, pageGeometry } from './export/typography';
 
 export interface PrintDocumentOptions {
   html: string;
@@ -6,26 +7,31 @@ export interface PrintDocumentOptions {
   locale: Locale;
 }
 
+/** Blob documents carry no network load; this only guards against a stalled engine. */
+const FRAME_LOAD_TIMEOUT_MS = 20_000;
+
+/**
+ * Content the printed page would lose is not silently printed: an image the
+ * export could not embed or a Smart Graphic that could not be drawn would
+ * come out degraded, while the editor page still shows it, so the caller
+ * falls back to printing that page, with the warning as the reason.
+ */
+const LOSSY_WARNING_CODES = new Set(['image-not-embedded', 'graphic-layout-simplified']);
+
 /**
  * Prints the open document like the export options render it: the exported
- * HTML document (the shared typography, paper size and margins, embedded
- * fonts, images and Smart Graphic drawings) is loaded into a hidden frame
- * and printed, so the dialog shows the document instead of the editor's
- * screen surface.
+ * HTML document — laid out for the locale's paper (the same geometry as the
+ * PDF export) with the shared typography, embedded fonts, images and Smart
+ * Graphic drawings — loads into a hidden frame, and printing that frame
+ * reproduces the PDF export's pages instead of the editor's screen surface.
  */
 export async function printDocument({ html, name, locale }: PrintDocumentOptions): Promise<void> {
   const { exportDocument } = await import('./export/documentExport');
-  const { blob, warnings } = await exportDocument({ html, name, locale, format: 'html' });
-  // An image the export could not embed would print as a placeholder, while
-  // the editor page still shows it: print that page instead (the caller
-  // falls back), with the warning as the reason.
-  const lossyImage = warnings.find((warning) => warning.code === 'image-not-embedded');
-  if (lossyImage) throw new Error(lossyImage.message);
-  await printFrame(blob);
+  const { blob, warnings } = await exportDocument({ html, name, locale, format: 'html', paper: true });
+  const lossy = warnings.find((warning) => LOSSY_WARNING_CODES.has(warning.code));
+  if (lossy) throw new Error(lossy.message);
+  await printFrame(blob, locale);
 }
-
-/** Blob documents carry no network load; this only guards against a stalled engine. */
-const FRAME_LOAD_TIMEOUT_MS = 20_000;
 
 /**
  * A `display: none` frame does not render in every engine, so the print
@@ -35,7 +41,8 @@ const FRAME_LOAD_TIMEOUT_MS = 20_000;
  * never reports it, the next print replaces the leftover frame, and the guard
  * in the menu covers the gap.
  */
-async function printFrame(blob: Blob): Promise<void> {
+async function printFrame(blob: Blob, locale: Locale): Promise<void> {
+  const geometry = pageGeometry(locale);
   const url = URL.createObjectURL(blob);
   // Supersede a frame an earlier print left behind (no `afterprint` came).
   document.querySelectorAll('iframe[data-lwrite-print]').forEach((stale) => {
@@ -89,11 +96,49 @@ async function printFrame(blob: Blob): Promise<void> {
     // Embedded fonts (data URLs) ship inside the loaded document; `fonts.ready`
     // awaits their decode so the dialog renders the first page completely.
     await view.document.fonts?.ready;
+    // Images arrive as data URLs, but decoding them is asynchronous too; the
+    // printed page needs the pixels ready before the dialog renders it.
+    await Promise.all(
+      Array.from(view.document.images).map((image) =>
+        typeof image.decode === 'function' ? image.decode().catch(() => undefined) : Promise.resolve(),
+      ),
+    );
+    markOversizedRows(view, geometry.contentWidthPx, geometry.contentHeightPt / PX_TO_PT);
     view.addEventListener('afterprint', removeFrame, { once: true });
     view.focus();
     view.print();
   } catch (error) {
     removeFrame();
     throw error;
+  }
+}
+
+/**
+ * `break-inside: avoid` protects rows from being cut at a page edge, but a
+ * row taller than the page would be pushed to a fresh (mostly empty) page and
+ * then cut anyway. Rows that tall are marked instead, and the print
+ * stylesheet lets them fragment; the PDF export splits them the same way.
+ * Heights are measured in the print geometry (the page's content width), so
+ * the probe styles the frame like the print media does while it measures.
+ */
+function markOversizedRows(view: Window, contentWidthPx: number, contentHeightPx: number): void {
+  const doc = view.document;
+  const body = doc.body;
+  const frame = view.frameElement;
+  if (!body || !(frame instanceof HTMLElement)) return;
+  const previousWidth = frame.style.width;
+  const probe = doc.createElement('style');
+  probe.textContent = '.lwrite-document{max-width:none!important;padding:0!important}';
+  try {
+    frame.style.width = `${Math.round(contentWidthPx)}px`;
+    doc.head?.appendChild(probe);
+    Array.from(doc.querySelectorAll<HTMLElement>('tr')).forEach((row) => {
+      if (row.getBoundingClientRect().height > contentHeightPx - 1) {
+        row.setAttribute('data-lwrite-breakable', '');
+      }
+    });
+  } finally {
+    probe.remove();
+    frame.style.width = previousWidth;
   }
 }

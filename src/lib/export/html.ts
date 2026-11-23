@@ -1,14 +1,25 @@
 import { parseSmartGraphicFromDom, parseSmartGraphicJson, serializeSmartGraphic } from '@/lib/smartGraphic';
 import { cssGenericFamily, resolveFamily } from './fonts/catalog';
+import { FALLBACK_FAMILY } from './fonts/fallback';
 import { matchFontFace, type UnicodeRange } from './fonts/faces';
-import { ExportFontRegistry, loadFontLicense } from './fonts/registry';
+import { ExportFontRegistry, loadFallbackBytes, loadFontLicense } from './fonts/registry';
+import { truetypeCovered } from './fonts/ttf';
 import { noteGraphicFonts } from './graphics/renditions';
 import { sceneToSvg } from './graphics/svg';
 import { bytesToBase64, escapeHtmlText, graphicAltText, imagePlaceholderRuns, walkBlocks } from './shared';
 import { noteDocumentFonts } from './textUsage';
-import { DOCUMENT_STYLE, EDITOR_COLUMN_WIDTH, pageGeometry } from './typography';
+import { DOCUMENT_STYLE, EDITOR_COLUMN_WIDTH, PX_TO_PT, pageGeometry } from './typography';
 import type { ExportDocumentModel, ExportGraphicBlock, ExportImageBlock } from './types';
 import type { WarningCollector } from './warnings';
+
+/** Layout target of the exported document: the editor column or real paper. */
+export interface HtmlExportOptions {
+  /**
+   * Direct Print: styles the document for the locale's page (the same
+   * geometry the PDF export lays out), so printing matches the PDF.
+   */
+  paper?: boolean;
+}
 
 /**
  * HTML: the sanitized editor HTML (so the file opens in LWrite again without
@@ -17,13 +28,17 @@ import type { WarningCollector } from './warnings';
  * needs), images as data URLs, and Smart Graphics as inline SVG. A content
  * security policy blocks scripts and anything loaded from elsewhere.
  */
-export async function renderHtml(documentModel: ExportDocumentModel, warnings: WarningCollector): Promise<Blob> {
+export async function renderHtml(
+  documentModel: ExportDocumentModel,
+  warnings: WarningCollector,
+  options: HtmlExportOptions = {},
+): Promise<Blob> {
   const registry = new ExportFontRegistry(warnings);
   noteDocumentFonts(registry, documentModel.blocks, { generated: true, graphicFallbacks: false });
   noteGraphicFonts(registry, documentModel);
   await registry.load({ instances: false, fallback: false });
 
-  const body = buildBody(documentModel, warnings);
+  const body = buildBody(documentModel, warnings, options);
   // Embedded fonts carry their license and copyright notice (OFL condition 2).
   const licenses = new Map<string, string>();
   await Promise.all(
@@ -34,7 +49,7 @@ export async function renderHtml(documentModel: ExportDocumentModel, warnings: W
         if (license) licenses.set(usage.family.name, license);
       }),
   );
-  const css = `${fontFaceCss(registry, licenses)}${documentCss(documentModel)}`;
+  const css = `${await fallbackFontFaceCss(registry, warnings)}${fontFaceCss(registry, licenses)}${documentCss(documentModel)}`;
   const language = escapeHtmlText(documentModel.locale);
   const html = `<!DOCTYPE html>
 <html lang="${language}">
@@ -60,7 +75,7 @@ const SVG_PLACEHOLDER = 'lwrite-export-svg';
 /** Tailwind classes TipTap writes on nodes; the exported stylesheet does not use them. */
 const KEPT_CLASSES = new Set(['lwrite-graphic', 'lwrite-graphic-title']);
 
-function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollector): string {
+function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollector, options: HtmlExportOptions): string {
   const parsed = new DOMParser().parseFromString(`<body>${documentModel.html}</body>`, 'text/html');
   const root = parsed.body;
 
@@ -113,8 +128,14 @@ function buildBody(documentModel: ExportDocumentModel, warnings: WarningCollecto
     }
   });
 
-  // The editor wraps tables in a scroll container; so does the export.
+  // The editor wraps tables in a scroll container; so does the export. Leading
+  // header rows move into a `thead` so they can repeat on every printed page,
+  // the way the other exporters repeat them (and the file keeps its semantics).
+  // For paper, resized tables wider than the page scale to fit it, like the
+  // PDF export's `resolveColumnWidths`.
   root.querySelectorAll('table').forEach((table) => {
+    promoteHeaderRows(table);
+    if (options.paper) fitTableToPaper(table, documentModel);
     const wrapper = parsed.createElement('div');
     wrapper.className = 'lwrite-table';
     table.replaceWith(wrapper);
@@ -172,6 +193,72 @@ function missingImage(doc: Document, src: string, image: ExportImageBlock): HTML
   return paragraph;
 }
 
+/**
+ * Moves the table's leading rows of header cells into a `thead`, so a printed
+ * page that continues the table repeats them (the same rows the PDF export
+ * repeats). A rowspan reaching past the header group would break the table
+ * model, and a table of only header rows is not a header (as in the galley),
+ * so both stay unchanged.
+ */
+function promoteHeaderRows(table: HTMLTableElement): void {
+  const body = table.tBodies[0];
+  if (!body) return;
+  const rows = Array.from(body.rows);
+  const cellsAreHeaders = (row: HTMLTableRowElement) => row.cells.length > 0 && Array.from(row.cells).every((cell) => cell.tagName === 'TH');
+  // The header group is the whole leading row of header cells first; rowspans
+  // are validated against that complete group, so a span crossing header rows
+  // (rowspan="2" over two header rows) repeats too, while a span reaching a
+  // body row still revalidates the group away.
+  let count = 0;
+  while (count < rows.length && cellsAreHeaders(rows[count])) count += 1;
+  const spansWithinGroup = Array.from({ length: count }, (_, index) => index).every((index) =>
+    Array.from(rows[index].cells).every((cell) => cell.rowSpan <= count - index),
+  );
+  if (count === 0 || count === rows.length || !spansWithinGroup) return;
+  const thead = (table.ownerDocument ?? document).createElement('thead');
+  table.insertBefore(thead, body);
+  for (let index = 0; index < count; index += 1) thead.appendChild(rows[index]);
+}
+
+/**
+ * Scales a resized table that is wider than the printed page down to it, like
+ * the PDF export's `resolveColumnWidths`: declared column widths keep their
+ * proportions (flexible columns count the PDF's minimum), the table fills the
+ * content width. Tables that already fit are left to the browser's `width:100%`.
+ */
+function fitTableToPaper(table: HTMLTableElement, documentModel: ExportDocumentModel): void {
+  const contentWidth = pageGeometry(documentModel.locale).contentWidthPx;
+  const columns = Array.from(table.querySelectorAll<HTMLElement>(':scope > colgroup > col'));
+  if (!columns.length) return;
+  const declaredWidth = (column: HTMLElement) =>
+    column.style.width.endsWith('px') ? Number.parseFloat(column.style.width) : Number.NaN;
+  const declared = columns.map(declaredWidth);
+  const fixedTotal = declared.reduce((sum, width) => sum + (Number.isFinite(width) ? width : 0), 0);
+  const flexible = declared.filter((width) => !Number.isFinite(width)).length;
+  const minWidth = DOCUMENT_STYLE.table.minColumnWidth;
+  const naturalWidth = flexible
+    ? parseLengthPx(table.style.minWidth) ?? fixedTotal + flexible * minWidth
+    : fixedTotal;
+  if (naturalWidth <= contentWidth) return;
+  const basisTotal = fixedTotal + flexible * minWidth;
+  if (basisTotal <= 0) return;
+  columns.forEach((column, index) => {
+    const element = column as HTMLElement;
+    const basis = Number.isFinite(declared[index]) ? (declared[index] as number) : minWidth;
+    element.style.width = `${Math.round((basis / basisTotal) * 1000000) / 10000}%`;
+    element.style.removeProperty('min-width');
+  });
+  table.style.width = '100%';
+  table.style.removeProperty('min-width');
+}
+
+/** A `12px`-style length as a number, or null. */
+function parseLengthPx(value: string): number | null {
+  const px = Number.parseFloat(value);
+  return value.endsWith('px') && Number.isFinite(px) && px > 0 ? px : null;
+}
+
+
 function unicodeRangeCss(ranges: UnicodeRange[]): string {
   return ranges
     .map(([low, high]) => {
@@ -179,6 +266,29 @@ function unicodeRangeCss(ranges: UnicodeRange[]): string {
       return low === high ? `U+${start}` : `U+${start}-${high.toString(16).toUpperCase()}`;
     })
     .join(', ');
+}
+
+/**
+ * `@font-face` rules for the bundled Noto Sans faces the document needs:
+ * characters outside the self-hosted latin subsets would otherwise show in
+ * whatever the reading system substitutes, while the PDF export draws them
+ * with these files. Documents whose text the selected fonts cover embed none.
+ */
+async function fallbackFontFaceCss(registry: ExportFontRegistry, warnings: WarningCollector): Promise<string> {
+  const rules = await Promise.all(
+    registry.fallbackStyles().map(async ({ bold, italic, codePoints }) => {
+      try {
+        const bytes = await loadFallbackBytes(bold, italic);
+        if (truetypeCovered(bytes, codePoints).size === 0) return '';
+        const weight = bold ? 700 : 400;
+        return `@font-face{font-family:'${FALLBACK_FAMILY}';font-style:${italic ? 'italic' : 'normal'};font-weight:${weight};src:url(data:font/ttf;base64,${bytesToBase64(bytes)}) format('truetype')}`;
+      } catch {
+        warnings.add('font-unavailable', FALLBACK_FAMILY);
+        return '';
+      }
+    }),
+  );
+  return rules.length ? `${rules.join('\n')}\n` : '';
 }
 
 function isWoff2(bytes: Uint8Array): boolean {
@@ -253,12 +363,19 @@ function mergeWeightRanges(ranges: WeightRange[]): WeightRange[] {
   return merged;
 }
 
-const SANS_STACK = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif";
-const MONO_STACK = "'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+// The bundled fallback sits before the system fonts, so characters the
+// self-hosted subsets lack use the same glyphs the PDF export draws.
+const SANS_STACK = `'${FALLBACK_FAMILY}', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+const MONO_STACK = `'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', '${FALLBACK_FAMILY}', monospace`;
 
 /**
  * The editor's document styles (`.prose` and `src/index.css`), resolved for
- * the light theme, with the same numbers the other exporters use.
+ * the light theme, with the same numbers the other exporters use. The
+ * responsive blocks are screen-only, so the print layout always uses the
+ * page's own geometry, and the print block carries the pagination rules the
+ * PDF export implements (orphans and widows, headings kept with what follows,
+ * repeating header rows, backgrounds preserved) plus the page's maximum
+ * image heights the PDF scales to.
  */
 function documentCss(documentModel: ExportDocumentModel): string {
   const s = DOCUMENT_STYLE;
@@ -269,6 +386,12 @@ function documentCss(documentModel: ExportDocumentModel): string {
   const h = s.headings;
   /** Prose sizes these in em, so they scale inside 14px table cells as in the editor. */
   const em = (px: number) => `${Math.round((px / s.sizePx) * 10000) / 10000}em`;
+  // The PDF export scales an image down once it would not fit a page's
+  // content area; the same ceiling in print keeps the image on one page
+  // instead of clipping it, and `object-fit` keeps long narrow images from
+  // stretching when an explicit width pins the box wider than the ceiling.
+  const imageCeilingPx = geometry.contentHeightPt / PX_TO_PT - s.image.margin * 2;
+  const graphicCeilingPx = geometry.contentHeightPt / PX_TO_PT - s.graphic.margin * 2 - (s.graphic.padding + s.graphic.borderWidth) * 2;
   return `*,::before,::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:#fff}
 body{margin:0;background:#fff;color:${text};font-family:'${s.family}', ${SANS_STACK};font-size:${s.sizePx}px;line-height:${s.lineHeight};-webkit-font-smoothing:antialiased}
@@ -286,7 +409,7 @@ h2 strong{font-weight:${h[2].strongWeight}}
 h3 strong{font-weight:${h[3].strongWeight}}
 :is(h2,h3,hr)+:is(p,ul,ol,blockquote,pre,hr){margin-top:0}
 strong,b{font-weight:${s.strongWeight};color:inherit}
-a{color:#${s.linkColor};text-decoration:underline;font-weight:${s.linkWeight}}
+a{color:#${s.linkColor};text-decoration:underline;text-underline-offset:3px;font-weight:${s.linkWeight}}
 a strong{color:inherit}
 mark{border-radius:${s.mark.radius}px;padding:${s.mark.paddingY}px ${s.mark.paddingX}px}
 sub,sup{font-size:${s.script.scale * 100}%;line-height:0;position:relative;vertical-align:baseline}
@@ -324,7 +447,7 @@ table[data-borders=hidden] :is(th,td){border-color:transparent}
 div.lwrite-graphic{margin:${s.graphic.margin}px 0;padding:${s.graphic.padding}px;border:${s.graphic.borderWidth}px solid #${s.graphic.borderColor};border-radius:${s.graphic.radius}px;background:#${s.graphic.background};overflow-x:auto}
 .lwrite-graphic-title{font-weight:600;margin:0 0 8px}
 svg.lwrite-graphic-drawing{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;white-space:pre;direction:${documentModel.direction}}
-@media (max-width:639px){
+@media screen and (max-width:639px){
 .lwrite-document{padding:20px 16px 32px}
 h1{font-size:28px;margin-top:24px}
 h2{font-size:22.4px;margin-top:22px}
@@ -333,15 +456,28 @@ table{table-layout:auto}
 :is(th,td){min-width:88px}
 div.lwrite-graphic{padding:12px 10px}
 }
-@media (max-width:479px){
+@media screen and (max-width:479px){
 img:is([data-align=left],[data-align=right]):is([data-width='75'],[data-width='100']){float:none;margin:16px auto}
 }
-@page{size:${geometry.name === 'letter' ? 'letter' : 'A4'};margin:${geometry.name === 'letter' ? '1in' : '25mm'}}
+@page{size:${geometry.widthPt}pt ${geometry.heightPt}pt;margin:${geometry.marginPt}pt}
 @media print{
+/* The paper carries the document's own tones: the PDF export always draws
+   table shading, code marks and highlights, so exact printing does not
+   depend on the browser's background-graphics switch. */
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .lwrite-document{max-width:none;padding:0}
+/* Paragraphs and code blocks break like the PDF's orphans and widows rule:
+   at least two lines stay on either side of a page break, inside code like
+   inside prose. */
+p,li,pre{orphans:2;widows:2}
 :is(h1,h2,h3){break-after:avoid}
-:is(img,pre,tr,div.lwrite-graphic){break-inside:avoid}
+:is(img,tr,div.lwrite-graphic){break-inside:avoid}
+/* A row taller than the page fragments like the PDF's split rows; the
+   print preparation marks them after measuring. */
+tr[data-lwrite-breakable]{break-inside:auto}
 .lwrite-table,div.lwrite-graphic,pre{overflow:visible}
+img{max-height:${Math.round(imageCeilingPx * 100) / 100}px;object-fit:contain}
+svg.lwrite-graphic-drawing{max-height:${Math.round(graphicCeilingPx * 100) / 100}px}
 }
 `;
 }

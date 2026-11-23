@@ -338,6 +338,7 @@ function layoutText(
     baseMetrics: builder.env.metricsFor(context),
     ...(align ? { align } : {}),
     direction: builder.env.direction ?? 'ltr',
+    slotWidth: frame.width,
     slotAt: (offset, height) => builder.slot(frame, builder.y + offset, height),
   });
   lineTop = builder.y;
@@ -445,6 +446,7 @@ function layoutCode(builder: GalleyBuilder, block: ExportCodeBlock, frame: Frame
     base,
     baseMetrics: builder.env.metricsFor(context),
     direction: builder.env.direction ?? 'ltr',
+    slotWidth: frame.width - style.paddingX * 2,
     slotAt: () => ({ inset: 0, width: frame.width - style.paddingX * 2 }),
   });
   const first = builder.atoms.length;
