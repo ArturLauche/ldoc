@@ -23,7 +23,14 @@ async function environment(text: string): Promise<InlineEnvironment> {
   return { registry, fonts: new PdfFontSet(await PDFDocument.create()), warnings, rasterizer: null };
 }
 
-function layout(env: InlineEnvironment, text: string, width: number, align?: ExportAlignment, direction?: 'ltr' | 'rtl') {
+function layout(
+  env: InlineEnvironment,
+  text: string,
+  width: number,
+  align?: ExportAlignment,
+  direction?: 'ltr' | 'rtl',
+  slotWidth?: number,
+) {
   const base = textBaseStyle({ kind: 'body' });
   const resolution = env.registry.resolve({ family: base.family, weight: 400, italic: false });
   return layoutInline(env, [{ text, style: resolveRunStyle({}, undefined, base) }], {
@@ -31,6 +38,7 @@ function layout(env: InlineEnvironment, text: string, width: number, align?: Exp
     baseMetrics: env.fonts.forLoaded(resolution.fonts[0]).metrics,
     ...(align ? { align } : {}),
     ...(direction ? { direction } : {}),
+    ...(slotWidth !== undefined ? { slotWidth } : {}),
     slotAt: () => ({ inset: 0, width }),
   });
 }
@@ -164,5 +172,27 @@ describe('runs within a paragraph', () => {
     expect(lines.map(lineText).join('')).toBe('aaaa bbbb cccc');
     expect(lineText(lines[0])).toBe('aaaa bbbb ');
     expect(lineText(lines[1] ?? { pieces: [] })).toBe('cccc');
+  });
+  it('keeps missing-font chunks whole while they fit, and fragments the ones that cannot', async () => {
+    // Thai is not covered by the declared faces and has no spaces: its words
+    // become single rasterized chunks (so the shapes join like the browser
+    // draws them), but a chunk wider than the line must wrap at grapheme
+    // boundaries instead of overflowing, like overflow-wrap: anywhere.
+    const env = await environment('ทดสอบ');
+    env.rasterizer = {
+      measure: (text: string) => ({ width: text.length * 8, ascent: 10, descent: 4 }),
+    };
+    const chunked = layout(env, 'ทดสอบ', 1000, undefined, undefined, 1000);
+    expect(chunked).toHaveLength(1);
+    expect(chunked[0].pieces).toHaveLength(1);
+    expect(lineText(chunked[0])).toBe('ทดสอบ');
+
+    const wrapped = layout(env, 'ทดสอบ', 30, undefined, undefined, 30);
+    expect(wrapped.length).toBeGreaterThan(1);
+    // Five characters, each its own piece now, distributed over the lines and
+    // none wider than the slot.
+    expect(wrapped.reduce((count, line) => count + line.pieces.length, 0)).toBe(5);
+    expect(wrapped.map(lineText).join('')).toBe('ทดสอบ');
+    expect(wrapped.every((line) => line.width <= 30.01)).toBe(true);
   });
 });

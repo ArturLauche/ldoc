@@ -201,7 +201,8 @@ export async function analyzePdf(page: Page, bytes: Buffer): Promise<AnalyzedPdf
       const items = rawItems
         .filter((item) => item.str.trim().length > 0)
         .map((item) => ({ str: item.str, x: item.transform[4], y: height - item.transform[5], w: item.width }))
-        .sort((a, b) => b.y - a.y || a.x - b.x);
+        // Top-origin reading order: first line of the page first.
+        .sort((a, b) => a.y - b.y || a.x - b.x);
       // Baselines within one line height belong together (sub- and
       // superscripts sit a fraction of an em off the baseline).
       interface LineBox {

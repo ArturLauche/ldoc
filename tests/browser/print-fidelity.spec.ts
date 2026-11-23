@@ -168,12 +168,14 @@ test('Direct Print reproduces the PDF export page by page', async ({ page }) => 
   const firstLine = printed.pages[0]?.lines[0];
   expect(firstLine).toBeDefined();
   if (firstLine) {
+    // Reading order is top down: the document's heading is the first line.
+    expect(firstLine.text).toContain('Direct print fidelity');
     expect(Math.abs(firstLine.x - 72)).toBeLessThanOrEqual(2);
-    // The heading line box starts flush at the top margin: its baseline sits
-    // one line-height in, not a further 24pt band below the content top.
-    const contentTop = 792 - 72;
-    expect(firstLine.y).toBeLessThanOrEqual(contentTop);
-    expect(contentTop - firstLine.y).toBeLessThanOrEqual(24);
+    // The heading starts flush at the top margin: top-origin y sits inside
+    // the first line box (72pt plus the h1's own 32.4pt line height), not a
+    // band below it.
+    expect(firstLine.y).toBeGreaterThanOrEqual(70);
+    expect(firstLine.y).toBeLessThanOrEqual(105);
     // The text column fills the content width.
     const widest = Math.max(...(printed.pages[0]?.lines.map((line) => line.end) ?? [0]));
     expect(widest).toBeGreaterThan(500);
@@ -201,22 +203,27 @@ test('A4 locales print on A4, with the same geometry as the export', async ({ pa
   expect(printed.pageCount).toBeGreaterThan(4);
 });
 
-test('dark editor themes print the same light document', async ({ page }) => {
-  await stubPrint(page);
-  await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
-  await page.goto('/');
-  await ready(page);
-  await setContent(page, onePageDocument);
-  const dark = await capturePrintDocument(page);
-  await page.evaluate(() => localStorage.setItem('theme', 'light'));
-  await page.reload();
-  await ready(page);
-  await setContent(page, onePageDocument);
-  const light = await capturePrintDocument(page);
+test('dark editor themes print the same light document', async ({ context }) => {
+  // The theme lives in localStorage, so each theme gets its own page instead
+  // of a reload: an init script rerun would overwrite the storage write that
+  // prepared the next capture.
+  const printInTheme = async (theme: 'dark' | 'light') => {
+    const themePage = await context.newPage();
+    await stubPrint(themePage);
+    await themePage.addInitScript((value) => localStorage.setItem('theme', value), theme);
+    await themePage.goto('/');
+    await ready(themePage);
+    await setContent(themePage, onePageDocument);
+    const capture = await capturePrintDocument(themePage);
+    await themePage.close();
+    return capture.html;
+  };
+  const dark = await printInTheme('dark');
+  const light = await printInTheme('light');
   // The print document is the export's light document in both themes: the
   // document decides its own colors, never the editor chrome's.
-  expect(dark.html).toBe(light.html);
-  expect(dark.html).toContain('background:#fff');
+  expect(dark).toBe(light);
+  expect(light).toContain('background:#fff');
 });
 
 test("backgrounds print without the browser's background-graphics switch", async ({ page }) => {

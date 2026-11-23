@@ -353,10 +353,17 @@ export class ExportFontRegistry {
             codePoint > 0x20 && !segments?.some((segment) => rangesContain(segment.ranges, codePoint)),
         );
         if (missing.length === 0) return;
-        const key = `${weight >= 600}|${entry.italic}`;
-        const entryStyle = needed.get(key) ?? { bold: weight >= 600, italic: entry.italic, codePoints: [] };
-        entryStyle.codePoints.push(...missing);
-        needed.set(key, entryStyle);
+        // The normal face carries the uncovered characters whichever style
+        // flagged them (usage tracks italic per family, not per run), and an
+        // italic-using family adds its face too — loadFallbacks pairs them
+        // the same way, so upright text never borrows the italic face.
+        const bold = weight >= 600;
+        for (const italic of entry.italic ? [false, true] : [false]) {
+          const key = `${bold}|${italic}`;
+          const style = needed.get(key) ?? { bold, italic, codePoints: [] };
+          style.codePoints.push(...missing);
+          needed.set(key, style);
+        }
       });
     });
     return Array.from(needed.values());

@@ -405,15 +405,27 @@ describe('HTML export', () => {
     ).blob.text();
     expect(new DOMParser().parseFromString(mixed, 'text/html').querySelector('table thead')).toBeNull();
 
+    // A rowspan across two header rows stays a header: the span ends inside
+    // the two-row group, so both rows repeat.
+    const span = await (
+      await exportAs(
+        'html',
+        '<table><tr><th rowspan="2"><p>Head</p></th><th><p>Head 2</p></th></tr><tr><th><p>Head 3</p></th><th><p>Head 4</p></th></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr></table>',
+      )
+    ).blob.text();
+    const spanTable = new DOMParser().parseFromString(span, 'text/html').querySelector('table') as HTMLTableElement;
+    expect(spanTable.tHead?.rows).toHaveLength(2);
+    expect(spanTable.tBodies[0]?.rows).toHaveLength(1);
+
     // A rowspan reaching past the header group stays in the body (a thead row
     // must not own cells of the body).
-    const span = await (
+    const spanPast = await (
       await exportAs(
         'html',
         '<table><tr><th rowspan="2"><p>Head</p></th><th><p>Head</p></th></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr><tr><td><p>Body</p></td><td><p>Body</p></td></tr></table>',
       )
     ).blob.text();
-    expect(new DOMParser().parseFromString(span, 'text/html').querySelector('table thead')).toBeNull();
+    expect(new DOMParser().parseFromString(spanPast, 'text/html').querySelector('table thead')).toBeNull();
 
     // A table of only header rows has no body to repeat them for (the galley's rule).
     const headersOnly = await (
@@ -483,6 +495,11 @@ describe('HTML export', () => {
     const latin = await (await exportAs('html', '<p>Plain latin words</p>')).blob.text();
     expect(latin).not.toMatch(/font-family:'Noto Sans'/);
     expect(latin).not.toMatch(/NotoSans-Regular/);
+    // A document with italic text needs both fallback faces: upright text
+    // must not borrow the italic one.
+    const mixed = await (await exportAs('html', '<p>Ελληνικά <em>κείμενο</em></p>')).blob.text();
+    expect(mixed).toMatch(/@font-face\{font-family:'Noto Sans';font-style:normal;font-weight:400;src:url\(data:font\/ttf;base64,/);
+    expect(mixed).toMatch(/@font-face\{font-family:'Noto Sans';font-style:italic;font-weight:400;src:url\(data:font\/ttf;base64,/);
     // The bundled Noto Sans is latin/greek/cyrillic only: no dead weight
     // embedded for scripts it cannot draw (the browser keeps falling back).
     const arabic = await (await exportAs('html', '<p>نص عربي</p>')).blob.text();

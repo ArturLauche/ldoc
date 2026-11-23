@@ -205,14 +205,16 @@ function promoteHeaderRows(table: HTMLTableElement): void {
   if (!body) return;
   const rows = Array.from(body.rows);
   const cellsAreHeaders = (row: HTMLTableRowElement) => row.cells.length > 0 && Array.from(row.cells).every((cell) => cell.tagName === 'TH');
-  const spansWithinGroup = (groupLength: number) =>
-    rows.slice(0, groupLength).every((row, index) => Array.from(row.cells).every((cell) => cell.rowSpan <= groupLength - index));
+  // The header group is the whole leading row of header cells first; rowspans
+  // are validated against that complete group, so a span crossing header rows
+  // (rowspan="2" over two header rows) repeats too, while a span reaching a
+  // body row still revalidates the group away.
   let count = 0;
-  while (count < rows.length && cellsAreHeaders(rows[count])) {
-    if (!spansWithinGroup(count + 1)) break;
-    count += 1;
-  }
-  if (count === 0 || count === rows.length) return;
+  while (count < rows.length && cellsAreHeaders(rows[count])) count += 1;
+  const spansWithinGroup = Array.from({ length: count }, (_, index) => index).every((index) =>
+    Array.from(rows[index].cells).every((cell) => cell.rowSpan <= count - index),
+  );
+  if (count === 0 || count === rows.length || !spansWithinGroup) return;
   const thead = (table.ownerDocument ?? document).createElement('thead');
   table.insertBefore(thead, body);
   for (let index = 0; index < count; index += 1) thead.appendChild(rows[index]);

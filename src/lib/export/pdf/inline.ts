@@ -164,6 +164,7 @@ function runClusters(
   index: number,
   start: number,
   direction: BidiDirection,
+  capWidth: number,
 ): Cluster[] {
   const { style } = run;
   const resolution = env.registry.resolve({ family: style.family, weight: style.weight, italic: style.italic });
@@ -207,14 +208,29 @@ function runClusters(
       stretchable: true,
     });
   };
-  const missingCluster = (grapheme: string, metrics: FontMetrics, from: number, to: number) => {
-    const measured = env.rasterizer?.measure(grapheme, style) ?? null;
-    if (measured) {
-      env.warnings.add('pdf-glyph-rasterized');
-      pushText(grapheme, null, metrics, [], measured.width, from, to, { text: grapheme, ...measured });
-    } else {
-      env.warnings.add('pdf-glyph-missing', grapheme);
+  const missingCluster = (text: string, metrics: FontMetrics, from: number, to: number) => {
+    const measured = env.rasterizer?.measure(text, style) ?? null;
+    if (!measured) {
+      env.warnings.add('pdf-glyph-missing', text);
+      return;
     }
+    env.warnings.add('pdf-glyph-rasterized');
+    if (capWidth > 0 && measured.width > capWidth) {
+      // Joined shapes stay whole while chunks fit a line; a chunk wider than
+      // the widest line (scripts without spaces, like Thai, can build them)
+      // would overflow instead of wrapping, so its characters break anywhere
+      // like the editor's `overflow-wrap: anywhere` fallback.
+      let cursor = from;
+      splitGraphemes(text).forEach((grapheme) => {
+        const piece = env.rasterizer?.measure(grapheme, style) ?? null;
+        if (piece) {
+          pushText(grapheme, null, metrics, [], piece.width, cursor, cursor + grapheme.length, { text: grapheme, ...piece });
+        }
+        cursor += grapheme.length;
+      });
+      return;
+    }
+    pushText(text, null, metrics, [], measured.width, from, to, { text, ...measured });
   };
 
   if (resolution.standard) {
@@ -389,6 +405,13 @@ export interface InlineLayoutOptions {
   align?: ExportAlignment;
   /** Paragraph base direction; `dir="auto"` resolved by the document. */
   direction?: BidiDirection;
+  /**
+   * Widest line the paragraph can hold, px: missing-font chunks wider than it
+   * fragment at grapheme boundaries (the `overflow-wrap: anywhere` fallback)
+   * instead of overflowing; chunks that fit stay whole, so joined scripts
+   * keep their shapes.
+   */
+  slotWidth?: number;
   /** Available width for a line starting `y` px below the paragraph top. */
   slotAt: (y: number, height: number) => LineSlot;
 }
@@ -404,7 +427,7 @@ export function layoutInline(env: InlineEnvironment, runs: StyledRun[], options:
   const levels = bidiLevels(combined, direction);
   let runStart = 0;
   const clusters = runs.flatMap((run, index) => {
-    const shaped = runClusters(env, run, index, runStart, direction);
+    const shaped = runClusters(env, run, index, runStart, direction, options.slotWidth ?? 0);
     runStart += run.text.length;
     return shaped;
   });
